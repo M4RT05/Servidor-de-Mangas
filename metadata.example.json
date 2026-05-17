@@ -1,0 +1,8 @@
+{
+  "type": "Manhwa",
+  "status": "Activo",
+  "genres": ["Acción", "Aventura", "Sistema"],
+  "synopsis": "Aquí va la sinopsis completa del manga. Puedes escribir todo el texto que quieras sin límite de extensión.",
+  "ranking": 1,
+  "adult": false
+}

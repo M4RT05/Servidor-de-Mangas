@@ -1,0 +1,10 @@
+[
+  {
+    "id": "1",
+    "username": "M4RTO",
+    "role": "admin",
+    "salt": "60508466c94b37d6b7524d947c508041",
+    "passwordHash": "4f44ddd51d5ededa30a6fa3263dcc1b29c3b3d7609643d5229046a1717487294",
+    "createdAt": "2026-05-17T18:37:12.505Z"
+  }
+]

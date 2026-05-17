@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
+  <title>MangaServer</title>
+  <link href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.34.0/dist/tabler-icons.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<div id="app">
+
+  <!-- TOP NAV -->
+  <nav id="tnav">
+    <!-- Logo (solo PC) -->
+    <a class="nav-logo" href="/" style="display:none;" id="nav-logo">
+      <div class="nav-logo-icon">M</div>
+      <span>MangaServer</span>
+    </a>
+    <!-- Tabs -->
+    <button class="ni on" data-p="inicio"><i class="ti ti-home-2"></i><span class="nlabel">Inicio</span></button>
+    <button class="ni" data-p="series"><i class="ti ti-layout-grid"></i><span class="nlabel">Series</span></button>
+    <button class="ni" data-p="rankings"><i class="ti ti-trending-up"></i><span class="nlabel">Rankings</span></button>
+    <button class="ni" data-p="capitulos"><i class="ti ti-bookmark"></i><span class="nlabel">Capítulos</span></button>
+    <button class="ni" data-p="busqueda"><i class="ti ti-search"></i><span class="nlabel">Buscar</span></button>
+    <div class="nav-spacer" style="display:none;" id="nav-spacer"></div>
+    <button class="ni" id="ubtn" style="padding:5px 5px 5px 8px;"><div class="avatar">M</div></button>
+  </nav>
+
+  <!-- CONTENIDO -->
+  <div id="cnt">
+
+    <!-- INICIO -->
+    <div id="p-inicio" class="pg on">
+      <div class="pgh"><h1>Bienvenido</h1><p>Tu biblioteca personal</p></div>
+      <div class="hst">Seguir Leyendo</div>
+      <div id="cont-reading"><div class="loading">Cargando...</div></div>
+      <div class="hst" style="margin-top:20px;">Añadidos Recientemente</div>
+      <div class="sgrid" id="recent-grid"><div class="loading" style="grid-column:1/-1">Cargando...</div></div>
+    </div>
+
+    <!-- SERIES -->
+    <div id="p-series" class="pg">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+        <div><h1 style="font-size:23px;font-weight:700;color:var(--text);">Series</h1><p id="scnt" style="font-size:13px;color:var(--mut);margin-top:2px;">Cargando...</p></div>
+        <button id="filter-btn" onclick="openFilter()" style="display:flex;align-items:center;gap:6px;background:var(--card);border:1px solid var(--brd);color:var(--text);padding:8px 14px;border-radius:20px;cursor:pointer;font-size:13px;font-weight:600;">
+          <i class="ti ti-adjustments-horizontal" style="font-size:16px;"></i> Filtrar
+        </button>
+      </div>
+      <div class="sgrid" id="sgrid"><div class="loading" style="grid-column:1/-1">Cargando...</div></div>
+    </div>
+
+    <!-- RANKINGS -->
+    <div id="p-rankings" class="pg">
+      <div class="pgh"><h1>Rankings</h1><p>Ordenado por ranking asignado</p></div>
+      <div id="rlist"><div class="loading">Cargando...</div></div>
+    </div>
+
+    <!-- CAPÍTULOS -->
+    <div id="p-capitulos" class="pg">
+      <div class="pgh"><h1>Últimos Capítulos</h1><p>Ordenados por fecha</p></div>
+      <div id="clist"><div class="loading">Cargando...</div></div>
+    </div>
+
+    <!-- BÚSQUEDA -->
+    <div id="p-busqueda" class="pg">
+      <div class="pgh"><h1>Búsqueda</h1></div>
+      <div class="sbar">
+        <i class="ti ti-search"></i>
+        <input id="sinput" type="text" placeholder="Buscar manga, manhwa, manhua..." autocomplete="off">
+        <button id="sclear" onclick="clearSearch()" style="display:none;background:none;border:none;color:var(--mut);cursor:pointer;font-size:18px;padding:0;"><i class="ti ti-x"></i></button>
+      </div>
+      <div id="sresults"></div>
+    </div>
+
+    <!-- DETALLE -->
+    <div id="p-detail" class="pg" style="padding:0;display:none;">
+
+      <!-- MOBILE HERO -->
+      <div class="det-hero" id="det-mobile-hero">
+        <img id="det-hero-bg" class="det-hero-bg" src="" alt="">
+        <div class="det-hero-gradient"></div>
+        <img id="det-hero-cover" class="det-hero-cover" src="" alt="">
+        <button class="det-back" onclick="closeDetail()"><i class="ti ti-arrow-left"></i></button>
+      </div>
+
+      <!-- MOBILE BODY -->
+      <div class="det-mobile-body" id="det-mobile-body">
+        <div class="det-body">
+          <div id="det-title" class="det-title"></div>
+          <div id="det-status-row" class="det-badges" style="margin-bottom:10px;"></div>
+          <div id="det-genres-row" class="det-genres" style="margin-bottom:14px;"></div>
+          <div id="det-syn" class="det-syn"></div>
+          <button class="det-btn det-pri" id="det-read-btn" style="width:100%;margin-bottom:16px;"><i class="ti ti-book-2"></i> Primer Capítulo</button>
+          <div class="chap-sec-header">
+            <span class="chap-sec-count"><span id="chap-count-num" style="color:var(--acc);font-weight:800;">0</span> Capítulos</span>
+            <div style="display:flex;gap:8px;">
+              <button class="chap-sec-btn" onclick="toggleChapSearch()"><i class="ti ti-search"></i></button>
+              <button class="chap-sec-btn" onclick="toggleSort()"><i class="ti ti-arrows-sort"></i></button>
+            </div>
+          </div>
+          <div id="chap-search-bar" style="display:none;margin-bottom:10px;">
+            <div class="sbar" style="margin-bottom:0;"><i class="ti ti-search"></i><input id="chap-sinput" type="text" placeholder="Número de capítulo..."></div>
+          </div>
+          <div id="det-chaplist"></div>
+        </div>
+      </div>
+
+      <!-- PC LAYOUT -->
+      <div id="det-pc-layout" style="display:none;">
+        <div style="padding:24px 40px 0;" id="det-pc-breadcrumb">
+          <button class="det-pc-back" onclick="closeDetail()"><i class="ti ti-arrow-left"></i> Volver</button>
+        </div>
+        <div class="det-pc-wrap" id="det-pc-wrap">
+          <div>
+            <img id="det-pc-cover-img" class="det-pc-cover" src="" alt="" style="display:none;">
+            <div id="det-pc-cover-ph" class="det-pc-cover-ph" style="display:none;">M</div>
+          </div>
+          <div class="det-pc-info">
+            <div id="det-pc-meta" class="det-pc-meta"></div>
+            <div id="det-pc-title" class="det-pc-title"></div>
+            <div id="det-pc-genres" class="det-pc-genres"></div>
+            <div id="det-pc-syn" class="det-pc-syn"></div>
+            <div>
+              <button class="det-pc-btn" id="det-pc-read-btn"><i class="ti ti-book-2"></i> Primer Capítulo</button>
+            </div>
+          </div>
+        </div>
+        <div class="det-pc-chaps">
+          <div class="chap-sec-header">
+            <span class="chap-sec-count"><span id="chap-count-num-pc" style="color:var(--acc);font-weight:800;">0</span> Capítulos</span>
+            <div style="display:flex;gap:8px;">
+              <button class="chap-sec-btn" onclick="toggleChapSearchPC()"><i class="ti ti-search"></i></button>
+              <button class="chap-sec-btn" onclick="toggleSort()"><i class="ti ti-arrows-sort"></i></button>
+            </div>
+          </div>
+          <div id="chap-search-bar-pc" style="display:none;margin-bottom:10px;">
+            <div class="sbar" style="margin-bottom:0;"><i class="ti ti-search"></i><input id="chap-sinput-pc" type="text" placeholder="Número de capítulo..."></div>
+          </div>
+          <div id="det-chaplist-pc"></div>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+</div>
+
+<!-- FILTER MODAL -->
+<div id="filter-overlay" onclick="closeFilter()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:300;"></div>
+<div id="filter-panel" style="display:none;position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;background:var(--surf);border-radius:20px 20px 0 0;z-index:301;padding:20px 16px calc(30px + env(safe-area-inset-bottom,16px));max-height:80vh;overflow-y:auto;">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+    <h2 style="font-size:18px;font-weight:700;color:var(--text);">Filtrar Series</h2>
+    <button onclick="closeFilter()" style="background:none;border:none;color:var(--mut);cursor:pointer;font-size:20px;"><i class="ti ti-x"></i></button>
+  </div>
+  <div class="pst" style="padding:0 0 6px;">Tipo</div><div id="filter-types" style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:16px;"></div>
+  <div class="pst" style="padding:0 0 6px;">Géneros</div><div id="filter-genres" style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:16px;"></div>
+  <div class="pst" style="padding:0 0 6px;">Estado</div><div id="filter-status" style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:20px;"></div>
+  <div style="display:flex;gap:10px;">
+    <button onclick="clearFilter()" style="flex:1;padding:11px;border-radius:12px;border:1px solid var(--brd);background:none;color:var(--mut);font-size:14px;font-weight:600;cursor:pointer;">Limpiar</button>
+    <button onclick="applyFilter()" style="flex:2;padding:11px;border-radius:12px;border:none;background:var(--acc);color:var(--acc-text);font-size:14px;font-weight:700;cursor:pointer;">Aplicar</button>
+  </div>
+</div>
+
+<!-- PANEL USUARIO -->
+<div id="ov"></div>
+<div id="upanel">
+  <div style="display:flex;justify-content:flex-end;padding:10px 10px 0;"><button id="cpanel" class="icon-btn"><i class="ti ti-x"></i></button></div>
+  <div class="uph">
+    <div class="uav">M</div>
+    <div class="un user-name-display">M4RTO</div>
+    <div class="ur user-role-display">Administrador</div>
+  </div>
+  <div class="pst">Configuración</div>
+  <div class="tgi"><span class="tglb">Contenido +18</span><div class="tg" id="toggle-adult" onclick="toggleAdult(this)"></div></div>
+  <div class="pst">Tema</div>
+  <div class="theme-grid">
+    <button class="theme-btn" data-theme="" onclick="setTheme('')">
+      <div class="theme-swatch"><span style="background:#0d1117;"></span><span style="background:#161b27;"></span><span style="background:#F5B800;"></span><span style="background:#1c2333;"></span></div>
+      <span class="theme-label">Origins</span>
+    </button>
+    <button class="theme-btn" data-theme="theme-void-matrix" onclick="setTheme('theme-void-matrix')">
+      <div class="theme-swatch"><span style="background:#080B10;"></span><span style="background:#0E1318;"></span><span style="background:#00E5FF;"></span><span style="background:#141B24;"></span></div>
+      <span class="theme-label">Void Matrix</span>
+    </button>
+    <button class="theme-btn" data-theme="theme-ember-dark" onclick="setTheme('theme-ember-dark')">
+      <div class="theme-swatch"><span style="background:#121313;"></span><span style="background:#1A1C1C;"></span><span style="background:#FF6044;"></span><span style="background:#222525;"></span></div>
+      <span class="theme-label">Ember Dark</span>
+    </button>
+    <button class="theme-btn" data-theme="theme-gilded-forest" onclick="setTheme('theme-gilded-forest')">
+      <div class="theme-swatch"><span style="background:#F7E7CE;"></span><span style="background:#EDD9B4;"></span><span style="background:#102C26;"></span><span style="background:#E2C99A;"></span></div>
+      <span class="theme-label">Gilded Forest</span>
+    </button>
+    <button class="theme-btn" data-theme="theme-arctic-ink" onclick="setTheme('theme-arctic-ink')">
+      <div class="theme-swatch"><span style="background:#F5F5F5;"></span><span style="background:#EBEBEB;"></span><span style="background:#1A1A1A;"></span><span style="background:#E0E0E0;"></span></div>
+      <span class="theme-label">Arctic Ink</span>
+    </button>
+    <button class="theme-btn" data-theme="theme-lunar-tide" onclick="setTheme('theme-lunar-tide')">
+      <div class="theme-swatch"><span style="background:#ECEFF1;"></span><span style="background:#DDE3E8;"></span><span style="background:#191970;"></span><span style="background:#CFD8DC;"></span></div>
+      <span class="theme-label">Lunar Tide</span>
+    </button>
+  </div>
+  <div class="pst">Cuenta</div>
+  <div class="pmi admin-only" onclick="window.location.href='/admin/users.html'"><i class="ti ti-users"></i> Gestionar usuarios</div>
+  <div class="pmi" onclick="logout()" style="color:#e74c3c;"><i class="ti ti-logout" style="color:#e74c3c;"></i> Cerrar sesión</div>
+  <div class="coded-by">Coded by M4RT05</div>
+</div>
+
+<script src="js/api.js"></script>
+<script src="js/app.js"></script>
+<script>
+// PC layout switcher
+function applyPCLayout(){
+  const pc = window.innerWidth >= 768;
+  const logo = document.getElementById('nav-logo');
+  const spacer = document.getElementById('nav-spacer');
+  if(logo) logo.style.display = pc ? 'flex' : 'none';
+  if(spacer) spacer.style.display = pc ? 'block' : 'none';
+  // En PC el body puede hacer scroll
+  document.body.style.overflow = pc ? 'auto' : 'hidden';
+  const app = document.getElementById('app');
+  if(app){ app.style.height = pc ? 'auto' : '100vh'; app.style.overflow = pc ? 'visible' : 'hidden'; }
+}
+applyPCLayout();
+window.addEventListener('resize', applyPCLayout);
+
+// Mostrar layout correcto en detalle al abrir
+const _origOpenDetail = window.openDetail;
+window.openDetail = async function(enc){
+  await _origOpenDetail(enc);
+  const pc = window.innerWidth >= 768;
+  const hero = document.getElementById('det-mobile-hero');
+  const mBody = document.getElementById('det-mobile-body');
+  const pcLayout = document.getElementById('det-pc-layout');
+  if(hero)  hero.style.display   = pc ? 'none' : '';
+  if(mBody) mBody.style.display  = pc ? 'none' : '';
+  if(pcLayout) pcLayout.style.display = pc ? 'block' : 'none';
+};
+</script>
+</body>
+</html>
