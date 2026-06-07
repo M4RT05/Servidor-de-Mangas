@@ -1,4 +1,4 @@
-# M4RTO Server — Servidor Personal de Manga
+# Servidor Personal de Manga
 
 Servidor personal para leer tu biblioteca de manga, manhwa y manhua desde cualquier dispositivo en tu red local. Funciona desde el navegador del celular, tablet o PC sin instalar nada en los dispositivos lectores.
 
@@ -53,7 +53,7 @@ Edita el archivo `.env` en la raíz del proyecto:
 
 ```env
 # Nombre de usuario administrador
-USERNAME=M4RTO
+USERNAME=tu_usuario_aqui
 
 # Contraseña para entrar al servidor
 PASSWORD=tu_contrasena_aqui
@@ -187,6 +187,22 @@ Toca el nombre del manga para ir a su detalle. Toca un capítulo para leerlo dir
 Busca mangas por nombre en tiempo real mientras escribes. Muestra portada, nombre, tipo, estado y géneros de cada resultado.
 
 La búsqueda normaliza acentos y mayúsculas — buscar `"accion"` encuentra mangas con el género `"Acción"`.
+
+---
+
+### Detalle del manga
+
+<img src="docs/screenshots/detalle.jpg" width="320" alt="Detalle del manga">
+
+Al tocar cualquier manga desde Inicio, Series, Rankings o Búsqueda se abre la vista de detalle con:
+
+- **Portada** con efecto de degradado
+- **Badges** de tipo, estado y ranking
+- **Géneros** del manga
+- **Sinopsis** con botón "más" si es larga
+- **Lista de capítulos** con páginas, fecha y punto de color (amarillo = no leído, gris = leído)
+- **Botones** para buscar capítulo por número, invertir el orden y marcar/desmarcar todos como leídos
+- **Primer Capítulo** para empezar a leer directamente
 
 ---
 
