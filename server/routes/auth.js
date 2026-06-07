@@ -94,8 +94,8 @@ function initAdminIfNeeded() {
   const users    = loadUsers();
   if (users.length === 0) {
     const salt     = crypto.randomBytes(16).toString('hex');
-    const username = process.env.USERNAME || 'admin';
-    const password = process.env.PASSWORD || 'admin';
+    const username = process.env.ADMIN_USERNAME || 'admin';
+    const password = process.env.ADMIN_PASSWORD || 'admin';
     users.push({
       id: '1', username, role: 'admin',
       salt, passwordHash: hashPassword(password, salt),
