@@ -1,19 +1,26 @@
-# Dependencias
+# ── DEPENDENCIAS ──────────────────────────────────────────────────────────────
 node_modules/
+package-lock.json
 
-# Variables de entorno (contiene tu contraseña - NUNCA subir)
+# ── VARIABLES DE ENTORNO (contraseña y JWT — NUNCA subir) ─────────────────────
 .env
 
-# Carpeta de mangas (imágenes pesadas - no subir a GitHub)
+# ── DATOS DE USUARIOS (información personal y hashes de contraseña) ───────────
+server/data/users.json
+server/data/avatars/
+
+# ── DATOS DE LECTURA (progreso e historial personal) ─────────────────────────
+server/progress.json
+server/detected_dates.json
+
+# ── CARPETA DE MANGAS (archivos pesados) ──────────────────────────────────────
 main/
 
-# Progreso de lectura (datos personales)
-server/progress.json
-
-# Sistema operativo
+# ── SISTEMA OPERATIVO ─────────────────────────────────────────────────────────
 .DS_Store
 Thumbs.db
+desktop.ini
 
-# Logs
+# ── LOGS ──────────────────────────────────────────────────────────────────────
 *.log
 npm-debug.log*
