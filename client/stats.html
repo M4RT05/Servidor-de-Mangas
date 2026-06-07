@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Estadísticas — MangaServer</title>
+  <link href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.34.0/dist/tabler-icons.min.css" rel="stylesheet">
+  <style>
+    :root{--bg:#0d1117;--surf:#161b27;--card:#1c2333;--acc:#F5B800;--acc-text:#0d1117;--text:#e6edf3;--mut:#7d8590;--brd:#30363d;--grn:#3fb950;--red:#e74c3c;--blue:#3b82f6;}
+    body.theme-dark      {--bg:#111318;--surf:#1a1d24;--card:#22262f;--acc:#E0E0E0;--acc-text:#111318;--text:#F0F0F0;--mut:#888;--brd:#2a2e38;}
+    body.theme-lunar-tide{--bg:#F0F4F8;--surf:#E2ECF4;--card:#D0DFF0;--acc:#1A237E;--acc-text:#F0F4F8;--text:#1A1A2E;--mut:#546E7A;--brd:#90A4AE;}
+    body.theme-white     {--bg:#FAFAFA;--surf:#F0F0F0;--card:#E6E6E6;--acc:#222;--acc-text:#FAFAFA;--text:#111;--mut:#666;--brd:#D4D4D4;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;min-height:100vh;}
+    .nav{background:var(--surf);border-bottom:1px solid var(--brd);padding:0 20px;height:56px;display:flex;align-items:center;gap:14px;position:sticky;top:0;z-index:10;}
+    .nav-back{background:none;border:none;color:var(--mut);cursor:pointer;font-size:20px;display:flex;}
+    .nav-title{font-size:16px;font-weight:700;}
+    .wrap{max-width:900px;margin:0 auto;padding:24px 16px;}
+    /* STAT CARDS */
+    .stat-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-bottom:24px;}
+    @media(min-width:600px){.stat-grid{grid-template-columns:repeat(4,1fr);}}
+    .stat-card{background:var(--card);border-radius:16px;padding:18px 16px;border:1px solid var(--brd);}
+    .stat-val{font-size:28px;font-weight:800;color:var(--acc);line-height:1;}
+    .stat-lbl{font-size:12px;color:var(--mut);margin-top:5px;font-weight:600;}
+    .stat-sub{font-size:11px;color:var(--mut);margin-top:3px;}
+    /* SECCIÓN */
+    .section{margin-bottom:28px;}
+    .section-title{font-size:15px;font-weight:700;color:var(--text);margin-bottom:14px;display:flex;align-items:center;gap:8px;}
+    /* PROGRESS BAR */
+    .prog-bar{background:var(--brd);border-radius:8px;height:8px;overflow:hidden;margin-top:8px;}
+    .prog-fill{height:8px;border-radius:8px;background:var(--acc);transition:width .6s ease;}
+    /* MANGA TABLE */
+    .manga-row{display:flex;align-items:center;gap:12px;padding:10px 12px;background:var(--card);border-radius:12px;margin-bottom:8px;cursor:pointer;transition:background .15s;}
+    .manga-row:hover{background:var(--surf);}
+    .manga-row-cover{width:36px;height:48px;border-radius:6px;object-fit:cover;background:var(--bg);flex-shrink:0;}
+    .manga-row-ph{width:36px;height:48px;border-radius:6px;background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;}
+    .manga-row-name{font-size:13px;font-weight:600;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .manga-row-pct{font-size:12px;font-weight:700;color:var(--acc);min-width:38px;text-align:right;}
+    .manga-row-bar{flex:1;max-width:100px;}
+    /* DONUT */
+    .donut-wrap{display:flex;align-items:center;gap:20px;flex-wrap:wrap;}
+    .donut-legend{display:flex;flex-direction:column;gap:8px;}
+    .legend-item{display:flex;align-items:center;gap:8px;font-size:13px;}
+    .legend-dot{width:12px;height:12px;border-radius:50%;flex-shrink:0;}
+    /* BTN */
+    .btn{display:inline-flex;align-items:center;gap:7px;padding:10px 18px;border-radius:12px;border:none;cursor:pointer;font-size:13px;font-weight:700;transition:opacity .15s;}
+    .btn:hover{opacity:.85;}
+    .btn-acc{background:var(--acc);color:var(--acc-text);}
+    .btn-outline{background:var(--card);color:var(--text);border:1px solid var(--brd);}
+    .export-row{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:24px;}
+    .import-area{background:var(--card);border:2px dashed var(--brd);border-radius:14px;padding:20px;text-align:center;cursor:pointer;transition:border-color .15s;}
+    .import-area:hover{border-color:var(--acc);}
+    .import-msg{font-size:13px;color:var(--mut);margin-top:8px;}
+    .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--card);border:1px solid var(--brd);border-radius:12px;padding:12px 20px;font-size:13px;font-weight:600;z-index:999;display:none;box-shadow:0 8px 32px rgba(0,0,0,.4);}
+    .toast.ok{border-color:var(--grn);color:var(--grn);}
+    .toast.err{border-color:var(--red);color:var(--red);}
+    .loading{text-align:center;padding:40px;color:var(--mut);}
+  </style>
+</head>
+<body>
+<nav class="nav">
+  <button class="nav-back" onclick="history.back()"><i class="ti ti-arrow-left"></i></button>
+  <span class="nav-title"><i class="ti ti-chart-bar" style="vertical-align:middle;margin-right:6px;"></i>Estadísticas de Lectura</span>
+</nav>
+
+<div class="wrap">
+  <div id="content"><div class="loading">Cargando estadísticas...</div></div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const TOKEN = localStorage.getItem('manga_token');
+if (!TOKEN) location.href = '/login.html';
+const theme = localStorage.getItem('manga_theme') || '';
+if (theme) document.body.classList.add(theme);
+
+function showToast(msg, type='ok') {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.className = 'toast ' + type; t.style.display = 'block';
+  setTimeout(() => { t.style.display = 'none'; }, 3000);
+}
+
+function goManga(name) { location.href = '/?goto=' + encodeURIComponent(name); }
+
+async function load() {
+  const r    = await fetch('/api/mangas/stats/summary', { headers: { Authorization: 'Bearer ' + TOKEN } });
+  const data = await r.json();
+
+  const pct = data.completionPct;
+  const byTypeEntries  = Object.entries(data.byType  || {});
+  const byStatusEntries= Object.entries(data.byStatus|| {});
+
+  // Colores por tipo
+  const typeColor  = {Manga:'#22c55e', Manhwa:'#3b82f6', Manhua:'#ef4444'};
+  const statusColor= {Activo:'#22c55e', Hiatus:'#3b82f6', Finalizado:'#ef4444'};
+
+  document.getElementById('content').innerHTML = `
+    <!-- STAT CARDS -->
+    <div class="stat-grid">
+      <div class="stat-card">
+        <div class="stat-val">${data.totalMangas}</div>
+        <div class="stat-lbl">Series totales</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-val">${data.readChapters}</div>
+        <div class="stat-lbl">Capítulos leídos</div>
+        <div class="stat-sub">de ${data.totalChapters} totales</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-val">${data.completed}</div>
+        <div class="stat-lbl">Completados</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-val">${data.inProgress}</div>
+        <div class="stat-lbl">En progreso</div>
+      </div>
+    </div>
+
+    <!-- PROGRESO GLOBAL -->
+    <div class="section">
+      <div class="section-title"><i class="ti ti-progress"></i> Progreso Global</div>
+      <div class="stat-card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+          <span style="font-size:13px;color:var(--mut);">Capítulos leídos de la biblioteca completa</span>
+          <span style="font-size:20px;font-weight:800;color:var(--acc);">${pct}%</span>
+        </div>
+        <div class="prog-bar"><div class="prog-fill" style="width:${pct}%;"></div></div>
+        <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:12px;color:var(--mut);">
+          <span>${data.readChapters} leídos</span><span>${data.totalChapters - data.readChapters} pendientes</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- POR TIPO Y ESTADO -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:24px;">
+      <div class="stat-card">
+        <div class="section-title" style="margin-bottom:12px;"><i class="ti ti-tag"></i> Por tipo</div>
+        ${byTypeEntries.map(([t,n])=>`
+          <div style="margin-bottom:10px;">
+            <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px;">
+              <span style="color:${typeColor[t]||'var(--acc)'};">${t}</span><span style="font-weight:700;">${n}</span>
+            </div>
+            <div class="prog-bar"><div class="prog-fill" style="width:${Math.round(n/data.totalMangas*100)}%;background:${typeColor[t]||'var(--acc)'};"></div></div>
+          </div>`).join('')}
+      </div>
+      <div class="stat-card">
+        <div class="section-title" style="margin-bottom:12px;"><i class="ti ti-circle-check"></i> Por estado</div>
+        ${byStatusEntries.map(([s,n])=>`
+          <div style="margin-bottom:10px;">
+            <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px;">
+              <span style="color:${statusColor[s]||'var(--mut)'};">${s}</span><span style="font-weight:700;">${n}</span>
+            </div>
+            <div class="prog-bar"><div class="prog-fill" style="width:${Math.round(n/data.totalMangas*100)}%;background:${statusColor[s]||'var(--acc)'};"></div></div>
+          </div>`).join('')}
+      </div>
+    </div>
+
+    <!-- TOP 5 -->
+    <div class="section">
+      <div class="section-title"><i class="ti ti-trophy"></i> Más leídos</div>
+      ${data.topRead.map(m => `
+        <div class="manga-row" onclick="goManga('${m.name}')">
+          <div class="manga-row-ph">M</div>
+          <div class="manga-row-name">${m.name}</div>
+          <div class="manga-row-bar">
+            <div class="prog-bar"><div class="prog-fill" style="width:${m.total>0?Math.round(m.read/m.total*100):0}%;"></div></div>
+          </div>
+          <div class="manga-row-pct">${m.read}/${m.total}</div>
+        </div>`).join('')}
+    </div>
+
+    <!-- LISTA COMPLETA -->
+    <div class="section">
+      <div class="section-title"><i class="ti ti-list"></i> Todos los mangas</div>
+      <div id="manga-full-list">
+        ${data.mangaList.filter(m=>m.read>0).map(m=>`
+          <div class="manga-row" onclick="goManga('${m.name}')">
+            <div class="manga-row-ph" style="font-size:13px;">${m.completed?'✅':'📖'}</div>
+            <div class="manga-row-name">${m.name}</div>
+            <div class="manga-row-bar">
+              <div class="prog-bar"><div class="prog-fill" style="width:${Math.round(m.read/m.total*100)}%;"></div></div>
+            </div>
+            <div class="manga-row-pct">${m.read}/${m.total}</div>
+          </div>`).join('')}
+      </div>
+    </div>
+
+    <!-- EXPORT / IMPORT -->
+    <div class="section">
+      <div class="section-title"><i class="ti ti-database-export"></i> Progreso — Exportar / Importar</div>
+      <div class="export-row">
+        <button class="btn btn-acc" onclick="exportProgress()">
+          <i class="ti ti-download"></i> Exportar progreso
+        </button>
+        <button class="btn btn-outline" onclick="document.getElementById('import-input').click()">
+          <i class="ti ti-upload"></i> Importar (reemplazar)
+        </button>
+        <button class="btn btn-outline" onclick="document.getElementById('import-merge-input').click()">
+          <i class="ti ti-git-merge"></i> Importar (combinar)
+        </button>
+      </div>
+      <input id="import-input"       type="file" accept=".json" style="display:none" onchange="importProgress(this,false)">
+      <input id="import-merge-input" type="file" accept=".json" style="display:none" onchange="importProgress(this,true)">
+      <div class="import-msg" style="font-size:12px;color:var(--mut);">
+        <i class="ti ti-info-circle"></i> <b>Reemplazar</b>: borra el progreso actual y usa el del archivo. <b>Combinar</b>: une ambos sin perder datos.
+      </div>
+    </div>`;
+}
+
+async function exportProgress() {
+  const r    = await fetch('/api/mangas/progress/export', { headers: { Authorization: 'Bearer ' + TOKEN } });
+  const blob = await r.blob();
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url;
+  a.download = `progreso-manga-${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('✅ Progreso exportado correctamente');
+}
+
+async function importProgress(input, merge) {
+  const file = input.files[0]; if (!file) return;
+  try {
+    const text = await file.text();
+    const json = JSON.parse(text);
+    const progress = json.progress || json; // soportar formato nuevo y viejo
+    const r = await fetch('/api/mangas/progress/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + TOKEN },
+      body: JSON.stringify({ progress, merge })
+    });
+    const data = await r.json();
+    if (data.ok) {
+      showToast(`✅ Importados ${data.imported} mangas correctamente`);
+      setTimeout(load, 500);
+    } else { showToast('❌ ' + (data.error||'Error'), 'err'); }
+  } catch(e) { showToast('❌ Archivo inválido', 'err'); }
+  input.value = '';
+}
+
+load();
+</script>
+</body>
+</html>

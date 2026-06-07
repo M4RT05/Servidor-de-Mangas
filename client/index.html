@@ -12,11 +12,6 @@
 
   <!-- TOP NAV -->
   <nav id="tnav">
-    <!-- Logo (solo PC) -->
-    <a class="nav-logo" href="/" style="display:none;" id="nav-logo">
-      <div class="nav-logo-icon">M</div>
-      <span>MangaServer</span>
-    </a>
     <!-- Tabs -->
     <button class="ni on" data-p="inicio"><i class="ti ti-home-2"></i><span class="nlabel">Inicio</span></button>
     <button class="ni" data-p="series"><i class="ti ti-layout-grid"></i><span class="nlabel">Series</span></button>
@@ -24,7 +19,7 @@
     <button class="ni" data-p="capitulos"><i class="ti ti-bookmark"></i><span class="nlabel">Capítulos</span></button>
     <button class="ni" data-p="busqueda"><i class="ti ti-search"></i><span class="nlabel">Buscar</span></button>
     <div class="nav-spacer" style="display:none;" id="nav-spacer"></div>
-    <button class="ni" id="ubtn" style="padding:5px 5px 5px 8px;"><div class="avatar">M</div></button>
+    <button class="ni" id="ubtn" style="padding:5px 5px 5px 8px;"><div class="avatar" id="nav-avatar">M</div></button>
   </nav>
 
   <!-- CONTENIDO -->
@@ -34,32 +29,49 @@
     <div id="p-inicio" class="pg on">
       <div class="pgh"><h1>Bienvenido</h1><p>Tu biblioteca personal</p></div>
       <div class="hst">Seguir Leyendo</div>
-      <div id="cont-reading"><div class="loading">Cargando...</div></div>
+      <div id="cont-reading"><div class="sk-row-list" id="sk-reading" style="padding:0 0 4px;">
+        <div class="sk-row"><div class="sk-thumb sk-shine"></div><div style="flex:1;display:flex;flex-direction:column;gap:7px;"><div class="sk-line sk-shine" style="width:75%;height:13px;border-radius:6px;"></div><div class="sk-line sk-shine" style="width:45%;height:10px;border-radius:5px;"></div></div></div>
+      </div></div>
       <div class="hst" style="margin-top:20px;">Añadidos Recientemente</div>
-      <div class="sgrid" id="recent-grid"><div class="loading" style="grid-column:1/-1">Cargando...</div></div>
+      <div class="sgrid" id="recent-grid"></div>
     </div>
 
     <!-- SERIES -->
     <div id="p-series" class="pg">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
         <div><h1 style="font-size:23px;font-weight:700;color:var(--text);">Series</h1><p id="scnt" style="font-size:13px;color:var(--mut);margin-top:2px;">Cargando...</p></div>
-        <button id="filter-btn" onclick="openFilter()" style="display:flex;align-items:center;gap:6px;background:var(--card);border:1px solid var(--brd);color:var(--text);padding:8px 14px;border-radius:20px;cursor:pointer;font-size:13px;font-weight:600;">
-          <i class="ti ti-adjustments-horizontal" style="font-size:16px;"></i> Filtrar
-        </button>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <select onchange="setSortMode(this.value)" id="sort-sel" style="background:var(--card);border:1px solid var(--brd);color:var(--text);padding:7px 10px;border-radius:20px;cursor:pointer;font-size:13px;font-weight:600;outline:none;">
+            <option value="az">A → Z</option>
+            <option value="za">Z → A</option>
+            <option value="added">Más nuevos</option>
+            <option value="caps">Más capítulos</option>
+
+          </select>
+          <button id="filter-btn" onclick="openFilter()" style="display:flex;align-items:center;gap:6px;background:var(--card);border:1px solid var(--brd);color:var(--text);padding:8px 14px;border-radius:20px;cursor:pointer;font-size:13px;font-weight:600;">
+            <i class="ti ti-adjustments-horizontal" style="font-size:16px;"></i> Filtrar
+          </button>
+        </div>
       </div>
-      <div class="sgrid" id="sgrid"><div class="loading" style="grid-column:1/-1">Cargando...</div></div>
+      <div class="sgrid" id="sgrid"></div>
     </div>
 
     <!-- RANKINGS -->
     <div id="p-rankings" class="pg">
       <div class="pgh"><h1>Rankings</h1><p>Ordenado por ranking asignado</p></div>
-      <div id="rlist"><div class="loading">Cargando...</div></div>
+      <!-- Mobile: lista simple -->
+      <div id="rlist"></div>
+      <!-- PC: grid de cards grandes (se rellena en renderRankings) -->
+      <div id="rlist-pc" style="display:none;"></div>
     </div>
 
     <!-- CAPÍTULOS -->
     <div id="p-capitulos" class="pg">
       <div class="pgh"><h1>Últimos Capítulos</h1><p>Ordenados por fecha</p></div>
-      <div id="clist"><div class="loading">Cargando...</div></div>
+      <!-- Mobile: lista simple -->
+      <div id="clist"></div>
+      <!-- PC: grid 2 columnas (se usa el mismo clist con CSS) -->
+      <div id="cap-pagination"></div>
     </div>
 
     <!-- BÚSQUEDA -->
@@ -80,8 +92,8 @@
       <div class="det-hero" id="det-mobile-hero">
         <img id="det-hero-bg" class="det-hero-bg" src="" alt="">
         <div class="det-hero-gradient"></div>
-        <img id="det-hero-cover" class="det-hero-cover" src="" alt="">
-        <button class="det-back" onclick="closeDetail()"><i class="ti ti-arrow-left"></i></button>
+        <img id="det-hero-cover" class="det-hero-cover" alt="">
+        <div id="det-hero-diamond"><div class="cover-diamond cover-diamond-lg"></div></div>
       </div>
 
       <!-- MOBILE BODY -->
@@ -97,6 +109,7 @@
             <div style="display:flex;gap:8px;">
               <button class="chap-sec-btn" onclick="toggleChapSearch()"><i class="ti ti-search"></i></button>
               <button class="chap-sec-btn" onclick="toggleSort()"><i class="ti ti-arrows-sort"></i></button>
+              <button class="chap-sec-btn" onclick="openChapConfig()" title="Opciones"><i class="ti ti-settings"></i></button>
             </div>
           </div>
           <div id="chap-search-bar" style="display:none;margin-bottom:10px;">
@@ -108,36 +121,40 @@
 
       <!-- PC LAYOUT -->
       <div id="det-pc-layout" style="display:none;">
-        <div style="padding:24px 40px 0;" id="det-pc-breadcrumb">
+        <div id="det-pc-breadcrumb">
           <button class="det-pc-back" onclick="closeDetail()"><i class="ti ti-arrow-left"></i> Volver</button>
         </div>
-        <div class="det-pc-wrap" id="det-pc-wrap">
-          <div>
-            <img id="det-pc-cover-img" class="det-pc-cover" src="" alt="" style="display:none;">
-            <div id="det-pc-cover-ph" class="det-pc-cover-ph" style="display:none;">M</div>
-          </div>
-          <div class="det-pc-info">
-            <div id="det-pc-meta" class="det-pc-meta"></div>
-            <div id="det-pc-title" class="det-pc-title"></div>
-            <div id="det-pc-genres" class="det-pc-genres"></div>
-            <div id="det-pc-syn" class="det-pc-syn"></div>
-            <div>
+        <div class="det-pc-wrap">
+          <!-- IZQUIERDA: portada + info -->
+          <div class="det-pc-left">
+            <div class="det-pc-cover-wrap">
+              <img id="det-pc-cover-img" class="det-pc-cover" src="" alt="" style="display:none;">
+              <div id="det-pc-cover-ph" class="det-pc-cover-ph" style="display:none;">M</div>
+              <div class="det-pc-cover-grad"></div>
+            </div>
+            <div class="det-pc-below-cover">
+              <div id="det-pc-meta" class="det-pc-meta"></div>
+              <div id="det-pc-title" class="det-pc-title"></div>
+              <div id="det-pc-genres" class="det-pc-genres"></div>
+              <div id="det-pc-syn" class="det-pc-syn"></div>
               <button class="det-pc-btn" id="det-pc-read-btn"><i class="ti ti-book-2"></i> Primer Capítulo</button>
             </div>
           </div>
-        </div>
-        <div class="det-pc-chaps">
-          <div class="chap-sec-header">
-            <span class="chap-sec-count"><span id="chap-count-num-pc" style="color:var(--acc);font-weight:800;">0</span> Capítulos</span>
-            <div style="display:flex;gap:8px;">
-              <button class="chap-sec-btn" onclick="toggleChapSearchPC()"><i class="ti ti-search"></i></button>
-              <button class="chap-sec-btn" onclick="toggleSort()"><i class="ti ti-arrows-sort"></i></button>
+          <!-- DERECHA: capítulos -->
+          <div class="det-pc-right">
+            <div class="chap-sec-header" style="margin-bottom:14px;">
+              <span class="chap-sec-count"><span id="chap-count-num-pc" style="color:var(--acc);font-weight:800;">0</span> Capítulos</span>
+              <div style="display:flex;gap:8px;">
+                <button class="chap-sec-btn" onclick="toggleChapSearchPC()"><i class="ti ti-search"></i></button>
+                <button class="chap-sec-btn" onclick="toggleSort()"><i class="ti ti-arrows-sort"></i></button>
+                <button class="chap-sec-btn" onclick="openChapConfig()" title="Opciones"><i class="ti ti-settings"></i></button>
+              </div>
             </div>
+            <div id="chap-search-bar-pc" style="display:none;margin-bottom:10px;">
+              <div class="sbar" style="margin-bottom:0;"><i class="ti ti-search"></i><input id="chap-sinput-pc" type="text" placeholder="Número de capítulo..."></div>
+            </div>
+            <div id="det-chaplist-pc"></div>
           </div>
-          <div id="chap-search-bar-pc" style="display:none;margin-bottom:10px;">
-            <div class="sbar" style="margin-bottom:0;"><i class="ti ti-search"></i><input id="chap-sinput-pc" type="text" placeholder="Número de capítulo..."></div>
-          </div>
-          <div id="det-chaplist-pc"></div>
         </div>
       </div>
 
@@ -167,9 +184,14 @@
 <div id="upanel">
   <div style="display:flex;justify-content:flex-end;padding:10px 10px 0;"><button id="cpanel" class="icon-btn"><i class="ti ti-x"></i></button></div>
   <div class="uph">
-    <div class="uav">M</div>
-    <div class="un user-name-display">M4RTO</div>
-    <div class="ur user-role-display">Administrador</div>
+    <div style="display:block;text-align:center;margin-bottom:9px;">
+      <div class="uav" id="panel-avatar" title="Cambiar foto de perfil" onclick="triggerAvatarInput()" style="cursor:pointer;margin:0 auto;">
+        <span id="panel-avatar-initials">M</span>
+        <div id="avatar-overlay" style="position:absolute;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity .2s;pointer-events:none;"><i class="ti ti-camera" style="font-size:20px;color:#fff;"></i></div>
+      </div>
+    </div>
+    <div class="un user-name-display">Usuario</div>
+    <div class="ur user-role-display">Lector</div>
   </div>
   <div class="pst">Configuración</div>
   <div class="tgi"><span class="tglb">Contenido +18</span><div class="tg" id="toggle-adult" onclick="toggleAdult(this)"></div></div>
@@ -179,62 +201,86 @@
       <div class="theme-swatch"><span style="background:#0d1117;"></span><span style="background:#161b27;"></span><span style="background:#F5B800;"></span><span style="background:#1c2333;"></span></div>
       <span class="theme-label">Origins</span>
     </button>
-    <button class="theme-btn" data-theme="theme-void-matrix" onclick="setTheme('theme-void-matrix')">
-      <div class="theme-swatch"><span style="background:#080B10;"></span><span style="background:#0E1318;"></span><span style="background:#00E5FF;"></span><span style="background:#141B24;"></span></div>
-      <span class="theme-label">Void Matrix</span>
-    </button>
-    <button class="theme-btn" data-theme="theme-ember-dark" onclick="setTheme('theme-ember-dark')">
-      <div class="theme-swatch"><span style="background:#121313;"></span><span style="background:#1A1C1C;"></span><span style="background:#FF6044;"></span><span style="background:#222525;"></span></div>
-      <span class="theme-label">Ember Dark</span>
-    </button>
-    <button class="theme-btn" data-theme="theme-gilded-forest" onclick="setTheme('theme-gilded-forest')">
-      <div class="theme-swatch"><span style="background:#F7E7CE;"></span><span style="background:#EDD9B4;"></span><span style="background:#102C26;"></span><span style="background:#E2C99A;"></span></div>
-      <span class="theme-label">Gilded Forest</span>
-    </button>
-    <button class="theme-btn" data-theme="theme-arctic-ink" onclick="setTheme('theme-arctic-ink')">
-      <div class="theme-swatch"><span style="background:#F5F5F5;"></span><span style="background:#EBEBEB;"></span><span style="background:#1A1A1A;"></span><span style="background:#E0E0E0;"></span></div>
-      <span class="theme-label">Arctic Ink</span>
+    <button class="theme-btn" data-theme="theme-dark" onclick="setTheme('theme-dark')">
+      <div class="theme-swatch"><span style="background:#0D0D0D;"></span><span style="background:#161616;"></span><span style="background:#E0E0E0;"></span><span style="background:#1E1E1E;"></span></div>
+      <span class="theme-label">Dark</span>
     </button>
     <button class="theme-btn" data-theme="theme-lunar-tide" onclick="setTheme('theme-lunar-tide')">
-      <div class="theme-swatch"><span style="background:#ECEFF1;"></span><span style="background:#DDE3E8;"></span><span style="background:#191970;"></span><span style="background:#CFD8DC;"></span></div>
+      <div class="theme-swatch"><span style="background:#ECEFF1;"></span><span style="background:#DDE3E8;"></span><span style="background:#1A237E;"></span><span style="background:#CFD8DC;"></span></div>
       <span class="theme-label">Lunar Tide</span>
     </button>
+    <button class="theme-btn" data-theme="theme-white" onclick="setTheme('theme-white')">
+      <div class="theme-swatch"><span style="background:#FFFFFF;"></span><span style="background:#F7F7F7;"></span><span style="background:#222222;"></span><span style="background:#EEEEEE;"></span></div>
+      <span class="theme-label">White</span>
+    </button>
   </div>
+  <div class="pst">Mi actividad</div>
+  <div class="pmi" onclick="window.location.href='/stats.html'"><i class="ti ti-chart-bar"></i> Estadísticas de lectura</div>
+  <div class="pmi" onclick="exportProgress()"><i class="ti ti-download"></i> Exportar progreso</div>
+  <div class="pmi" onclick="document.getElementById('import-file-input').click()"><i class="ti ti-upload"></i> Importar progreso</div>
+  <input id="import-file-input" type="file" accept=".json" style="display:none" onchange="importProgressFromPanel(this)">
   <div class="pst">Cuenta</div>
   <div class="pmi admin-only" onclick="window.location.href='/admin/users.html'"><i class="ti ti-users"></i> Gestionar usuarios</div>
+  <div class="pmi admin-only" onclick="window.location.href='/admin/metadata.html'"><i class="ti ti-database-edit"></i> Editor de metadata</div>
   <div class="pmi" onclick="logout()" style="color:#e74c3c;"><i class="ti ti-logout" style="color:#e74c3c;"></i> Cerrar sesión</div>
   <div class="coded-by">Coded by M4RT05</div>
 </div>
 
+<!-- CHAPTER CONFIG MODAL -->
+<div id="chap-cfg-overlay" onclick="closeChapConfig()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:300;"></div>
+<div id="chap-cfg-panel" style="display:none;position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;background:var(--surf);border-radius:20px 20px 0 0;z-index:301;padding:20px 16px calc(30px + env(safe-area-inset-bottom,16px));">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;">
+    <h2 style="font-size:17px;font-weight:700;color:var(--text);display:flex;align-items:center;gap:8px;"><i class="ti ti-settings" style="font-size:18px;"></i> Gestión de lectura</h2>
+    <button onclick="closeChapConfig()" style="background:none;border:none;color:var(--mut);cursor:pointer;font-size:20px;padding:0;"><i class="ti ti-x"></i></button>
+  </div>
+  <button onclick="markAllChaptersRead()" style="width:100%;display:flex;align-items:center;gap:14px;padding:15px 16px;background:var(--card);border:none;border-radius:14px;cursor:pointer;color:var(--text);font-size:14px;font-weight:600;margin-bottom:10px;text-align:left;">
+    <i class="ti ti-checks" style="font-size:22px;color:var(--grn);flex-shrink:0;"></i>
+    <div><div>Marcar todos como leídos</div><div style="font-size:12px;color:var(--mut);margin-top:2px;">Marca todos los capítulos como leídos</div></div>
+  </button>
+  <button onclick="unmarkAllChaptersRead()" style="width:100%;display:flex;align-items:center;gap:14px;padding:15px 16px;background:var(--card);border:none;border-radius:14px;cursor:pointer;color:var(--text);font-size:14px;font-weight:600;text-align:left;">
+    <i class="ti ti-bookmark-off" style="font-size:22px;color:var(--mut);flex-shrink:0;"></i>
+    <div><div>Desmarcar todos los capítulos</div><div style="font-size:12px;color:var(--mut);margin-top:2px;">Elimina todos los registros de lectura</div></div>
+  </button>
+</div>
+
 <script src="js/api.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/detail.js"></script>
 <script src="js/app.js"></script>
 <script>
-// PC layout switcher
-function applyPCLayout(){
+// ── PC LAYOUT SWITCHER ───────────────────────────────────────────────────────
+function applyPCLayout() {
   const pc = window.innerWidth >= 768;
-  const logo = document.getElementById('nav-logo');
   const spacer = document.getElementById('nav-spacer');
-  if(logo) logo.style.display = pc ? 'flex' : 'none';
-  if(spacer) spacer.style.display = pc ? 'block' : 'none';
-  // En PC el body puede hacer scroll
-  document.body.style.overflow = pc ? 'auto' : 'hidden';
+  if (spacer) spacer.style.display = pc ? 'block' : 'none';
+  document.body.style.overflow  = pc ? 'auto'    : 'hidden';
+  document.body.style.height    = pc ? 'auto'    : '100%';
   const app = document.getElementById('app');
-  if(app){ app.style.height = pc ? 'auto' : '100vh'; app.style.overflow = pc ? 'visible' : 'hidden'; }
+  if (app) {
+    app.style.height   = pc ? 'auto'    : '100vh';
+    app.style.overflow = pc ? 'visible' : 'hidden';
+  }
+  // Rankings: mostrar grid PC o lista mobile
+  const rMobile = document.getElementById('rlist');
+  const rPC     = document.getElementById('rlist-pc');
+  if (rMobile) rMobile.style.display = pc ? 'none' : '';
+  if (rPC)     rPC.style.display     = pc ? 'grid' : 'none';
+  // Capítulos: grilla 2 columnas en PC via CSS, nada que cambiar aquí
 }
 applyPCLayout();
 window.addEventListener('resize', applyPCLayout);
 
-// Mostrar layout correcto en detalle al abrir
+// ── DETALLE: mostrar layout correcto ────────────────────────────────────────
 const _origOpenDetail = window.openDetail;
-window.openDetail = async function(enc){
+window.openDetail = async function(enc) {
   await _origOpenDetail(enc);
-  const pc = window.innerWidth >= 768;
-  const hero = document.getElementById('det-mobile-hero');
-  const mBody = document.getElementById('det-mobile-body');
-  const pcLayout = document.getElementById('det-pc-layout');
-  if(hero)  hero.style.display   = pc ? 'none' : '';
-  if(mBody) mBody.style.display  = pc ? 'none' : '';
-  if(pcLayout) pcLayout.style.display = pc ? 'block' : 'none';
+  const pc     = window.innerWidth >= 768;
+  const hero   = document.getElementById('det-mobile-hero');
+  const mBody  = document.getElementById('det-mobile-body');
+  const pcLay  = document.getElementById('det-pc-layout');
+  if (hero)  hero.style.display  = pc ? 'none' : '';
+  if (mBody) mBody.style.display = pc ? 'none' : '';
+  if (pcLay) pcLay.style.display = pc ? 'block' : 'none';
 };
 </script>
 </body>

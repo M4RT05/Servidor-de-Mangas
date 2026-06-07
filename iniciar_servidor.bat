@@ -1,27 +1,39 @@
 @echo off
-:: Ir a la carpeta donde está este archivo (raíz del proyecto)
+title MangaServer
 cd /d "%~dp0"
 
-:: Verificar que node esté instalado
+:: ── VERIFICAR NODE ────────────────────────────────────────────────────────────
 where node >nul 2>&1
 if %errorlevel% neq 0 (
-  echo [ERROR] Node.js no está instalado o no está en el PATH.
-  echo Descárgalo en: https://nodejs.org/
-  pause
-  exit /b 1
+  echo [ERROR] Node.js no esta instalado.
+  echo Descargalo en: https://nodejs.org/
+  pause & exit /b 1
 )
 
-:: Instalar dependencias si node_modules no existe
+:: ── INSTALAR DEPENDENCIAS ─────────────────────────────────────────────────────
 if not exist "node_modules\" (
   echo Instalando dependencias...
   npm install
 )
 
-:: Iniciar el servidor
-echo.
-echo  Iniciando MangaServer...
-echo  Cierra esta ventana para detener el servidor.
-echo.
-npm start
+:: ── LIMPIAR PROCESOS NODE ANTERIORES ─────────────────────────────────────────
+taskkill /f /im node.exe >nul 2>&1
+timeout /t 1 /nobreak >nul
 
+:: ── OBTENER PUERTO DEL .ENV ──────────────────────────────────────────────────
+set PORT=3000
+for /f "tokens=1,* delims==" %%A in (.env) do (
+  if "%%A"=="PORT" set PORT=%%B
+)
+
+:: ── ABRIR PUERTO EN EL FIREWALL ───────────────────────────────────────────────
+netsh advfirewall firewall show rule name="MangaServer Puerto %PORT%" >nul 2>&1
+if %errorlevel% neq 0 (
+  netsh advfirewall firewall add rule name="MangaServer Puerto %PORT%" ^
+    dir=in action=allow protocol=TCP localport=%PORT% ^
+    profile=private,domain >nul 2>&1
+)
+
+:: ── INICIAR SERVIDOR ──────────────────────────────────────────────────────────
+npm start
 pause

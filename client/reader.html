@@ -2,281 +2,844 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover">
   <title>Lector — MangaServer</title>
   <link href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.34.0/dist/tabler-icons.min.css" rel="stylesheet">
+
   <style>
-    :root{--bg:#0d1117;--surf:#161b27;--card:#1c2333;--acc:#F5B800;--text:#e6edf3;--mut:#7d8590;--brd:#30363d;}
-    *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
-    html,body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;height:100%;overflow:hidden;}
-
-    /* BARRA SUPERIOR */
-    #top-bar{
-      position:fixed;top:0;left:0;right:0;max-width:720px;margin:0 auto;
-      background:var(--surf);border-bottom:1px solid var(--brd);
-      z-index:100;transition:transform .3s ease;
-      padding-top:env(safe-area-inset-top,0px);
+    :root {
+      --bot-h:  60px;
+      --acc:    #F5B800;
+      --bg:     #0d1117;
+      --surf:   #161b27;
+      --card:   #1c2333;
+      --brd:    #30363d;
+      --text:   #e6edf3;
+      --mut:    #7d8590;
+      /* 2 colores del lector:
+         --tb-bg  = topbar (más oscuro/diferenciado)
+         --tb-set = fondo de página + zona configuración */
+      --tb-bg:  #1e2435;
+      --tb-brd: #2a3045;
+      --tb-set: #0d1117;
     }
-    #top-bar.hidden{transform:translateY(-120%);}
-    .top-main{display:flex;align-items:center;gap:8px;padding:10px 12px;}
-    .top-back{background:none;border:none;color:var(--mut);cursor:pointer;font-size:22px;display:flex;align-items:center;padding:0;flex-shrink:0;}
-    .top-info{flex:1;min-width:0;}
-    .top-manga{font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;margin-bottom:2px;}
-    .top-manga:hover{color:var(--acc);}
-    .top-nav{display:flex;align-items:center;gap:6px;}
-    .top-arrow{background:none;border:none;color:var(--mut);cursor:pointer;font-size:20px;display:flex;align-items:center;padding:2px;transition:color .15s;}
-    .top-arrow:disabled{opacity:.3;cursor:not-allowed;}
-    .top-arrow:not(:disabled):hover{color:var(--text);}
-    .top-chap{font-size:13px;font-weight:700;color:var(--text);min-width:32px;text-align:center;}
-    .top-config{display:flex;align-items:center;justify-content:space-between;padding:7px 12px 10px;border-top:1px solid var(--brd);}
-    .cfg-left{display:flex;align-items:center;gap:5px;font-size:13px;color:var(--mut);}
-    .cfg-right{display:flex;align-items:center;gap:6px;}
-    .mode-btn{padding:4px 12px;border-radius:20px;border:1px solid var(--brd);font-size:12px;font-weight:700;cursor:pointer;background:none;color:var(--mut);transition:all .15s;}
-    .mode-btn.on{background:var(--acc);color:#0d1117;border-color:var(--acc);}
+    /* ── TEMAS ── */
+    body.theme-dark       { --bg:#111318; --surf:#1a1d24; --card:#22262f; --acc:#E0E0E0; --text:#F0F0F0; --mut:#888888; --brd:#2a2e38; --tb-bg:#1e2130; --tb-brd:#2e3348; --tb-set:#111318; }
+    body.theme-lunar-tide { --bg:#F0F4F8; --surf:#E2ECF4; --card:#D0DFF0; --acc:#1A237E; --text:#1A1A2E; --mut:#546E7A; --brd:#90A4AE; --tb-bg:#C5D5E8; --tb-brd:#90A4AE; --tb-set:#F0F4F8; }
+    body.theme-white      { --bg:#FAFAFA; --surf:#F0F0F0; --card:#E6E6E6; --acc:#222222; --text:#111111; --mut:#666666; --brd:#D4D4D4; --tb-bg:#E0E0E0; --tb-brd:#CCCCCC; --tb-set:#FAFAFA; }
 
-    /* BARRA INFERIOR */
-    #bot-bar{
-      position:fixed;bottom:0;left:0;right:0;max-width:720px;margin:0 auto;
-      background:var(--surf);border-top:1px solid var(--brd);
-      padding:10px 20px calc(env(safe-area-inset-bottom,10px) + 10px);
-      display:flex;align-items:center;justify-content:space-between;
-      z-index:100;transition:transform .3s ease;
+    * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+    html { background:var(--tb-set,var(--bg)); }
+    body { background:var(--tb-set,var(--bg)); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; overscroll-behavior:none; }
+
+    /* ── TOP BAR ── */
+    #top-bar {
+      position: relative;
+      width: 100%;
+      background: var(--tb-bg);
+      /* Sin border-bottom — la transición de color es suficiente */
+      padding-top: env(safe-area-inset-top, 0px);
     }
-    #bot-bar.hidden{transform:translateY(120%);}
-    .bot-btn{display:flex;align-items:center;gap:5px;background:none;border:none;color:var(--mut);cursor:pointer;font-size:14px;font-weight:600;padding:6px 10px;border-radius:10px;}
-    .bot-btn:not(:disabled):hover{color:var(--text);}
-    .bot-btn:disabled{opacity:.3;cursor:not-allowed;}
-    .bot-chap-label{font-size:14px;font-weight:700;color:var(--text);}
-
-    /* CONTENIDO */
-    #reader-wrap{
-      position:fixed;inset:0;max-width:720px;margin:0 auto;
-      overflow-y:auto;overflow-x:hidden;background:var(--bg);scrollbar-width:none;
+    .trow1 {
+      display: flex; align-items: center;
+      padding: 10px 14px; gap: 10px;
+      max-width: 900px; margin: 0 auto;
     }
-    #reader-wrap::-webkit-scrollbar{display:none;}
-    #reader-wrap.with-bars{padding-top:var(--top-h,88px);padding-bottom:var(--bot-h,64px);}
-    #scroll-reader img{width:100%;display:block;}
-
-    /* MODO PÁGINAS */
-    #page-reader{
-      display:none;position:fixed;inset:0;max-width:720px;margin:0 auto;
-      background:var(--bg);align-items:center;justify-content:center;overflow:hidden;
+    .t-back {
+      background: none; border: none;
+      color: var(--mut); cursor: pointer;
+      font-size: 20px; padding: 0;
+      display: flex; flex-shrink: 0;
+      transition: color .15s;
     }
-    #page-reader.with-bars{top:var(--top-h,88px);bottom:var(--bot-h,64px);}
-    #page-img{max-width:100%;max-height:100%;object-fit:contain;display:block;user-select:none;pointer-events:none;}
-    #page-tap-left{position:absolute;top:0;left:0;width:35%;height:100%;cursor:pointer;z-index:5;}
-    #page-tap-right{position:absolute;top:0;right:0;width:35%;height:100%;cursor:pointer;z-index:5;}
-    #page-tap-mid{position:absolute;top:0;left:35%;width:30%;height:100%;cursor:pointer;z-index:5;}
-    #page-counter{position:absolute;bottom:12px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.65);color:#fff;font-size:12px;font-weight:600;padding:4px 14px;border-radius:20px;z-index:6;}
+    .t-back:hover { color: var(--text); }
+    .t-title-wrap {
+      flex: 1; min-width: 0;
+      display: flex; flex-direction: column; align-items: center; gap: 4px;
+    }
+    .t-manga {
+      font-size: 13px; font-weight: 700;
+      color: var(--text); text-align: center; line-height: 1.3;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      max-width: 100%; cursor: pointer; transition: color .15s;
+    }
+    .t-manga:hover { color: var(--acc); }
+    .chapter-nav { display: flex; align-items: center; gap: 10px; }
+    .t-arrow {
+      background: none; border: none; color: var(--text);
+      font-size: 17px; line-height: 1; cursor: pointer;
+      padding: 2px 6px; border-radius: 5px;
+      transition: color .15s, background .15s;
+    }
+    .t-arrow:hover  { color: var(--acc); background: rgba(245,184,0,.1); }
+    .t-arrow:disabled { opacity: .25; cursor: not-allowed; }
+    .t-chapnum {
+      font-size: 13px; font-weight: 700;
+      color: var(--text); min-width: 28px; text-align: center;
+    }
+    /* Botón de número de capítulo — sin contenedor, solo el número */
+    .t-chapnum-btn {
+      display: flex; align-items: center; gap: 4px;
+      background: none;
+      border: none;
+      padding: 4px 2px;
+      color: var(--text);
+      font-size: 13px; font-weight: 700;
+      cursor: pointer;
+      transition: color .15s;
+    }
+    .t-chapnum-btn:hover { color: var(--acc); }
+    /* Drawer de capítulos */
+    #chap-drawer-bg {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,.6); z-index: 500;
+    }
+    #chap-drawer-bg.on { display: block; }
+    #chap-drawer {
+      display: none; position: fixed;
+      bottom: 0; left: 50%; transform: translateX(-50%);
+      width: 100%; max-width: 520px;
+      background: var(--surf);
+      border-radius: 20px 20px 0 0;
+      z-index: 501;
+      max-height: 70vh;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    #chap-drawer.on { display: flex; }
+    .drawer-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 16px 18px 12px;
+      border-bottom: 1px solid var(--brd);
+      flex-shrink: 0;
+    }
+    .drawer-title { font-size: 15px; font-weight: 700; color: var(--text); }
+    .drawer-close {
+      background: none; border: none; color: var(--mut);
+      font-size: 22px; cursor: pointer; padding: 0;
+      display: flex; align-items: center;
+    }
+    .drawer-list {
+      overflow-y: auto; flex: 1;
+      padding: 8px 0 calc(16px + env(safe-area-inset-bottom,0px));
+    }
+    .drawer-item {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 18px; cursor: pointer;
+      transition: background .12s; font-size: 14px; font-weight: 600;
+    }
+    .drawer-item:hover, .drawer-item:active { background: var(--hover); }
+    .drawer-item.current { color: var(--acc); }
+    .drawer-item.current .drawer-item-icon { opacity: 1; }
+    .drawer-item-icon { opacity: 0; color: var(--acc); font-size: 16px; }
+    .t-avatar {
+      width: 38px; height: 38px; border-radius: 50%;
+      background: #2d2a18;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 12px; font-weight: 700; color: var(--acc);
+      flex-shrink: 0; cursor: pointer; overflow: hidden;
+    }
+    .t-avatar img { width:100%; height:100%; object-fit:cover; border-radius:50%; }
 
-    #loader{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;color:var(--mut);font-size:14px;background:var(--bg);z-index:50;}
+    /* Fila 2: zona de configuración — mismo color que el fondo de lectura */
+    .trow2 {
+      background: var(--tb-set);
+      padding: 10px 14px;
+      /* Sin border-top: la diferencia de color ya separa visualmente */
+    }
+    .tcfg-card {
+      display: flex; align-items: center; justify-content: space-between;
+      border: 1px solid var(--tb-brd);
+      border-radius: 15px;
+      background: var(--tb-set);
+      padding: 11px 14px;
+      max-width: 900px; margin: 0 auto;
+    }
+    .t-cfg {
+      display: flex; align-items: center; gap: 7px;
+      background: none; border: none; color: var(--mut);
+      font-size: 13px; font-weight: 500; cursor: pointer; padding: 0;
+      transition: color .15s;
+    }
+    .t-cfg:hover { color: var(--text); }
+    .t-fs {
+      background: none; border: none; color: var(--mut);
+      cursor: pointer; font-size: 17px; padding: 0;
+      display: flex; align-items: center; transition: color .15s;
+    }
+    .t-fs:hover { color: var(--text); }
+
+    /* ── READER WRAP ── */
+    #reader-wrap {
+      position: relative; width: 100%;
+      max-width: 720px; margin: 0 auto;
+      overflow-x: hidden;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(255,255,255,.2) transparent;
+    }
+    #reader-wrap::-webkit-scrollbar { width: 4px; }
+    #reader-wrap::-webkit-scrollbar-track { background: transparent; }
+    #reader-wrap::-webkit-scrollbar-thumb { background: rgba(255,255,255,.25); border-radius: 4px; }
+
+    #scroll-reader { display:block; }
+    #scroll-reader img { width:100%; display:block; }
+
+    /* ── PAGE READER — fixed, cubre TODO incluyendo la topbar ── */
+    #page-reader {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: var(--tb-set,var(--bg));
+      align-items: center;
+      justify-content: center;
+      z-index: 20;
+    }
+    #page-reader.on { display:flex; }
+
+    /* Imagen centrada, ocupa el espacio disponible sin desbordarse */
+    #page-img {
+      max-width: 100%;
+      max-height: 100%;
+      width: auto;
+      height: auto;
+      object-fit: contain;
+      user-select: none;
+      pointer-events: none;
+      display: block;
+    }
+
+    /* Zonas de toque: izq / centro / der */
+    #ptl { position:absolute; left:0;   top:0; width:35%; height:100%; cursor:pointer; z-index:5; }
+    #ptm { position:absolute; left:35%; top:0; width:30%; height:100%; cursor:pointer; z-index:5; }
+    #ptr { position:absolute; right:0;  top:0; width:35%; height:100%; cursor:pointer; z-index:5; }
+
+    /* ── NIGHT MODE ── */
+    body.night { background:#060809; }
+    body.night #scroll-reader img,
+    body.night #page-img { filter:brightness(.76) sepia(.32) contrast(.92) !important; }
+
+    /* ── FLOAT PANEL ── */
+    #float-panel {
+      position:fixed; right:13px; top:50%; transform:translateY(-50%);
+      background:rgba(22,27,39,.93); border:1px solid var(--brd);
+      border-radius:40px; padding:8px;
+      display:flex; flex-direction:column; gap:8px;
+      z-index:50; backdrop-filter:blur(12px);
+    }
+    #float-panel.hidden { display:none !important; }
+    .fb { width:40px; height:40px; border-radius:50%; background:rgba(255,255,255,.08); border:none; color:var(--text); cursor:pointer; font-size:18px; display:flex; align-items:center; justify-content:center; transition:all .2s; }
+    .fb:hover { background:rgba(255,255,255,.14); }
+    .fb.on-night { background:rgba(245,184,0,.2); color:var(--acc); }
+    .fb.on-play  { background:rgba(63,185,80,.2); color:#3fb950; }
+
+    /* ── BOTTOM BAR ── */
+    #bot-bar {
+      position: fixed;
+      bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+      left: 50%; transform: translateX(-50%);
+      background: rgba(22,27,39,.95); border:1px solid var(--brd);
+      border-radius: 50px; padding: 7px 9px;
+      display: flex; align-items: center; gap: 6px;
+      z-index: 100; backdrop-filter: blur(14px);
+      transition: opacity .3s ease;
+      width: max-content; max-width: calc(100vw - 20px);
+    }
+    #bot-bar.hidden { opacity:0; pointer-events:none; }
+
+    .b-chap { width:40px; height:40px; border-radius:50%; background:var(--acc); border:none; color:#0d1117; font-size:18px; cursor:pointer; display:flex; align-items:center; justify-content:center; flex-shrink:0; transition:background .2s, transform .15s; }
+    .b-chap:hover { transform:scale(1.08); }
+    .b-chap:disabled { background:#2d3142; color:var(--mut); cursor:not-allowed; opacity:.5; transform:none; }
+    .b-chap.last { background:#e74c3c; color:#fff; }
+    .b-act { width:34px; height:34px; border-radius:20px; background:rgba(255,255,255,.08); border:none; color:var(--text); cursor:pointer; font-size:15px; display:flex; align-items:center; justify-content:center; transition:background .15s; }
+    .b-act:hover { background:rgba(255,255,255,.14); }
+    .b-page { display:flex; align-items:center; gap:5px; background:rgba(255,255,255,.08); border-radius:20px; padding:5px 12px; cursor:pointer; font-size:12px; color:var(--text); font-weight:700; white-space:nowrap; transition:background .15s; border:none; }
+    .b-page:hover { background:rgba(255,255,255,.13); }
+
+    .sp-bot { height: calc(var(--bot-h) + env(safe-area-inset-bottom, 0px) + 30px); }
+
+    /* ── CONFIG SHEET ── */
+    #cfg-bg { display:none; position:fixed; inset:0; background:rgba(0,0,0,.65); z-index:200; }
+    #cfg-bg.on { display:block; }
+    #cfg-sheet {
+      display:none; position:fixed; bottom:0; left:50%; transform:translateX(-50%);
+      width:100%; max-width:520px; background:var(--surf);
+      border-radius:20px 20px 0 0;
+      padding:20px 18px calc(30px + env(safe-area-inset-bottom, 0px));
+      z-index:201; max-height:82vh; overflow-y:auto;
+    }
+    #cfg-sheet.on { display:block; }
+
+    .cs-title { font-size:15px; font-weight:700; color:var(--text); margin-bottom:18px; display:flex; align-items:center; justify-content:space-between; }
+    .cs-close { background:none; border:none; color:var(--mut); cursor:pointer; font-size:20px; padding:0; }
+    .cs-label { font-size:11px; font-weight:600; color:var(--mut); text-transform:uppercase; letter-spacing:.06em; margin-bottom:10px; }
+    .cs-sep { height:1px; background:var(--brd); margin:16px 0; }
+    .mode-btns { display:flex; gap:8px; }
+    .mode-btn { flex:1; padding:10px; border-radius:12px; border:1px solid var(--brd); background:none; color:var(--mut); font-size:13px; font-weight:700; cursor:pointer; transition:all .15s; display:flex; align-items:center; justify-content:center; gap:7px; }
+    .mode-btn.on { background:var(--acc); color:#0d1117; border-color:var(--acc); }
+    .cfg-row { display:flex; align-items:center; justify-content:space-between; padding:10px 0; }
+    .cfg-rl { display:flex; align-items:center; gap:11px; flex:1; }
+    .cfg-icon { font-size:18px; color:var(--mut); }
+    .cfg-txt .cfg-name { font-size:14px; font-weight:600; color:var(--text); }
+    .cfg-txt .cfg-desc { font-size:12px; color:var(--mut); margin-top:2px; }
+    .tg { width:44px; height:24px; border-radius:12px; background:var(--brd); cursor:pointer; position:relative; transition:background .2s; flex-shrink:0; }
+    .tg.on { background:var(--acc); }
+    .tg::after { content:''; position:absolute; top:3px; left:3px; width:18px; height:18px; border-radius:50%; background:#fff; transition:transform .2s; }
+    .tg.on::after { transform:translateX(20px); }
+    #speed-row { margin-top:10px; padding:12px 14px; background:rgba(255,255,255,.04); border-radius:12px; }
+    .spd-top { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
+    .spd-lbl { font-size:13px; color:var(--mut); }
+    .spd-val { font-size:13px; font-weight:700; color:var(--acc); }
+    input[type=range] { width:100%; height:4px; border-radius:2px; -webkit-appearance:none; appearance:none; background:linear-gradient(to right, var(--acc) var(--pct,26%), var(--brd) var(--pct,26%)); outline:none; cursor:pointer; }
+    input[type=range]::-webkit-slider-thumb { -webkit-appearance:none; width:18px; height:18px; border-radius:50%; background:var(--acc); cursor:pointer; box-shadow:0 2px 6px rgba(0,0,0,.4); }
+    input[type=range]::-moz-range-thumb { width:18px; height:18px; border-radius:50%; background:var(--acc); cursor:pointer; border:none; }
+
+    /* ── LOADER ── */
+    #loader { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; color:var(--mut); font-size:14px; background:var(--bg); z-index:300; }
+    #loader.off { display:none; }
+
+    /* ── PC ── */
+    @media (min-width:768px) {
+      #reader-wrap { max-width: 860px; }
+      #bot-bar { max-width:380px; }
+      #float-panel { right:32px; }
+    }
   </style>
 </head>
 <body>
 
-<div id="top-bar">
-  <div class="top-main">
-    <button class="top-back" onclick="goBack()"><i class="ti ti-arrow-left"></i></button>
-    <div class="top-info">
-      <div class="top-manga" id="top-manga-name" onclick="goToManga()">Cargando...</div>
-      <div class="top-nav">
-        <button class="top-arrow" id="prev-btn" disabled><i class="ti ti-chevron-left"></i></button>
-        <span class="top-chap" id="top-chap-label">—</span>
-        <button class="top-arrow" id="next-btn" disabled><i class="ti ti-chevron-right"></i></button>
-      </div>
-    </div>
-  </div>
-  <div class="top-config">
-    <div class="cfg-left"><i class="ti ti-adjustments-horizontal"></i> Modo de lectura</div>
-    <div class="cfg-right">
-      <button class="mode-btn on" id="btn-scroll" onclick="setMode('scroll')">Scroll</button>
-      <button class="mode-btn" id="btn-page" onclick="setMode('page')">Páginas</button>
-    </div>
-  </div>
-</div>
-
 <div id="loader">Cargando capítulo...</div>
 
-<div id="reader-wrap" class="with-bars" style="display:none;">
+<div id="top-bar">
+  <div class="trow1">
+    <button class="t-back" onclick="goBack()" title="Volver al manga" aria-label="Volver">
+      <i class="ti ti-arrow-left"></i>
+    </button>
+    <div class="t-title-wrap">
+      <div class="t-manga" id="t-title" onclick="goBack()" title="Volver al manga">Cargando...</div>
+      <nav class="chapter-nav" aria-label="Navegación de capítulos">
+        <button class="t-arrow" id="t-prev" disabled onclick="prevChap()" aria-label="Capítulo anterior">‹</button>
+        <button class="t-chapnum-btn" id="t-chapnum" onclick="openChapDrawer()" aria-label="Seleccionar capítulo">
+          <span id="t-chapnum-label">—</span>
+        </button>
+        <button class="t-arrow" id="t-next" disabled onclick="nextChap()" aria-label="Capítulo siguiente">›</button>
+      </nav>
+    </div>
+    <div class="t-avatar" id="t-avatar" aria-label="Perfil">M</div>
+  </div>
+  <div class="trow2">
+    <div class="tcfg-card">
+      <button class="t-cfg" onclick="openCfg()" aria-label="Abrir configuración">
+        <i class="ti ti-adjustments-horizontal" style="font-size:14px;"></i>
+        Configuración
+      </button>
+      <button class="t-fs" id="t-fs-btn" onclick="toggleFS()" title="Pantalla completa" aria-label="Pantalla completa">
+        <i class="ti ti-arrows-maximize"></i>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- SCROLL READER -->
+<div id="reader-wrap">
   <div id="scroll-reader"></div>
+  <div class="sp-bot"></div>
 </div>
 
-<div id="page-reader" class="with-bars" style="display:none;">
-  <div id="page-tap-left" onclick="prevPage()"></div>
-  <div id="page-tap-mid" onclick="toggleBars()"></div>
-  <div id="page-tap-right" onclick="nextPage()"></div>
+<!-- PAGE READER (fixed, se activa solo en modo página) -->
+<div id="page-reader">
+  <div id="ptl" onclick="prevPage()"></div>
+  <div id="ptm" onclick="toggleBars()"></div>
+  <div id="ptr" onclick="nextPage()"></div>
   <img id="page-img" src="" alt="">
-  <div id="page-counter">0 / 0</div>
 </div>
 
-<div id="bot-bar" class="hidden">
-  <button class="bot-btn" id="bot-prev" disabled onclick="goToPrevChap()"><i class="ti ti-chevron-left"></i> Anterior</button>
-  <span class="bot-chap-label" id="bot-chap-label">—</span>
-  <button class="bot-btn" id="bot-next" disabled onclick="goToNextChap()">Siguiente <i class="ti ti-chevron-right"></i></button>
+<!-- FLOATING PANEL -->
+<div id="float-panel" class="hidden">
+  <button class="fb" id="fb-night" onclick="toggleNight()" title="Modo noche">
+    <i class="ti ti-moon"></i>
+  </button>
+  <button class="fb" id="fb-play" onclick="togglePlay()" title="Auto-scroll">
+    <i class="ti ti-player-play-filled"></i>
+  </button>
+</div>
+
+<!-- BOTTOM BAR -->
+<div id="bot-bar">
+  <button class="b-chap" id="b-prev" disabled onclick="prevChap()" title="Capítulo anterior">
+    <i class="ti ti-chevron-left"></i>
+  </button>
+  <button class="b-act" id="b-fs-btn" onclick="toggleFS()" title="Pantalla completa">
+    <i class="ti ti-arrows-maximize"></i>
+  </button>
+  <button class="b-page" onclick="scrollToTop()" id="b-page-info" title="Ir al inicio">
+    <i class="ti ti-book" style="font-size:13px;"></i>
+    <span id="b-page-num">1 / 1</span>
+    <i class="ti ti-chevron-up" style="font-size:11px;color:var(--mut);"></i>
+  </button>
+  <button class="b-act" onclick="openCfg()" title="Configuración">
+    <i class="ti ti-adjustments-horizontal"></i>
+  </button>
+  <button class="b-chap" id="b-next" disabled onclick="nextChap()" title="Siguiente capítulo">
+    <i class="ti ti-chevron-right"></i>
+  </button>
+</div>
+
+<!-- CONFIG SHEET -->
+<!-- CHAPTER DRAWER -->
+<div id="chap-drawer-bg" onclick="closeChapDrawer()"></div>
+<div id="chap-drawer">
+  <div class="drawer-header">
+    <span class="drawer-title">Seleccionar capítulo</span>
+    <button class="drawer-close" onclick="closeChapDrawer()"><i class="ti ti-x"></i></button>
+  </div>
+  <div class="drawer-list" id="chap-drawer-list"></div>
+</div>
+
+<div id="cfg-bg" onclick="closeCfg()"></div>
+<div id="cfg-sheet">
+  <div class="cs-title">
+    <span><i class="ti ti-adjustments-horizontal" style="vertical-align:middle;margin-right:7px;font-size:17px;"></i>Opciones de lectura</span>
+    <button class="cs-close" onclick="closeCfg()"><i class="ti ti-x"></i></button>
+  </div>
+
+  <div class="cs-label">Modo de lectura</div>
+  <div class="mode-btns">
+    <button class="mode-btn" id="btn-scroll" onclick="setMode('scroll')">
+      <i class="ti ti-align-justify"></i> Scroll
+    </button>
+    <button class="mode-btn" id="btn-page" onclick="setMode('page')">
+      <i class="ti ti-layout-bottombar" style="font-size:15px;"></i> Páginas
+    </button>
+  </div>
+
+  <div class="cs-sep"></div>
+  <div class="cs-label">Desplazamiento automático</div>
+  <div class="cfg-row">
+    <div class="cfg-rl">
+      <i class="ti ti-player-play cfg-icon"></i>
+      <div class="cfg-txt">
+        <div class="cfg-name">Desplazamiento automático</div>
+        <div class="cfg-desc">Scroll continuo automático</div>
+      </div>
+    </div>
+    <div class="tg" id="tg-as" onclick="toggleAutoScroll()"></div>
+  </div>
+  <div id="speed-row" style="display:none;">
+    <div class="spd-top">
+      <span class="spd-lbl">Velocidad</span>
+      <span class="spd-val" id="spd-val">130px/s</span>
+    </div>
+    <input type="range" id="spd-slider" min="10" max="500" value="130" oninput="setSpeed(this.value)">
+  </div>
+
+  <div class="cs-sep"></div>
+  <div class="cs-label">Comodidad visual</div>
+  <div class="cfg-row">
+    <div class="cfg-rl">
+      <i class="ti ti-moon cfg-icon"></i>
+      <div class="cfg-txt">
+        <div class="cfg-name">Modo noche</div>
+        <div class="cfg-desc">Reduce brillo y luz azul</div>
+      </div>
+    </div>
+    <div class="tg" id="tg-night" onclick="toggleNight()"></div>
+  </div>
+  <div class="cs-sep"></div>
+  <div class="cfg-row">
+    <div class="cfg-rl">
+      <i class="ti ti-pin cfg-icon"></i>
+      <div class="cfg-txt">
+        <div class="cfg-name">Mostrar en pantalla</div>
+        <div class="cfg-desc">Panel flotante con controles rápidos</div>
+      </div>
+    </div>
+    <div class="tg" id="tg-screen" onclick="toggleScreen()"></div>
+  </div>
 </div>
 
 <script>
-const params  = new URLSearchParams(window.location.search);
-const MANGA   = decodeURIComponent(params.get('manga') || '');
-const CHAPTER = decodeURIComponent(params.get('chapter') || '');
+// ── PARAMS & AUTH ─────────────────────────────────────────────────────────────
+const P       = new URLSearchParams(location.search);
+const MANGA   = decodeURIComponent(P.get('manga')   || '');
+const CHAPTER = decodeURIComponent(P.get('chapter') || '');
 const TOKEN   = localStorage.getItem('manga_token');
-if (!TOKEN) window.location.href = '/login.html';
+if (!TOKEN) location.href = '/login.html';
 
-let chapterData = null;
-let currentPage = 0;
-let readMode    = localStorage.getItem('read_mode') || 'scroll';
-let barsVisible = true;
-let lastScrollY = 0;
-let scrollTicking = false;
+// ── BACK BUTTON FIX (Android) ─────────────────────────────────────────────────
+history.pushState(null, '', location.href);
+addEventListener('popstate', () => { history.pushState(null, '', location.href); goBack(); });
 
-function imgSrc(src){ return src+(src.includes('?')?'&':'?')+'token='+TOKEN; }
-function chLabel(str){
-  const m=String(str).match(/(\d+(?:\.\d+)?)/);
-  if(!m)return'Cap. '+str;
-  const n=parseFloat(m[1]);
-  return'Cap. '+(Number.isInteger(n)?n:n);
+// ── STATE ─────────────────────────────────────────────────────────────────────
+let chapData   = null;
+let curPage    = 0;
+let isLast     = false;
+let mode       = localStorage.getItem('rm_mode')   || 'scroll';
+let nightOn    = localStorage.getItem('rm_night')  === 'true';
+let screenOn   = localStorage.getItem('rm_screen') === 'true';
+let asOn       = localStorage.getItem('rm_as')     === 'true';
+let asSpeed    = parseInt(localStorage.getItem('rm_speed') || '130');
+let asActive   = false;
+let asRAF      = null;
+let asLastTime = null;
+
+// ── REFS ──────────────────────────────────────────────────────────────────────
+const wrap   = document.getElementById('reader-wrap');
+const scrRdr = document.getElementById('scroll-reader');
+const pgRdr  = document.getElementById('page-reader');
+const pgImg  = document.getElementById('page-img');
+const botBar = document.getElementById('bot-bar');
+const fPanel = document.getElementById('float-panel');
+const loader = document.getElementById('loader');
+
+// ── INIT UI ───────────────────────────────────────────────────────────────────
+const _avn   = document.getElementById('t-avatar');
+const _avurl = localStorage.getItem('manga_avatar');
+if (_avurl) {
+  _avn.innerHTML = `<img src="${_avurl}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`;
+} else {
+  _avn.textContent = (localStorage.getItem('manga_username') || 'M').slice(0,2).toUpperCase();
 }
 
-// Medir altura de barras para el padding correcto
-function measureBars(){
-  const tb=document.getElementById('top-bar');
-  const bb=document.getElementById('bot-bar');
-  const th=tb?tb.offsetHeight:88;
-  const bh=bb&&!bb.classList.contains('hidden')?bb.offsetHeight:64;
-  document.documentElement.style.setProperty('--top-h', th+'px');
-  document.documentElement.style.setProperty('--bot-h', bh+'px');
+// Aplicar tema guardado (void-matrix se convierte a default si alguien lo tenía)
+const savedTheme = localStorage.getItem('manga_theme') || '';
+if (savedTheme && savedTheme !== 'theme-void-matrix') {
+  document.body.classList.add(savedTheme);
+} else if (savedTheme === 'theme-void-matrix') {
+  localStorage.removeItem('manga_theme');
 }
 
-async function loadChapter(){
-  try{
-    const res=await fetch(`/api/mangas/${encodeURIComponent(MANGA)}/${encodeURIComponent(CHAPTER)}/images`,{headers:{Authorization:'Bearer '+TOKEN}});
-    if(!res.ok)throw new Error();
-    chapterData=await res.json();
+if (nightOn) document.body.classList.add('night');
+document.getElementById('tg-night').classList.toggle('on', nightOn);
+document.getElementById('tg-as').classList.toggle('on', asOn);
+document.getElementById('tg-screen').classList.toggle('on', screenOn);
+document.getElementById('speed-row').style.display = asOn ? 'block' : 'none';
+document.getElementById('spd-slider').value = asSpeed;
+setSpeedUI(asSpeed);
+setModeUI(mode);
+updateFB();
+if (!screenOn) fPanel.classList.add('hidden');
+
+// ── LOAD CHAPTER ──────────────────────────────────────────────────────────────
+async function loadChapter() {
+  loader.classList.remove('off');
+  try {
+    const r = await fetch(`/api/mangas/${encodeURIComponent(MANGA)}/${encodeURIComponent(CHAPTER)}/images`, {
+      headers: { Authorization: 'Bearer ' + TOKEN }
+    });
+    if (!r.ok) throw new Error(r.status);
+    chapData = await r.json();
     renderChapter();
-  }catch{ document.getElementById('loader').textContent='Error cargando el capítulo.'; }
+  } catch(e) {
+    loader.textContent = 'Error cargando el capítulo. (' + e.message + ')';
+  }
 }
 
-function renderChapter(){
-  const d=chapterData;
-  document.title=`${MANGA} — ${chLabel(CHAPTER)}`;
-  document.getElementById('top-manga-name').textContent=MANGA;
-  document.getElementById('top-chap-label').textContent=chLabel(CHAPTER);
-  document.getElementById('bot-chap-label').textContent=chLabel(CHAPTER);
-  const prevBtn=document.getElementById('prev-btn');
-  const nextBtn=document.getElementById('next-btn');
-  prevBtn.disabled=!d.prevChapter; nextBtn.disabled=!d.nextChapter;
-  prevBtn.onclick=()=>d.prevChapter&&goToChapter(d.prevChapter);
-  nextBtn.onclick=()=>d.nextChapter&&goToChapter(d.nextChapter);
-  document.getElementById('bot-prev').disabled=!d.prevChapter;
-  document.getElementById('bot-next').disabled=!d.nextChapter;
-  document.getElementById('loader').style.display='none';
-  setTimeout(measureBars,50);
-  setMode(readMode);
+function renderChapter() {
+  isLast = !chapData.nextChapter;
+
+  document.getElementById('t-title').textContent = MANGA;
+  // Actualizar el botón con el número actual
+  document.getElementById('t-chapnum-label').textContent = chapLabel(CHAPTER);
+  // Llenar el drawer de capítulos
+  if (chapData.allChapters && chapData.allChapters.length > 0) {
+    const reversed = [...chapData.allChapters].reverse();
+    document.getElementById('chap-drawer-list').innerHTML = reversed.map(ch => `
+      <div class="drawer-item${ch===CHAPTER?' current':''}" onclick="goToChapFromDrawer('${ch}')">
+        <span>${chapLabel(ch)}</span>
+        <i class="ti ti-check drawer-item-icon"></i>
+      </div>`).join('');
+  } else {
+    document.getElementById('chap-drawer-list').innerHTML =
+      `<div class="drawer-item current"><span>${chapLabel(CHAPTER)}</span><i class="ti ti-check drawer-item-icon"></i></div>`;
+  }
+  document.getElementById('t-prev').disabled = !chapData.prevChapter;
+  document.getElementById('t-next').disabled = false;
+  if (isLast) document.getElementById('t-next').style.color = '#e74c3c';
+
+  document.getElementById('b-prev').disabled = !chapData.prevChapter;
+  const bNext = document.getElementById('b-next');
+  bNext.disabled = false;
+  bNext.classList.toggle('last', isLast);
+  bNext.title = isLast ? 'Volver al manga' : 'Siguiente capítulo';
+  updatePageNum(1, chapData.images.length);
+
+  loader.classList.add('off');
+
+  if (mode === 'scroll') renderScroll();
+  else renderPage();
+
   saveProgress();
 }
 
-function setMode(mode){
-  readMode=mode;
-  localStorage.setItem('read_mode',mode);
-  document.getElementById('btn-scroll').classList.toggle('on',mode==='scroll');
-  document.getElementById('btn-page').classList.toggle('on',mode==='page');
-  if(mode==='scroll'){
-    document.getElementById('page-reader').style.display='none';
-    document.getElementById('reader-wrap').style.display='block';
-    renderScrollMode();
-    setupScrollListener();
-  }else{
-    document.getElementById('reader-wrap').style.display='none';
-    const pr=document.getElementById('page-reader');
-    pr.style.display='flex';
-    renderPageMode();
-  }
-  measureBars();
+function chapLabel(ch) {
+  const m = String(ch).match(/(\d+(?:\.\d+)?)/);
+  if (!m) return ch;
+  const n = parseFloat(m[1]);
+  return Number.isInteger(n) ? String(n) : String(n);
 }
 
-function renderScrollMode(){
-  const el=document.getElementById('scroll-reader');
-  if(el.children.length>0)return;
-  el.innerHTML=chapterData.images.map((src,i)=>`<img src="${imgSrc(src)}" alt="Página ${i+1}" loading="lazy">`).join('');
-}
-function renderPageMode(){ showPageImg(0); }
-function showPageImg(index){
-  if(!chapterData||index<0||index>=chapterData.images.length)return;
-  currentPage=index;
-  document.getElementById('page-img').src=imgSrc(chapterData.images[index]);
-  document.getElementById('page-counter').textContent=`${index+1} / ${chapterData.images.length}`;
-}
-function prevPage(){ if(currentPage>0)showPageImg(currentPage-1); else showBars(); }
-function nextPage(){ if(chapterData&&currentPage<chapterData.images.length-1)showPageImg(currentPage+1); else showEndBars(); }
+// ── SCROLL MODE ───────────────────────────────────────────────────────────────
+function renderScroll() {
+  // Asegurarse que el page reader no interfiere
+  pgRdr.classList.remove('on');
+  pgRdr.style.display = 'none';
+  wrap.style.display = 'block';
 
-function setupScrollListener(){
-  const wrap=document.getElementById('reader-wrap');
-  wrap.addEventListener('scroll',()=>{
-    if(scrollTicking)return;
-    requestAnimationFrame(()=>{
-      const y=wrap.scrollTop;
-      const max=wrap.scrollHeight-wrap.clientHeight;
-      if(y<80)showBars();
-      else if(max-y<80)showEndBars();
-      else if(y>lastScrollY+8)hideBars();
-      else if(y<lastScrollY-8)showTopOnly();
-      lastScrollY=y;
-      scrollTicking=false;
-    });
-    scrollTicking=true;
+  scrRdr.innerHTML = chapData.images.map((src, i) =>
+    `<img src="${src}?token=${TOKEN}" alt="Pag ${i+1}" loading="lazy">`
+  ).join('');
+
+  window.removeEventListener('scroll', onScroll);
+  window.addEventListener('scroll', onScroll, { passive: true });
+  lastScrollY = window.scrollY;
+  if (asOn && asActive) startAS();
+}
+
+let lastScrollY = 0;
+
+function onScroll() {
+  updatePageNum(getCurPage(), chapData?.images?.length || 1);
+  const y = window.scrollY;
+  const atBottom = (y + window.innerHeight) >= (document.body.scrollHeight - 30);
+  if (atBottom) showBars();
+  else if (y > lastScrollY + 8) hideBars();
+  else if (y < lastScrollY - 8) showBars();
+  lastScrollY = y;
+}
+
+function getCurPage() {
+  const imgs = scrRdr.querySelectorAll('img');
+  if (!imgs.length) return 1;
+  const mid = window.scrollY + window.innerHeight / 2;
+  let closest = 0, minD = Infinity;
+  imgs.forEach((img, i) => {
+    const d = Math.abs(img.offsetTop + img.offsetHeight / 2 - mid);
+    if (d < minD) { minD = d; closest = i; }
   });
+  return closest + 1;
 }
 
-function showBars(){
-  document.getElementById('top-bar').classList.remove('hidden');
-  document.getElementById('bot-bar').classList.add('hidden');
-  document.getElementById('reader-wrap').classList.add('with-bars');
-  document.getElementById('page-reader').classList.add('with-bars');
-  barsVisible=true; measureBars();
-}
-function showTopOnly(){
-  document.getElementById('top-bar').classList.remove('hidden');
-  document.getElementById('bot-bar').classList.add('hidden');
-  barsVisible=true;
-}
-function showEndBars(){
-  document.getElementById('top-bar').classList.remove('hidden');
-  document.getElementById('bot-bar').classList.remove('hidden');
-  document.getElementById('reader-wrap').classList.add('with-bars');
-  document.getElementById('page-reader').classList.add('with-bars');
-  barsVisible=true; measureBars();
-}
-function hideBars(){
-  document.getElementById('top-bar').classList.add('hidden');
-  document.getElementById('bot-bar').classList.add('hidden');
-  document.getElementById('reader-wrap').classList.remove('with-bars');
-  document.getElementById('page-reader').classList.remove('with-bars');
-  barsVisible=false;
-}
-function toggleBars(){ if(barsVisible)hideBars(); else showBars(); }
+// ── PAGE MODE — imagen centrada en pantalla completa limpia ───────────────────
+function renderPage() {
+  // Ocultar scroll reader y su contenedor
+  wrap.style.display = 'none';
+  window.removeEventListener('scroll', onScroll);
 
-function goToChapter(ch){ window.location.href=`/reader.html?manga=${encodeURIComponent(MANGA)}&chapter=${encodeURIComponent(ch)}`; }
-function goToPrevChap(){ if(chapterData?.prevChapter)goToChapter(chapterData.prevChapter); }
-function goToNextChap(){ if(chapterData?.nextChapter)goToChapter(chapterData.nextChapter); }
-function goBack(){ history.back(); }
-function goToManga(){ window.location.href='/?goto='+encodeURIComponent(MANGA); }
+  // Mostrar el reader de página
+  pgRdr.style.display = 'flex';
+  pgRdr.classList.add('on');
 
-document.addEventListener('keydown',e=>{
-  if(e.key==='ArrowLeft')prevPage();
-  if(e.key==='ArrowRight')nextPage();
-  if(e.key==='Escape')goBack();
+  // Limpiar imagen anterior para evitar flashes
+  pgImg.src = '';
+  curPage = 0;
+  showPgImg(0);
+}
+
+function showPgImg(idx) {
+  if (!chapData || idx < 0 || idx >= chapData.images.length) return;
+  curPage = idx;
+  // Evitar el bug de flash/colorshift: limpiar src primero, luego asignar
+  pgImg.style.opacity = '0';
+  pgImg.onload = () => { pgImg.style.opacity = '1'; };
+  pgImg.onerror = () => { pgImg.style.opacity = '1'; };
+  pgImg.src = chapData.images[idx] + '?token=' + TOKEN;
+  updatePageNum(idx + 1, chapData.images.length);
+}
+
+function prevPage() { if (curPage > 0) showPgImg(curPage - 1); else toggleBars(); }
+function nextPage() {
+  if (!chapData) return;
+  if (curPage < chapData.images.length - 1) showPgImg(curPage + 1);
+  else nextChap();
+}
+
+// ── MODE ──────────────────────────────────────────────────────────────────────
+function setMode(m) {
+  mode = m;
+  localStorage.setItem('rm_mode', m);
+  setModeUI(m);
+  if (!chapData) return;
+  if (m === 'scroll') {
+    pgRdr.classList.remove('on');
+    pgRdr.style.display = 'none';
+    renderScroll();
+  } else {
+    scrRdr.innerHTML = '';
+    window.removeEventListener('scroll', onScroll);
+    renderPage();
+  }
+}
+function setModeUI(m) {
+  document.getElementById('btn-scroll').classList.toggle('on', m === 'scroll');
+  document.getElementById('btn-page').classList.toggle('on',   m === 'page');
+}
+
+// ── CHAPTER NAV ───────────────────────────────────────────────────────────────
+function prevChap() { if (chapData?.prevChapter) goToChap(chapData.prevChapter); }
+function nextChap() {
+  if (isLast) { goBack(); return; }
+  if (chapData?.nextChapter) goToChap(chapData.nextChapter);
+}
+function goToChap(ch) {
+  if (asActive) stopAS();
+  location.href = `/reader.html?manga=${encodeURIComponent(MANGA)}&chapter=${encodeURIComponent(ch)}`;
+}
+
+// ── BACK ──────────────────────────────────────────────────────────────────────
+function goBack() {
+  if (asActive) stopAS();
+  saveProgress();
+  location.href = '/?goto=' + encodeURIComponent(MANGA);
+}
+
+// ── BARS ──────────────────────────────────────────────────────────────────────
+function showBars()   { botBar.classList.remove('hidden'); }
+function hideBars()   { botBar.classList.add('hidden'); }
+function toggleBars() { botBar.classList.toggle('hidden'); }
+
+function updatePageNum(page, total) {
+  document.getElementById('b-page-num').textContent = `${page} / ${total}`;
+}
+function scrollToTop() { window.scrollTo({ top: 0, behavior: 'smooth' }); }
+
+// ── AUTO SCROLL ───────────────────────────────────────────────────────────────
+function toggleAutoScroll() {
+  asOn = !asOn;
+  localStorage.setItem('rm_as', asOn);
+  document.getElementById('tg-as').classList.toggle('on', asOn);
+  document.getElementById('speed-row').style.display = asOn ? 'block' : 'none';
+  if (!asOn && asActive) stopAS();
+  updateFB();
+}
+function togglePlay() {
+  if (!asOn) {
+    asOn = true;
+    localStorage.setItem('rm_as', true);
+    document.getElementById('tg-as').classList.add('on');
+    document.getElementById('speed-row').style.display = 'block';
+  }
+  if (asActive) stopAS(); else startAS();
+}
+function startAS() {
+  if (!asOn || mode === 'page') return;
+  asActive = true; asLastTime = performance.now();
+  updateFB();
+  function step(now) {
+    if (!asActive) return;
+    const dt = (now - asLastTime) / 1000;
+    asLastTime = now;
+    window.scrollBy(0, asSpeed * dt);
+    const atEnd = window.scrollY + window.innerHeight >= document.body.scrollHeight - 5;
+    if (atEnd) { stopAS(); return; }
+    asRAF = requestAnimationFrame(step);
+  }
+  asRAF = requestAnimationFrame(step);
+}
+function stopAS() {
+  asActive = false;
+  if (asRAF) { cancelAnimationFrame(asRAF); asRAF = null; }
+  updateFB();
+}
+function setSpeed(val) {
+  asSpeed = parseInt(val);
+  localStorage.setItem('rm_speed', asSpeed);
+  setSpeedUI(asSpeed);
+}
+function setSpeedUI(val) {
+  document.getElementById('spd-val').textContent = val + 'px/s';
+  const pct = ((val - 10) / (500 - 10) * 100).toFixed(1) + '%';
+  document.getElementById('spd-slider').style.setProperty('--pct', pct);
+}
+
+// ── NIGHT MODE ────────────────────────────────────────────────────────────────
+function toggleNight() {
+  nightOn = !nightOn;
+  localStorage.setItem('rm_night', nightOn);
+  document.body.classList.toggle('night', nightOn);
+  document.getElementById('tg-night').classList.toggle('on', nightOn);
+  updateFB();
+}
+
+// ── SHOW ON SCREEN ────────────────────────────────────────────────────────────
+function toggleScreen() {
+  screenOn = !screenOn;
+  localStorage.setItem('rm_screen', screenOn);
+  document.getElementById('tg-screen').classList.toggle('on', screenOn);
+  fPanel.classList.toggle('hidden', !screenOn);
+}
+
+function updateFB() {
+  document.getElementById('fb-night').classList.toggle('on-night', nightOn);
+  document.getElementById('fb-play').classList.toggle('on-play', asActive);
+  document.getElementById('fb-play').innerHTML = asActive
+    ? '<i class="ti ti-player-pause-filled"></i>'
+    : '<i class="ti ti-player-play-filled"></i>';
+}
+
+// ── FULLSCREEN ────────────────────────────────────────────────────────────────
+function toggleFS() {
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen?.().catch(()=>{});
+    screen.orientation?.lock?.('portrait').catch(()=>{});
+  } else {
+    document.exitFullscreen?.();
+  }
+}
+document.addEventListener('fullscreenchange', () => {
+  const fs = !!document.fullscreenElement;
+  const icon = fs ? 'ti-arrows-minimize' : 'ti-arrows-maximize';
+  document.getElementById('t-fs-btn').innerHTML = `<i class="ti ${icon}"></i>`;
+  document.getElementById('b-fs-btn').innerHTML = `<i class="ti ${icon}"></i>`;
 });
 
-async function saveProgress(){
-  try{
-    await fetch('/api/mangas/progress',{
-      method:'POST',
-      headers:{'Content-Type':'application/json','Authorization':'Bearer '+TOKEN},
-      body:JSON.stringify({manga:MANGA,chapter:CHAPTER,page:0})
+// ── CONFIG SHEET ──────────────────────────────────────────────────────────────
+function openCfg()  { document.getElementById('cfg-bg').classList.add('on'); document.getElementById('cfg-sheet').classList.add('on'); }
+function closeCfg() { document.getElementById('cfg-bg').classList.remove('on'); document.getElementById('cfg-sheet').classList.remove('on'); }
+
+// ── PROGRESS ──────────────────────────────────────────────────────────────────
+async function saveProgress() {
+  try {
+    const page = mode === 'page' ? curPage : (getCurPage?.() || 0);
+    await fetch('/api/mangas/progress', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + TOKEN },
+      body: JSON.stringify({ manga: MANGA, chapter: CHAPTER, page })
     });
-  }catch{}
+  } catch {}
 }
 
+// ── DRAWER DE CAPÍTULOS ──────────────────────────────────────────────────────
+function openChapDrawer() {
+  document.getElementById('chap-drawer-bg').classList.add('on');
+  document.getElementById('chap-drawer').classList.add('on');
+  // Hacer scroll al capítulo actual
+  setTimeout(() => {
+    const current = document.querySelector('.drawer-item.current');
+    if (current) current.scrollIntoView({ block: 'center' });
+  }, 80);
+}
+function closeChapDrawer() {
+  document.getElementById('chap-drawer-bg').classList.remove('on');
+  document.getElementById('chap-drawer').classList.remove('on');
+}
+function goToChapFromDrawer(ch) {
+  closeChapDrawer();
+  if (ch && ch !== CHAPTER) goToChap(ch);
+}
+
+// ── TECLADO (PC) ──────────────────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  if (['INPUT','TEXTAREA'].includes(e.target.tagName)) return;
+  const k = e.key;
+  if (k === 'ArrowLeft'  || k === 'ArrowUp')    prevPage();
+  if (k === 'ArrowRight' || k === 'ArrowDown')   nextPage();
+  if (k === 'Escape')  goBack();
+  if (k === 'f' || k === 'F') toggleFS();
+  if (k === ' ') { e.preventDefault(); togglePlay(); }
+  if (k === 'n' || k === 'N') toggleNight();
+});
+
+// ── ARRANCAR ──────────────────────────────────────────────────────────────────
 loadChapter();
 </script>
 </body>

@@ -12,13 +12,13 @@ Servidor personal para leer tu biblioteca de manga, manhwa y manhua desde cualqu
 4. [Estructura de carpetas de mangas](#estructura-de-carpetas-de-mangas)
 5. [Cómo usar el servidor](#cómo-usar-el-servidor)
    - [Inicio](#inicio)
-   - [Panel de usuario](#panel-de-usuario)
    - [Series](#series)
    - [Rankings](#rankings)
    - [Últimos Capítulos](#últimos-capítulos)
    - [Búsqueda](#búsqueda)
-6. [Herramienta de Metadata](#herramienta-de-metadata)
-7. [Acceso desde otros dispositivos](#acceso-desde-otros-dispositivos)
+   - [Panel de usuario](#panel-de-usuario)
+6. [Acceso desde otros dispositivos](#acceso-desde-otros-dispositivos)
+7. [Acceso remoto con Tailscale](#acceso-remoto-con-tailscale)
 8. [Solución de problemas](#solución-de-problemas)
 9. [Estructura del proyecto](#estructura-del-proyecto)
 
@@ -29,9 +29,9 @@ Servidor personal para leer tu biblioteca de manga, manhwa y manhua desde cualqu
 Antes de instalar, asegúrate de tener lo siguiente en la PC que va a funcionar como servidor:
 
 - **Node.js v18 o superior** — [descargar en nodejs.org](https://nodejs.org/)
-- **Windows 10 / 11** (el proyecto está optimizado para Windows)
+- **Windows 10 / 11**
 - Una carpeta con tus mangas organizados (ver [estructura de carpetas](#estructura-de-carpetas-de-mangas))
-- El servidor y los dispositivos lectores deben estar en la **misma red WiFi**
+- Para acceso desde otros dispositivos: todos deben estar en la **misma red WiFi**
 
 ---
 
@@ -40,7 +40,7 @@ Antes de instalar, asegúrate de tener lo siguiente en la PC que va a funcionar 
 1. Descarga o clona el repositorio en tu PC
 2. Copia el archivo `.env.example` y renómbralo a `.env`
 3. Completa los valores del `.env` (ver [Configuración](#configuración))
-4. Doble clic en **`iniciar_servidor.bat`** (ejecutar como Administrador la primera vez)
+4. Doble clic en **`iniciar_servidor.bat`** — ejecutar como **Administrador** la primera vez para que configure el firewall automáticamente
 5. Abre el navegador en `http://localhost:3000`
 
 > **Primera vez:** El `.bat` instala las dependencias automáticamente con `npm install`. Puede tardar un minuto.
@@ -52,6 +52,9 @@ Antes de instalar, asegúrate de tener lo siguiente en la PC que va a funcionar 
 Edita el archivo `.env` en la raíz del proyecto:
 
 ```env
+# Nombre de usuario administrador
+USERNAME=M4RTO
+
 # Contraseña para entrar al servidor
 PASSWORD=tu_contrasena_aqui
 
@@ -68,13 +71,13 @@ MANGA_PATH=D:\Mis Mangas
 MANGA_PATH_2=D:\Mis Mangas 2
 ```
 
-> **Importante:** El archivo `.env` contiene tu contraseña. Nunca lo subas a GitHub ni lo compartas. Ya está incluido en `.gitignore`.
+> **Importante:** El archivo `.env` contiene tu contraseña. Nunca lo subas a GitHub. Ya está incluido en `.gitignore`.
 
 ---
 
 ## Estructura de carpetas de mangas
 
-El servidor espera que cada manga esté en su propia carpeta, y dentro de ella los capítulos como subcarpetas con las imágenes:
+El servidor espera que cada manga esté en su propia carpeta, con los capítulos como subcarpetas que contienen las imágenes:
 
 ```
 📁 Mis Mangas/
@@ -87,13 +90,13 @@ El servidor espera que cada manga esté en su propia carpeta, y dentro de ella l
 │   │   └── ...
 │   ├── 📁 Capitulo_2/
 │   └── ...
-├── 📁 Otro Manga/
-│   └── ...
+└── 📁 Otro Manga/
+    └── ...
 ```
 
-**`cover.jpg`** — Portada del manga. Si no existe, el servidor usa la primera imagen del primer capítulo.
+**`cover.jpg`** — Portada del manga. Si no existe, el servidor usa la primera imagen del primer capítulo automáticamente.
 
-**`metadata.json`** — Información adicional del manga. Si no existe, el manga aparece con valores por defecto. Ejemplo:
+**`metadata.json`** — Información del manga. Si no existe, aparece con valores por defecto. Ejemplo:
 
 ```json
 {
@@ -127,7 +130,63 @@ La pantalla principal muestra dos secciones:
 
 **Seguir Leyendo** — Mangas que empezaste pero no terminaste, con barra de progreso y el último capítulo leído. Toca una tarjeta para ir directamente al detalle del manga.
 
-**Añadidos Recientemente** — Los 10 mangas más nuevos de tu biblioteca ordenados por fecha de creación de la carpeta.
+**Añadidos Recientemente** — Los 10 mangas más nuevos de tu biblioteca, ordenados por fecha de creación de la carpeta.
+
+---
+
+### Series
+
+<img src="docs/screenshots/series.jpg" width="320" alt="Pantalla de series">
+
+Vista completa de tu biblioteca. Cada manga se muestra como una card con portada, nombre, tipo, estado y número de capítulos.
+
+**Ordenar** — El selector permite ordenar por A→Z, Z→A, más nuevos o más capítulos.
+
+**Filtrar** — Toca el botón "Filtrar" para abrir el panel de filtros.
+
+<img src="docs/screenshots/filtros.jpg" width="320" alt="Panel de filtros">
+
+El panel de filtros permite combinar múltiples criterios:
+
+- **Tipo** — Manga, Manhwa o Manhua
+- **Géneros** — Solo muestra los géneros presentes en tu biblioteca. Si el contenido +18 está desactivado, los géneros adultos no aparecen aquí
+- **Estado** — Activo, Hiatus o Finalizado
+
+El número en el botón "Filtrar" indica cuántos filtros están activos. El botón "Limpiar" los borra todos.
+
+---
+
+### Rankings
+
+<img src="docs/screenshots/rankings.jpg" width="320" alt="Pantalla de rankings">
+
+Muestra los mangas ordenados por el campo `ranking` del `metadata.json`. Los que no tienen ranking asignado aparecen al final.
+
+Cada card muestra la portada, el número de puesto y los badges de tipo y estado. El ranking se asigna editando el `metadata.json` de cada manga o usando el Editor de metadata desde el panel de usuario.
+
+---
+
+### Últimos Capítulos
+
+<img src="docs/screenshots/capitulos.jpg" width="320" alt="Pantalla de últimos capítulos">
+
+Lista los mangas ordenados por la fecha del capítulo más reciente, mostrando los 2 últimos capítulos de cada uno:
+
+- **Punto amarillo** — capítulo no leído
+- **Punto gris** — capítulo ya leído
+- La fecha es relativa: "Hace 2 horas", "Hace 3 días", etc.
+
+Toca el nombre del manga para ir a su detalle. Toca un capítulo para leerlo directamente. La lista está paginada de 20 en 20.
+
+---
+
+### Búsqueda
+
+<img src="docs/screenshots/busqueda.jpg" width="320" alt="Pantalla de búsqueda">
+
+Busca mangas por nombre en tiempo real mientras escribes. Muestra portada, nombre, tipo, estado y géneros de cada resultado.
+
+La búsqueda normaliza acentos y mayúsculas — buscar `"accion"` encuentra mangas con el género `"Acción"`.
 
 ---
 
@@ -137,129 +196,64 @@ La pantalla principal muestra dos secciones:
 
 Accesible tocando el avatar en la esquina superior derecha. Desde aquí puedes:
 
-- **Contenido +18** — Activa o desactiva la visibilidad de mangas marcados como adultos. Cuando está desactivado, esos mangas desaparecen de todas las secciones y sus géneros no aparecen en los filtros.
-- **Tema** — Cambia entre 4 temas visuales: Origins (amarillo oscuro), Dark (gris oscuro), Lunar Tide (azul claro) y White (blanco).
-- **Estadísticas de lectura** — Ver resumen de tu actividad lectora.
-- **Exportar progreso** — Descarga un archivo `.json` con todo tu historial de lectura como backup.
-- **Importar progreso** — Restaura el progreso desde un archivo `.json` exportado anteriormente.
-- **Gestionar usuarios** *(solo admin)* — Crear, editar y eliminar usuarios.
-- **Editor de metadata** *(solo admin)* — Editar la información de los mangas directamente desde el navegador.
+**Configuración:**
+- **Contenido +18** — Activa o desactiva la visibilidad de mangas marcados como adultos. Cuando está desactivado, esos mangas desaparecen de todas las secciones incluyendo búsqueda, filtros y rankings
 
----
+**Temas visuales:**
+- **Origins** — Fondo oscuro azulado con acento amarillo
+- **Dark** — Fondo negro puro con acento gris claro
+- **Lunar Tide** — Fondo azul claro
+- **White** — Fondo blanco
 
-### Series
+**Mi actividad:**
+- **Estadísticas de lectura** — Resumen de tu progreso: total de capítulos leídos, mangas completados, en progreso y no iniciados, distribución por tipo y estado
+- **Exportar progreso** — Descarga un archivo `.json` con todo tu historial de lectura como backup
+- **Importar progreso** — Restaura el progreso desde un archivo `.json` exportado anteriormente. Dos modos: *Reemplazar* (borra el actual) o *Combinar* (une ambos sin perder datos)
 
-<img src="docs/screenshots/series.jpg" width="320" alt="Pantalla de series">
-
-Vista completa de toda tu biblioteca. Muestra cada manga como una card con portada grande, nombre, tipo (Manga/Manhwa/Manhua), estado y número de capítulos.
-
-**Ordenar** — Usa el selector para ordenar por:
-- A → Z / Z → A (alfabético)
-- Más nuevos (por fecha de creación)
-- Más capítulos
-
-**Filtrar** — Toca el botón "Filtrar" para abrir el panel de filtros.
-
----
-
-### Filtrar por categoría
-
-<img src="docs/screenshots/filtros.jpg" width="320" alt="Panel de filtros">
-
-El panel de filtros permite combinar múltiples criterios al mismo tiempo:
-
-- **Tipo** — Filtra por Manga, Manhwa o Manhua
-- **Géneros** — Muestra solo los géneros presentes en tu biblioteca (si el contenido +18 está desactivado, los géneros adultos no aparecen aquí)
-- **Estado** — Filtra por Activo, Hiatus o Finalizado
-
-Puedes combinar varios filtros a la vez. El botón "Limpiar" los borra todos. El número en el botón "Filtrar" indica cuántos filtros están activos.
-
----
-
-### Rankings
-
-<img src="docs/screenshots/rankings.jpg" width="320" alt="Pantalla de rankings">
-
-Muestra los mangas ordenados por el campo `ranking` del `metadata.json`. Los que no tienen ranking asignado aparecen al final ordenados por cantidad de capítulos.
-
-Cada card muestra la portada grande, el nombre, el puesto y los badges de tipo y estado. En PC se muestran en una grilla de 5 columnas; en móvil en 2 columnas.
-
-Para asignar o cambiar rankings, usa el [Editor de metadata](#herramienta-de-metadata).
-
----
-
-### Últimos Capítulos
-
-<img src="docs/screenshots/capitulos.jpg" width="320" alt="Pantalla de últimos capítulos">
-
-Lista los mangas ordenados por la fecha del capítulo más reciente. Muestra los 2 últimos capítulos de cada manga con:
-
-- Punto de color — **amarillo** = no leído, **gris** = ya leído
-- Fecha relativa — "Hace 2 horas", "Hace 3 días", etc.
-- Estado del manga (Activo, Hiatus, Finalizado)
-
-Toca el nombre del manga para ir a su detalle. Toca un capítulo para leerlo directamente.
-
-La lista está paginada de 20 en 20. Usa las flechas de paginación en la parte inferior para navegar.
-
----
-
-### Búsqueda
-
-<img src="docs/screenshots/busqueda.jpg" width="320" alt="Pantalla de búsqueda">
-
-Busca mangas por nombre en tiempo real mientras escribes. Los resultados muestran portada, nombre, tipo, estado y los primeros géneros de cada manga.
-
-La búsqueda normaliza acentos y mayúsculas — buscar "accion" encuentra mangas con el género "Acción".
-
----
-
-## Herramienta de Metadata
-
-La carpeta `metadata-manager/` contiene una herramienta separada para gestionar tu biblioteca desde la PC. Permite editar metadata, subir portadas, ver capítulos y detectar problemas.
-
-```
-Servidor-de-Mangas/
-└── metadata-manager/
-    └── iniciar.bat   ← doble clic para abrir
-```
-
-**Cómo usarla:**
-
-1. Doble clic en `metadata-manager/iniciar.bat`
-2. Se abre automáticamente en `http://localhost:3001`
-3. Lee el `.env` del proyecto principal automáticamente — no requiere configuración extra
-
-**Funciones:**
-
-- Ver todos los mangas con indicadores de portada, metadata y problemas
-- Filtrar por: sin metadata, sin portada, con problemas
-- Editar tipo, estado, ranking, géneros (con sugerencias), sinopsis y flag +18
-- Subir portada — arrastra una imagen JPG/PNG/WEBP y se guarda como `cover.jpg`
-- Ver capítulos con miniatura de la primera página y cantidad de imágenes
-- Renombrar carpetas de capítulos
-- Detectar capítulos vacíos, pocas páginas y gaps numéricos
-- Exportar toda la metadata a un JSON
-
-> El servidor principal y el metadata manager pueden correr al mismo tiempo en puertos distintos (3000 y 3001).
+**Cuenta:**
+- **Gestionar usuarios** *(solo admin)* — Crear, editar y eliminar usuarios del servidor
+- **Editor de metadata** *(solo admin)* — Editar tipo, estado, ranking, géneros, sinopsis y flag +18 de cada manga directamente desde el navegador, sin tocar archivos manualmente
+- **Cerrar sesión**
 
 ---
 
 ## Acceso desde otros dispositivos
 
-Para acceder desde el celular u otro PC en la misma red:
+Para acceder desde el celular u otro PC en la misma red WiFi:
 
-1. El servidor muestra la IP local al arrancar — busca la línea que dice `📱 Red local:`
-2. Usa esa URL en el celular: `http://192.168.x.x:3000`
-3. El celular y la PC deben estar en la **misma red WiFi**
+1. El servidor muestra la IP local al arrancar — busca la línea `📱 Red local:`
+2. Escribe esa URL en el celular: `http://192.168.x.x:3000`
+3. El celular y la PC deben estar en el **mismo router/WiFi**
 
-Si no aparece la IP correcta, encuéntrala manualmente abriendo `cmd` y ejecutando:
-
+Si necesitas encontrar la IP manualmente, abre `cmd` y ejecuta:
 ```
 ipconfig
 ```
+Busca la sección "Adaptador de Wi-Fi" → **Dirección IPv4**.
 
-Busca la sección "Adaptador de Wi-Fi" y anota la **Dirección IPv4**.
+---
+
+## Acceso remoto con Tailscale
+
+Para leer desde fuera de tu casa (datos móviles, otra red WiFi) sin exponer el servidor a internet, puedes usar **Tailscale** — una VPN gratuita que conecta tus dispositivos como si estuvieran en la misma red local.
+
+**Configuración:**
+
+1. Instala Tailscale en la PC del servidor: [tailscale.com/download](https://tailscale.com/download)
+2. Instala Tailscale en el celular (disponible en App Store y Play Store)
+3. Inicia sesión con la misma cuenta en ambos dispositivos
+4. En Tailscale, cada dispositivo recibe una IP fija del rango `100.x.x.x`
+5. Usa la IP de Tailscale de tu PC para acceder al servidor: `http://100.x.x.x:3000`
+
+**Ventajas:**
+- No necesitas abrir puertos en el router
+- El tráfico va cifrado
+- La IP de Tailscale no cambia aunque te muevas de red
+
+**Notas:**
+- La PC del servidor debe tener Tailscale activo y estar encendida
+- Si la página carga pero no muestra las imágenes, asegúrate de que el servidor esté escuchando en `0.0.0.0` (ya está configurado así por defecto)
+- Tailscale puede convivir con el acceso por red local sin problema
 
 ---
 
@@ -267,47 +261,45 @@ Busca la sección "Adaptador de Wi-Fi" y anota la **Dirección IPv4**.
 
 ### El servidor no arranca
 
-**Error: `node` no encontrado**
-```
-Node.js no está instalado o no está en el PATH
-```
-Instala Node.js desde [nodejs.org](https://nodejs.org/) y reinicia la PC.
+**`Node.js no está instalado`**
+
+Instala Node.js v18 o superior desde [nodejs.org](https://nodejs.org/) y reinicia la PC.
 
 ---
 
-**Error: `Puerto en uso`**
-```
-Error: listen EADDRINUSE :::3000
-```
-Hay otro proceso usando el puerto 3000. Ejecútalo como administrador o cambia el `PORT` en el `.env`.
+**`Error: listen EADDRINUSE :::3000`** — Puerto en uso
+
+Hay otro proceso usando el puerto 3000. Ciérralo o cambia el `PORT` en el `.env`:
 
 ```powershell
-# Matar el proceso que usa el puerto 3000
+# Ver qué proceso usa el puerto
 netstat -ano | findstr :3000
-# Anotar el PID del proceso y ejecutar:
+# Matar el proceso (reemplaza <PID> por el número que apareció)
 taskkill /f /pid <PID>
 ```
 
 ---
 
-**Error: `No se encontraron carpetas de mangas`**
+**`No se encontraron carpetas de mangas`**
 
 El `MANGA_PATH` del `.env` no existe o está mal escrito. Verifica:
 - Que la ruta exista en tu disco
-- Que no tenga comillas en el `.env` (`MANGA_PATH=D:\Mis Mangas` no `MANGA_PATH="D:\Mis Mangas"`)
+- Que no tenga comillas: `MANGA_PATH=D:\Mis Mangas` ✅ — `MANGA_PATH="D:\Mis Mangas"` ❌
 - Que la carpeta no esté vacía
 
 ---
 
 ### No conecta desde el celular
 
-**Paso 1 — Verificar que el servidor esté corriendo**
+**1 — Verificar que el servidor esté corriendo**
+
 Abre `http://localhost:3000` en la PC. Si no carga, el servidor no está iniciado.
 
-**Paso 2 — Verificar que estén en la misma red**
-El celular y la PC deben estar conectados al mismo router/WiFi.
+**2 — Verificar que estén en la misma red**
 
-**Paso 3 — Abrir el puerto en el Firewall de Windows**
+El celular y la PC deben estar conectados al mismo router.
+
+**3 — Abrir el puerto en el Firewall de Windows**
 
 Abre PowerShell como **Administrador** y ejecuta:
 
@@ -315,9 +307,7 @@ Abre PowerShell como **Administrador** y ejecuta:
 netsh advfirewall firewall add rule name="MangaServer Puerto 3000" dir=in action=allow protocol=TCP localport=3000 profile=private,domain
 ```
 
-**Paso 4 — Cambiar la red de Pública a Privada**
-
-Si tu WiFi está marcada como "Pública", Windows bloquea conexiones entrantes.
+**4 — Cambiar la red de Pública a Privada**
 
 `Win + I` → Red e Internet → WiFi → clic en tu red → **Perfil de red: Privado**
 
@@ -326,36 +316,36 @@ O por PowerShell:
 Set-NetConnectionProfile -InterfaceAlias "Wi-Fi" -NetworkCategory Private
 ```
 
-**Paso 5 — Verificar que el puerto responde**
+**5 — Verificar conectividad**
 
 ```powershell
-Test-NetConnection -ComputerName <TU-IP> -Port 3000
+# Reemplaza con la IP de tu PC
+Test-NetConnection -ComputerName 192.168.1.x -Port 3000
 ```
 
-Si `TcpTestSucceeded` es `True`, el problema no es el firewall sino el router. Algunos routers tienen **Client Isolation** (aislamiento de clientes) que impide la comunicación entre dispositivos. Desactívalo en la configuración del router.
+Si `TcpTestSucceeded` es `True`, el servidor es accesible. Si el celular aún no conecta, el router puede tener **Client Isolation** activado — desactívalo en la configuración del router.
 
 ---
 
 ### Los mangas no aparecen
 
-- Verifica que las carpetas de mangas sean directorios (no archivos ZIP)
-- Verifica que dentro de cada manga haya al menos una subcarpeta de capítulo
-- Verifica que las imágenes sean `.jpg`, `.jpeg`, `.png`, `.webp` o `.gif`
+- Verifica que las carpetas de mangas sean directorios (no archivos ZIP sin descomprimir)
+- Verifica que dentro de cada manga haya al menos una subcarpeta de capítulo con imágenes
+- Los formatos de imagen válidos son: `.jpg`, `.jpeg`, `.png`, `.webp`, `.gif`
 - Reinicia el servidor después de agregar mangas nuevos
 
 ---
 
 ### Las imágenes no cargan
 
-- Verifica que el token de sesión no haya expirado (cierra sesión y vuelve a entrar)
-- Verifica que los nombres de archivo no tengan caracteres especiales problemáticos
-- Los nombres de carpeta con `#`, `?` o `%` pueden causar problemas en las rutas
+- Cierra sesión y vuelve a entrar para renovar el token
+- Evita caracteres especiales como `#`, `?` o `%` en los nombres de carpetas
 
 ---
 
 ### El progreso no se guarda
 
-El progreso se guarda en `server/progress.json`. Si el servidor no tiene permisos de escritura en esa carpeta, el progreso no se persistirá. Verifica los permisos de la carpeta `server/`.
+El progreso se guarda en `server/progress.json`. Verifica que la carpeta `server/` tenga permisos de escritura.
 
 ---
 
@@ -363,37 +353,29 @@ El progreso se guarda en `server/progress.json`. Si el servidor no tiene permiso
 
 ```
 Servidor-de-Mangas/
-├── client/                    ← Frontend (HTML, CSS, JS)
+├── client/                    ← Frontend
 │   ├── index.html             ← Aplicación principal
 │   ├── reader.html            ← Lector de capítulos
 │   ├── login.html             ← Pantalla de login
 │   ├── stats.html             ← Estadísticas de lectura
-│   ├── css/
-│   │   └── app.css            ← Estilos (mobile-first, 4 temas)
+│   ├── css/app.css            ← Estilos (mobile-first, 4 temas)
 │   ├── js/
 │   │   ├── api.js             ← Cliente HTTP con caché
 │   │   ├── app.js             ← Estado global, renders, navegación
 │   │   ├── ui.js              ← Componentes visuales y cards
 │   │   └── detail.js          ← Vista de detalle de manga
 │   └── admin/
-│       ├── users.html         ← Gestión de usuarios (admin)
-│       └── metadata.html      ← Editor de metadata (admin)
+│       ├── users.html         ← Gestión de usuarios
+│       └── metadata.html      ← Editor de metadata
 ├── server/                    ← Backend (Node.js + Express)
 │   ├── index.js               ← Entrada del servidor
-│   ├── middleware/
-│   │   └── auth.js            ← Verificación JWT
+│   ├── middleware/auth.js     ← Verificación JWT
 │   ├── routes/
 │   │   ├── auth.js            ← Login, usuarios, avatares
 │   │   └── manga.js           ← Biblioteca, capítulos, progreso
-│   ├── data/
-│   │   └── users.json         ← Usuarios registrados
+│   ├── data/users.json        ← Usuarios registrados
 │   └── progress.json          ← Progreso de lectura por usuario
-├── metadata-manager/          ← Herramienta de gestión (puerto 3001)
-│   ├── server.js
-│   ├── public/index.html
-│   └── iniciar.bat
-├── docs/
-│   └── screenshots/           ← Capturas de pantalla
+├── docs/screenshots/          ← Capturas de pantalla
 ├── .env                       ← Configuración local (NO subir a Git)
 ├── .env.example               ← Plantilla de configuración
 ├── metadata.example.json      ← Ejemplo de metadata.json
@@ -405,11 +387,11 @@ Servidor-de-Mangas/
 
 ## Notas de seguridad
 
-- El servidor está diseñado para uso en **red local privada**, no para exposición a internet
+- Diseñado para **red local privada**, no para exposición directa a internet
 - El archivo `.env` está en `.gitignore` — nunca lo subas al repositorio
 - Los tokens JWT expiran en 30 días
-- El login tiene protección contra fuerza bruta: bloquea una IP por 5 minutos tras 10 intentos fallidos
-- Las imágenes se sirven autenticadas — no son accesibles sin sesión iniciada
+- Protección contra fuerza bruta en el login: bloquea una IP por 5 minutos tras 10 intentos fallidos
+- Las imágenes requieren sesión activa para ser accesibles
 
 ---
 
