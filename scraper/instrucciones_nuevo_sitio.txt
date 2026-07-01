@@ -1,0 +1,376 @@
+═══════════════════════════════════════════════════════════════════════════════
+  📋  GUÍA PARA AGREGAR UN NUEVO SITIO AL M4RTO SCRAPER
+  Basada en la experiencia real desarrollando los scrapers de:
+  Olympus, Temple Scan, Dragon Translation, ManhwasWEB
+═══════════════════════════════════════════════════════════════════════════════
+
+ANTES DE ESCRIBIR UNA SOLA LÍNEA DE CÓDIGO
+───────────────────────────────────────────
+Hay que entender completamente cómo funciona el sitio.
+Saltarse esta etapa es la causa #1 de perder tiempo.
+
+
+══════════════════════════════════════════════════════
+  FASE 1 — RECONOCIMIENTO DEL SITIO
+══════════════════════════════════════════════════════
+
+PASO 1.1 — ANALIZAR EL APK DE MIHON/TACHIYOMI (si existe)
+──────────────────────────────────────────────────────────
+Si hay una extensión APK del sitio para Mihon, extraerla y analizarla.
+Un APK es un ZIP — se puede abrir con:
+  unzip tachiyomi-es_SITIO-vX.X.X.apk -d carpeta/
+
+Luego ejecutar:
+  strings carpeta/classes.dex | grep -E "(https?://|/api/|/serie/|/manga/|/chapter)"
+
+Qué buscar en el APK:
+  ✅ URL base del sitio (ej: https://olympusxyz.com)
+  ✅ Si el dominio es dinámico (fetchDomain, cachedBaseUrl, redirect_url)
+  ✅ Endpoints de API (ej: /api/series/list, /api/capitulo/, /chapters?page=)
+  ✅ Sistema de anti-bot (cloudflare, turnstile, scramble, AES, nonce)
+  ✅ Plataforma base (Madara/WordPress, API propia, custom)
+  ✅ Prefijos de URL (/serie/, /manga/, /manhwa/, /comic/)
+  ✅ Si usa Supabase u otro sistema para resolver el dominio actual
+
+Señales de alerta en el APK:
+  ⚠ "scramble" → imágenes con píxeles mezclados (como Nexus) — muy complejo
+  ⚠ "AES" + "CBC" + "nonce" → capítulos encriptados (Temple)
+  ⚠ "cloudflare" + "turnstile" → anti-bot fuerte
+  ⚠ "fetchDomain" → el dominio cambia regularmente (como Olympus)
+  ⚠ "synchrony" → JS altamente ofuscado (LeerCapitulo)
+
+
+PASO 1.2 — INSPECCIONAR EL SITIO EN EL NAVEGADOR
+──────────────────────────────────────────────────
+Abrir DevTools (F12) ANTES de navegar. Marcar "Preserve log".
+Filtrar por Fetch/XHR primero, luego ver All.
+
+Páginas a visitar y qué buscar:
+
+  a) Página principal / novedades:
+     → ¿Hay endpoint de API para capítulos recientes?
+     → ¿La URL tiene paginación? (/capitulos?page=1)
+     → ¿Los mangas tienen slugs únicos o IDs numéricos?
+
+  b) Página de un manga:
+     → ¿Cómo se llama el prefijo? (/serie/, /manga/, /manhwa/)
+     → ¿La lista de capítulos está en el HTML o viene de AJAX?
+     → Si es AJAX: ¿qué campos manda el POST? ¿necesita nonce/security?
+     → ¿El manga tiene un ID interno (data-id en el HTML)?
+
+  c) Página de un capítulo:
+     → ¿Las imágenes están directo en el HTML o hay redirección JS?
+     → Si hay redirección: ¿a qué dominio? ¿con qué método (POST/GET)?
+     → ¿Las imágenes usan data-src, src, lazy-loading?
+     → ¿Hay selector CSS específico? (ej: img.manga-page-img)
+     → ¿Las URLs de imágenes tienen caracteres especiales (ñ, paréntesis)?
+
+  CRÍTICO — guardar el HTML de una página de capítulo:
+  En PowerShell:
+    $r = Invoke-WebRequest -Uri "URL_DEL_CAPITULO" -UseBasicParsing
+    $r.Content | Out-File "$env:USERPROFILE\Desktop\cap.html" -Encoding utf8
+  Subir ese archivo y analizarlo antes de codear.
+
+
+PASO 1.3 — PREGUNTAS CLAVE QUE RESPONDER
+─────────────────────────────────────────
+Responder TODAS antes de escribir código:
+
+  1. ¿El dominio es fijo o cambia? → Si cambia, ¿cómo se resuelve el actual?
+  2. ¿Tiene API JSON propia o es WordPress/Madara scraping HTML?
+  3. ¿Qué prefijo usa para los mangas? (/serie/, /manga/, /manhwa/, etc.)
+  4. ¿La lista de capítulos está en el HTML o requiere AJAX?
+     Si requiere AJAX: ¿necesita nonce? ¿manga_id? ¿security token?
+  5. ¿Las imágenes están en la página del capítulo directamente?
+     O hay redirección JS a otro dominio?
+  6. ¿Qué selectores CSS tienen las imágenes? (class, data-src, etc.)
+  7. ¿Tienen anti-bot? ¿Cloudflare? ¿Verificación de edad?
+  8. ¿Las URLs de imágenes tienen caracteres especiales (ñ, acentos, paréntesis)?
+  9. ¿El slug del manga es estable o incluye timestamps que cambian?
+  10. ¿Necesita cookies de sesión para acceder al contenido?
+11. ¿Cómo funciona la pagina?(donde aparecen los nuevos capitulo, como funciona su interfaz, en que modulo se encuentras los capítulos mas recientes)
+
+
+══════════════════════════════════════════════════════
+  FASE 2 — CLASIFICAR EL TIPO DE SITIO
+══════════════════════════════════════════════════════
+
+Tipo A — API JSON propia (más fácil)
+  Ejemplo: Olympus, ManhwasWEB
+  Señales: respuestas JSON en /api/, sin WordPress, datos estructurados
+  Enfoque: requests directo, sin BeautifulSoup, rápido
+
+Tipo B — WordPress + Madara (medio)
+  Ejemplo: Temple Scan, Dragon Translation
+  Señales: /wp-admin/admin-ajax.php, wp-manga en URLs de imágenes,
+           /wp-content/uploads/WP-manga/data/, classes.dex muestra "madara"
+  Enfoque: requests + BeautifulSoup, puede necesitar AJAX con nonce
+
+Tipo C — Redirección JS a dominio externo (complejo)
+  Ejemplo: Temple Scan (redirige a blayvia.com)
+  Señales: en el HTML del capítulo hay un <form> con action a otro dominio,
+           las imágenes no están en el HTML inicial
+  Enfoque: Selenium/undetected-chromedriver obligatorio
+
+Tipo D — Imágenes encriptadas/scrambled (muy complejo)
+  Ejemplo: Nexus Scanlation
+  Señales: "scramble" en el APK, imágenes que se ven mezcladas visualmente
+  Enfoque: implementar algoritmo de descramble (requiere ingeniería inversa)
+
+
+══════════════════════════════════════════════════════
+  FASE 3 — ESTRUCTURA DEL CÓDIGO EN SCRAPER.PY
+══════════════════════════════════════════════════════
+
+El scraper.py tiene una estructura fija. Todo sitio nuevo es una clase
+que hereda de ScraperBase (Tipo A) o MadaraScraper (Tipo B/C).
+
+ESTRUCTURA DE UNA CLASE NUEVA:
+───────────────────────────────
+
+class NuevoSitioScraper(ScraperBase):   # o MadaraScraper para WordPress
+    """Descripción del sitio y sus particularidades."""
+
+    BASE_URL = "https://url-del-sitio.com"
+
+    def __init__(self):
+        super().__init__()
+        # Si el dominio es dinámico, resolverlo acá
+        # self.BASE_URL = self._resolver_dominio()
+
+    @property
+    def nombre(self) -> str:
+        return "Nombre Del Sitio"
+
+    def obtener_capitulos(self, slug: str) -> list[dict]:
+        """
+        Retorna lista de dicts con:
+        {"numero": float, "url": str, "titulo": str, "slug": str, "fuente": str}
+        Ordenada de menor a mayor.
+        """
+        ...
+
+    def obtener_imagenes(self, cap_url: str, slug: str, numero) -> list[str]:
+        """
+        Retorna lista de URLs de imágenes del capítulo.
+        """
+        ...
+
+DÓNDE AGREGAR LA CLASE EN EL ARCHIVO:
+──────────────────────────────────────
+Buscar el comentario "§12  FACTORY DE SCRAPERS" y agregar la clase
+en la sección antes de ese comentario (§7 a §11).
+
+REGISTRAR EN LA FACTORY:
+─────────────────────────
+En la función crear_scraper(), agregar la entrada:
+
+  scrapers = {
+      "olympus":      OlympusScraper,
+      "temple":       TempleScraper,
+      "dragon":       DragonScraper,
+      "manhwaweb":    ManhwasWebScraper,
+      "nuevo_sitio":  NuevoSitioScraper,   # ← agregar acá
+  }
+
+AGREGAR FILTROS ADAPTATIVOS:
+─────────────────────────────
+En el método descargar_capitulo() de ScraperBase, en el dict FILTROS:
+
+  FILTROS = {
+      "olympus":      {...},
+      "temple":       {...},
+      "dragon":       {...},
+      "manhwaweb":    {...},
+      "nuevo_sitio":  {          # ← agregar acá
+          "ancho_min":    300,   # píxeles mínimos de ancho
+          "alto_min":     300,   # píxeles mínimos de alto
+          "ratio_max":    4.0,   # ratio ancho/alto máximo (para filtrar banners)
+          "cuadrado_max": 400,   # tamaño máximo para considerar ícono cuadrado
+          "tol_pct":      20,    # tolerancia % de variación del ancho dominante
+          "fallback_min": 2,     # mínimo de imgs antes de activar modo relajado
+      },
+  }
+
+  Referencia de valores:
+    ancho_min/alto_min: 150 para sitios con miniaturas, 400 para webtoons
+    ratio_max: 3.5-4.0 típico (mayor filtra más banners horizontales)
+    tol_pct: 15 estricto (Olympus), 30 relajado (Temple)
+
+AGREGAR PRIORIDAD:
+───────────────────
+En seguimiento.json, campo "_prioridad", agregar el nombre de la fuente
+en el orden deseado.
+
+AGREGAR AL CICLO DE ESCANEO:
+─────────────────────────────
+En ciclo_escaneo(), en el dict de íconos:
+
+  icono = {"temple":"🏯","dragon":"🐉","manhwaweb":"📚",
+           "nuevo_sitio":"🆕"}.get(fuente,"📖")
+
+
+══════════════════════════════════════════════════════
+  FASE 4 — CASOS ESPECIALES Y SOLUCIONES CONOCIDAS
+══════════════════════════════════════════════════════
+
+PROBLEMA: Dominio cambia regularmente
+  Solución A (Olympus): página de redirección estable (olympus.pages.dev)
+    → Hacer GET a la página estable, extraer el dominio del redirect final
+    → Cachear en self._api_base para no consultar en cada request
+  Solución B (Temple): Supabase con la URL actual
+    → GET a URL de Supabase con apikey, leer campo "value"
+    → Si falla, usar URL de fallback hardcodeada
+
+PROBLEMA: Slug del manga incluye timestamp y cambia
+  Solución (Olympus): comparar slugs ignorando el timestamp final
+    → Función _slugs_coinciden() que quita sufijos numéricos antes de comparar
+    → Si el slug falla, buscar por nombre en la lista del sitio
+    → Actualizar seguimiento.json automáticamente si cambia
+
+PROBLEMA: Lista de capítulos detrás de AJAX que da 400
+  Causa: WordPress/Madara requiere nonce de seguridad en el POST
+  Solución: parsear primero el HTML de la página del manga
+    → Buscar selectores: li.wp-manga-chapter a, ul.version-chap li a
+    → Si el HTML no tiene caps, hacer AJAX extrayendo nonce del script
+      script#wp-manga-js-extra → "nonce":"xxxxx"
+    → Incluir ese nonce en el POST como campo "security"
+
+PROBLEMA: Imágenes detrás de redirección JS a otro dominio
+  Causa: el sitio hace POST con datos encriptados a un dominio externo
+  Señal: en el HTML del capítulo hay <form id="redirect-form" method="POST">
+  Solución: Selenium/undetected-chromedriver
+    1. requests detecta el form con action a otro dominio
+    2. Activa Selenium automáticamente
+    3. Selenium navega, espera la redirección (WebDriverWait 20seg)
+    4. Espera 5 segundos adicionales para carga del lector JS
+    5. Extrae imágenes por selector CSS y regex en el HTML renderizado
+
+PROBLEMA: Selenium detectado como bot (página en blanco / data:,)
+  Causa: el sitio detecta webdriver por navigator.webdriver
+  Solución:
+    - Usar webdriver.Chrome con options "disable-blink-features=AutomationControlled"
+    - excludeSwitches: ["enable-automation"]
+    - Ejecutar JS: Object.defineProperty(navigator,'webdriver',{get:()=>undefined})
+    - NO usar el perfil personal del navegador (causa conflicto de instancias)
+    - Usar un directorio de datos dedicado: --user-data-dir=C:\brave-scraper
+    - El ChromeDriver debe ser compatible con la versión del navegador
+      → Descargar desde: googlechromelabs.github.io/chrome-for-testing/LATEST_RELEASE_{major}
+
+PROBLEMA: ChromeDriver versión incompatible con el navegador
+  Causa: webdriver-manager baja versiones viejas (114) incompatibles con Brave 149+
+  Solución: NO usar webdriver-manager para Brave
+    → Obtener versión de Brave desde "Last Version" en la carpeta de instalación
+    → Descargar ChromeDriver desde Chrome for Testing API
+    → Cachear en ~/.m4rto_drivers/chromedriver_{major}.exe
+
+PROBLEMA: Imágenes no encontradas aunque están en el HTML (0 imgs)
+  Causa A: URLs con caracteres especiales (ñ, acentos, paréntesis)
+    → El regex genérico corta la URL en el carácter especial
+    → Solución: regex específico para el patrón del sitio
+      Ej: r"https?://[^\s<>]+/WP-manga/data/[^\s<>]+"
+  Causa B: Imágenes con clase específica no cubierta por los selectores
+    → Inspeccionar el HTML final con debug_selenium.html
+    → Agregar el selector específico (ej: img.manga-page-img)
+  Causa C: AdBlock bloqueando el script que carga las imágenes
+    → El script se ve en Console como ERR_BLOCKED_BY_CLIENT
+    → El perfil del navegador en Selenium no tiene AdBlock → se carga todo
+
+PROBLEMA: Imágenes mezcladas con banners/iconos/reacciones
+  Causa: el HTML tiene muchas imágenes que no son del capítulo
+  Solución: filtros adaptativos en descargar_capitulo()
+    → ancho/alto mínimos
+    → ratio máximo (filtra banners horizontales)
+    → ancho dominante ± tolerancia (filtra imágenes fuera del perfil)
+    → lista de ruido por nombre de archivo (Me-Gusta, logo-, banner-, etc.)
+    → fallback: si quedan < fallback_min imgs, relajar filtros
+
+PROBLEMA: Logging mezclado con barras de progreso de tqdm
+  Causa: logging.StreamHandler y tqdm escriben al mismo stdout sin coordinarse
+  Solución: reemplazar StreamHandler por _TqdmLogHandler
+    class _TqdmLogHandler(logging.StreamHandler):
+        def emit(self, record):
+            tqdm.write(self.format(record))
+
+
+══════════════════════════════════════════════════════
+  FASE 5 — DATOS MÍNIMOS NECESARIOS PARA IMPLEMENTAR
+══════════════════════════════════════════════════════
+
+Para que Claude pueda implementar el scraper de un sitio nuevo,
+proporcionar al menos:
+
+  1. URL base del sitio
+     Ej: https://nuevo-sitio.com
+
+  2. URL de la página de novedades (si existe)
+     Ej: https://nuevo-sitio.com/capitulos
+
+  3. URL de ejemplo de un manga
+     Ej: https://nuevo-sitio.com/serie/nombre-del-manga/
+     → El prefijo (/serie/, /manga/, etc.) es información clave
+
+  4. URL de ejemplo de un capítulo
+     Ej: https://nuevo-sitio.com/serie/nombre-del-manga/capitulo-1/
+
+  5. URL de ejemplo de una imagen del capítulo
+     → Abrir el capítulo en el navegador, clic derecho en una imagen
+        y copiar la URL de la imagen
+     Ej: https://cdn.nuevo-sitio.com/uploads/mangas/hash/imagen-001.webp
+     → Esto revela dónde están alojadas las imágenes y si tienen patrones
+
+  6. El HTML de un capítulo guardado con PowerShell:
+     $r = Invoke-WebRequest -Uri "URL_CAPITULO" -UseBasicParsing
+     $r.Content | Out-File "$env:USERPROFILE\Desktop\cap.html" -Encoding utf8
+
+  7. El APK de la extensión de Mihon (si existe)
+     → Proporciona toda la información técnica en un solo archivo
+
+  8. Si usa Selenium: el debug_selenium.html
+     → Se genera automáticamente cuando Selenium no encuentra imágenes
+     → Ubicación: scraper/debug_selenium.html
+
+  9. Qué mangas seguís en ese sitio (nombre y URL de cada uno)
+     → Para crear las entradas en seguimiento.json
+
+
+══════════════════════════════════════════════════════
+  FASE 6 — CHECKLIST DE VERIFICACIÓN ANTES DE USAR
+══════════════════════════════════════════════════════
+
+  □ La clase tiene nombre único y hereda de ScraperBase o MadaraScraper
+  □ obtener_capitulos() retorna lista ordenada de menor a mayor
+  □ Cada cap dict tiene: numero, url, titulo, slug, fuente
+  □ obtener_imagenes() retorna lista de URLs válidas
+  □ La clase está registrada en crear_scraper()
+  □ Los filtros adaptativos están en FILTROS dict
+  □ La fuente está en la prioridad del seguimiento.json
+  □ El ícono está en el dict de ciclo_escaneo()
+  □ Probado con --una-vez en un manga con pocos capítulos
+  □ Verificar que las imágenes descargadas se abren correctamente
+  □ Verificar que ultimo_capitulo se actualiza en seguimiento.json
+  □ Verificar que las notificaciones se generan en notificaciones.json
+
+
+══════════════════════════════════════════════════════
+  REFERENCIA RÁPIDA — ESTRUCTURA DEL SCRAPER.PY
+══════════════════════════════════════════════════════
+
+  §0   Auto-instalador de dependencias
+  §1   Configuración (INTERVALO_HORAS, TIMEOUT, SELENIUM_HEADLESS, etc.)
+  §2   Logging con _TqdmLogHandler
+  §3   Notificaciones (notificaciones.json)
+  §4   Seguimiento (seguimiento.json)
+  §5   Utilidades HTTP (hacer_get, hacer_post, descargar_imagen)
+  §6   ScraperBase — clase abstracta con descargar_capitulo() completo
+  §7   OlympusScraper — API JSON + scraping /capitulos
+  §8   MadaraScraper — base WordPress/Madara
+  §9   TempleScraper — Madara + Supabase + Selenium para blayvia.com
+  §10  DragonScraper — Madara simple
+  §11  ManhwasWebScraper — API JSON propia
+  §12  Factory de scrapers (crear_scraper)     ← agregar nueva fuente acá
+  §13  Lógica de escaneo (_descargar_caps_nuevos, escanear_olympus, etc.)
+  §14  Scheduler (ciclo_escaneo, loop cada 3 horas)
+  §15  Main
+
+═══════════════════════════════════════════════════════════════════════════════

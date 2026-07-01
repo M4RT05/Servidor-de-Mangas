@@ -1,0 +1,50 @@
+{
+  "mangas": [
+    {
+      "nombre_carpeta": "Ejemplo Manga Simple",
+      "fuente": "temple",
+      "url_manga": "https://aedexnox.akan01.com/serie/ejemplo-manga-simple/",
+      "slug": "ejemplo-manga-simple",
+      "ultimo_capitulo": 0,
+      "capitulos_con_error": null,
+      "activo": true
+    },
+    {
+      "nombre_carpeta": "Ejemplo Manga En Curso",
+      "fuente": "nexus",
+      "url_manga": "https://nexusscanlation.com/series/ejemplo-manga-en-curso",
+      "slug": "ejemplo-manga-en-curso",
+      "ultimo_capitulo": 42.0,
+      "capitulos_con_error": [38.0],
+      "activo": true
+    },
+    {
+      "nombre_carpeta": "Ejemplo Manga Pausado",
+      "fuente": "dragon",
+      "url_manga": "https://dragontranslation.org/manga/ejemplo-manga-pausado/",
+      "slug": "ejemplo-manga-pausado",
+      "ultimo_capitulo": 15.0,
+      "capitulos_con_error": null,
+      "activo": false
+    },
+    {
+      "nombre_carpeta": "Ejemplo Manga Multi Fuente",
+      "fuente": "olympus",
+      "url_manga": "https://olympusxyz.com/series/comic-ejemplo-manga-multi-fuente",
+      "slug": "comic-ejemplo-manga-multi-fuente",
+      "ultimo_capitulo": 30.0,
+      "capitulos_con_error": null,
+      "activo": true
+    },
+    {
+      "nombre_carpeta": "Ejemplo Manga Multi Fuente",
+      "fuente": "ikigai",
+      "url_manga": "https://visualikigai.aplikando.com/series/ejemplo-manga-multi-fuente/",
+      "slug": "ejemplo-manga-multi-fuente",
+      "ultimo_capitulo": 28.0,
+      "capitulos_con_error": null,
+      "activo": true,
+      "prioridad_fuente": 2
+    }
+  ]
+}

@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Metadata — MangaServer Admin</title>
+  <link href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.34.0/dist/tabler-icons.min.css" rel="stylesheet">
+  <style>
+    :root{--bg:#0d1117;--surf:#161b27;--card:#1c2333;--acc:#F5B800;--acc-text:#0d1117;--text:#e6edf3;--mut:#7d8590;--brd:#30363d;--grn:#3fb950;--red:#e74c3c;}
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;min-height:100vh;}
+    .nav{background:var(--surf);border-bottom:1px solid var(--brd);padding:0 20px;height:56px;display:flex;align-items:center;gap:14px;position:sticky;top:0;z-index:10;}
+    .nav-back{background:none;border:none;color:var(--mut);cursor:pointer;font-size:22px;display:flex;align-items:center;transition:color .15s;}
+    .nav-back:hover{color:var(--text);}
+    .nav-title{font-size:16px;font-weight:700;flex:1;}
+    .nav-count{font-size:12px;color:var(--mut);}
+
+    /* ── VISTA LISTA (index) ── */
+    #view-list{display:block;}
+    #view-edit{display:none;}
+
+    .list-wrap{max-width:700px;margin:0 auto;padding:16px;}
+    .search-bar{display:flex;align-items:center;background:var(--card);border-radius:12px;padding:10px 14px;gap:8px;margin-bottom:16px;border:1px solid var(--brd);}
+    .search-bar i{color:var(--mut);font-size:18px;}
+    .search-bar input{background:none;border:none;outline:none;color:var(--text);font-size:15px;flex:1;}
+    .search-bar input::placeholder{color:var(--mut);}
+
+    .manga-row{display:flex;align-items:center;gap:12px;padding:11px 14px;background:var(--card);border-radius:14px;margin-bottom:8px;cursor:pointer;transition:background .15s;border:1px solid var(--brd);}
+    .manga-row:hover,.manga-row:active{background:var(--surf);}
+    .manga-thumb{width:42px;height:58px;border-radius:8px;object-fit:cover;flex-shrink:0;background:var(--bg);}
+    .manga-thumb-ph{width:42px;height:58px;border-radius:8px;background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;}
+    .manga-row-info{flex:1;min-width:0;}
+    .manga-row-name{font-size:14px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .manga-row-meta{font-size:12px;color:var(--mut);margin-top:3px;display:flex;gap:6px;flex-wrap:wrap;}
+
+    /* ── VISTA EDICIÓN ── */
+    .edit-wrap{max-width:600px;margin:0 auto;padding:20px 16px 40px;}
+    .edit-hero{display:flex;gap:16px;align-items:flex-start;margin-bottom:24px;}
+    .edit-cover{width:90px;height:126px;border-radius:12px;object-fit:cover;flex-shrink:0;background:var(--card);border:2px solid var(--brd);}
+    .edit-cover-ph{width:90px;height:126px;border-radius:12px;background:var(--card);display:flex;align-items:center;justify-content:center;font-size:36px;flex-shrink:0;border:2px solid var(--brd);}
+    .edit-manga-name{font-size:18px;font-weight:800;color:var(--text);line-height:1.3;margin-bottom:6px;word-break:break-word;}
+    .edit-manga-sub{font-size:13px;color:var(--mut);}
+
+    .form-group{margin-bottom:16px;}
+    .form-label{font-size:12px;font-weight:600;color:var(--mut);text-transform:uppercase;letter-spacing:.06em;margin-bottom:7px;display:block;}
+    .form-input{width:100%;background:var(--card);border:1px solid var(--brd);border-radius:10px;padding:11px 13px;color:var(--text);font-size:14px;outline:none;transition:border-color .15s;}
+    .form-input:focus{border-color:var(--acc);}
+    .form-select{width:100%;background:var(--card);border:1px solid var(--brd);border-radius:10px;padding:11px 13px;color:var(--text);font-size:14px;outline:none;cursor:pointer;}
+    textarea.form-input{resize:vertical;min-height:100px;line-height:1.6;}
+    .form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+
+    .genre-wrap{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:10px;min-height:32px;}
+    .genre-tag{display:inline-flex;align-items:center;gap:5px;background:var(--surf);border:1px solid var(--brd);border-radius:20px;padding:5px 11px;font-size:13px;font-weight:600;}
+    .genre-tag button{background:none;border:none;color:var(--mut);cursor:pointer;font-size:15px;line-height:1;display:flex;align-items:center;padding:0;}
+    .genre-tag button:hover{color:var(--red);}
+    .genre-add{display:flex;gap:8px;}
+    .genre-add input{flex:1;background:var(--card);border:1px solid var(--brd);border-radius:10px;padding:10px 12px;color:var(--text);font-size:14px;outline:none;}
+    .genre-add input:focus{border-color:var(--acc);}
+    .btn-add-genre{background:var(--acc);border:none;color:var(--acc-text);border-radius:10px;padding:10px 16px;font-size:14px;font-weight:700;cursor:pointer;white-space:nowrap;}
+
+    .row-toggle{display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--brd);}
+    .row-toggle-left{flex:1;}
+    .row-toggle-name{font-size:14px;font-weight:600;color:var(--text);}
+    .row-toggle-desc{font-size:12px;color:var(--mut);margin-top:2px;}
+    .tg{width:44px;height:24px;border-radius:12px;background:var(--brd);cursor:pointer;position:relative;transition:background .2s;flex-shrink:0;}
+    .tg.on{background:var(--red);}
+    .tg::after{content:'';position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;transition:transform .2s;}
+    .tg.on::after{transform:translateX(20px);}
+
+    .btn-save{width:100%;background:var(--acc);border:none;color:var(--acc-text);border-radius:14px;padding:15px;font-size:16px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;margin-top:24px;transition:opacity .15s;}
+    .btn-save:disabled{opacity:.5;cursor:not-allowed;}
+    .save-msg{text-align:center;font-size:13px;font-weight:600;margin-top:10px;min-height:20px;}
+    .save-msg.ok{color:var(--grn);}
+    .save-msg.err{color:var(--red);}
+    .loading-spin{display:inline-block;width:18px;height:18px;border:2px solid rgba(13,17,23,.3);border-top-color:var(--acc-text);border-radius:50%;animation:spin .6s linear infinite;}
+    @keyframes spin{to{transform:rotate(360deg);}}
+
+    .empty{text-align:center;padding:40px;color:var(--mut);}
+  </style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav class="nav">
+  <button class="nav-back" id="nav-back-btn" onclick="handleBack()">
+    <i class="ti ti-arrow-left"></i>
+  </button>
+  <span class="nav-title" id="nav-title"><i class="ti ti-database-edit" style="vertical-align:middle;margin-right:6px;font-size:18px;"></i>Editor de Metadata</span>
+  <span class="nav-count" id="nav-count"></span>
+</nav>
+
+<!-- VISTA LISTA -->
+<div id="view-list">
+  <div class="list-wrap">
+    <div class="search-bar">
+      <i class="ti ti-search"></i>
+      <input id="search-input" type="text" placeholder="Buscar manga..." oninput="filterList(this.value)" autocomplete="off">
+    </div>
+    <div id="manga-list"><div class="empty">Cargando...</div></div>
+  </div>
+</div>
+
+<!-- VISTA EDICIÓN -->
+<div id="view-edit">
+  <div class="edit-wrap" id="edit-wrap"></div>
+</div>
+
+<script>
+const TOKEN = localStorage.getItem('manga_token');
+if (!TOKEN) location.href = '/login.html';
+
+let allMangas    = [];
+let currentManga = null;
+let currentGenres= [];
+
+// Si viene ?manga=X en la URL, abrir directo el editor
+const urlParams  = new URLSearchParams(location.search);
+const initManga  = urlParams.get('manga');
+
+async function loadMangas() {
+  try {
+    const r = await fetch('/api/mangas', { headers: { Authorization: 'Bearer ' + TOKEN } });
+    allMangas = await r.json();
+    allMangas.sort((a,b) => a.name.localeCompare(b.name));
+    document.getElementById('nav-count').textContent = allMangas.length + ' series';
+    if (initManga) {
+      // Modo mobile: abrir directo
+      const m = allMangas.find(m => m.name === initManga);
+      if (m) { openEditor(m); return; }
+    }
+    renderList(allMangas);
+  } catch(e) {
+    document.getElementById('manga-list').innerHTML = '<div class="empty">Error cargando mangas.</div>';
+  }
+}
+
+function renderList(list) {
+  document.getElementById('manga-list').innerHTML = list.length
+    ? list.map(m => `
+      <div class="manga-row" onclick="openEditorByName('${encodeURIComponent(m.name)}')">
+        ${m.cover
+          ? `<img class="manga-thumb" src="${m.cover}?token=${TOKEN}" onerror="this.style.display='none'">`
+          : `<div class="manga-thumb-ph">M</div>`}
+        <div class="manga-row-info">
+          <div class="manga-row-name">${m.name}</div>
+          <div class="manga-row-meta">
+            <span>${m.metadata?.type||'—'}</span>
+            <span>·</span>
+            <span>${m.metadata?.status||'—'}</span>
+            <span>·</span>
+            <span>${m.chapterCount} caps</span>
+            ${m.metadata?.ranking ? `<span>· Rank #${m.metadata.ranking}</span>` : ''}
+          </div>
+        </div>
+        <i class="ti ti-chevron-right" style="color:var(--mut);font-size:18px;flex-shrink:0;"></i>
+      </div>`).join('')
+    : '<div class="empty">Sin resultados.</div>';
+}
+
+function filterList(q) {
+  renderList(q ? allMangas.filter(m => m.name.toLowerCase().includes(q.toLowerCase())) : allMangas);
+}
+
+function openEditorByName(encoded) {
+  const name = decodeURIComponent(encoded);
+  const m    = allMangas.find(m => m.name === name);
+  if (m) openEditor(m);
+}
+
+async function openEditor(manga) {
+  currentManga = manga;
+  // Cargar metadata completa
+  const r    = await fetch(`/api/mangas/${encodeURIComponent(manga.name)}/metadata`, { headers: { Authorization: 'Bearer ' + TOKEN } });
+  const meta = await r.json();
+  currentGenres = Array.isArray(meta.genres) ? [...meta.genres] : [];
+
+  // Cambiar vista
+  document.getElementById('view-list').style.display = 'none';
+  document.getElementById('view-edit').style.display = 'block';
+  document.getElementById('nav-title').textContent    = manga.name;
+  document.getElementById('nav-count').textContent    = '';
+
+  renderEditor(manga, meta);
+  window.scrollTo(0, 0);
+}
+
+function handleBack() {
+  if (document.getElementById('view-edit').style.display !== 'none') {
+    // Volver a la lista
+    document.getElementById('view-list').style.display = 'block';
+    document.getElementById('view-edit').style.display = 'none';
+    document.getElementById('nav-title').innerHTML = '<i class="ti ti-database-edit" style="vertical-align:middle;margin-right:6px;font-size:18px;"></i>Editor de Metadata';
+    document.getElementById('nav-count').textContent = allMangas.length + ' series';
+    window.scrollTo(0, 0);
+  } else {
+    history.back();
+  }
+}
+
+function renderEditor(manga, meta) {
+  document.getElementById('edit-wrap').innerHTML = `
+    <div class="edit-hero">
+      ${manga.cover
+        ? `<img class="edit-cover" src="${manga.cover}?token=${TOKEN}" alt="">`
+        : `<div class="edit-cover-ph">M</div>`}
+      <div>
+        <div class="edit-manga-name">${manga.name}</div>
+        <div class="edit-manga-sub">${manga.chapterCount} capítulos disponibles</div>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Tipo</label>
+        <select class="form-select" id="f-type">
+          <option value="Manga"  ${(meta.type||'Manga')==='Manga'  ?'selected':''}>Manga</option>
+          <option value="Manhwa" ${meta.type==='Manhwa'?'selected':''}>Manhwa</option>
+          <option value="Manhua" ${meta.type==='Manhua'?'selected':''}>Manhua</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Estado</label>
+        <select class="form-select" id="f-status">
+          <option value="Activo"     ${(meta.status||'Activo')==='Activo'    ?'selected':''}>Activo</option>
+          <option value="Hiatus"     ${meta.status==='Hiatus'    ?'selected':''}>Hiatus</option>
+          <option value="Finalizado" ${meta.status==='Finalizado'?'selected':''}>Finalizado</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Ranking <span style="font-weight:400;text-transform:none;color:var(--mut);">(vacío = sin ranking)</span></label>
+      <input class="form-input" id="f-ranking" type="number" min="1" placeholder="ej: 1" value="${meta.ranking ?? ''}">
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Géneros</label>
+      <div class="genre-wrap" id="genre-wrap">${renderGenreTags()}</div>
+      <div class="genre-add">
+        <input id="genre-input" type="text" placeholder="Nuevo género..." onkeydown="if(event.key==='Enter'){addGenre();event.preventDefault();}">
+        <button class="btn-add-genre" onclick="addGenre()">+ Agregar</button>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Sinopsis</label>
+      <textarea class="form-input" id="f-synopsis" placeholder="Escribe la sinopsis aquí...">${meta.synopsis||''}</textarea>
+    </div>
+
+    <div class="row-toggle">
+      <div class="row-toggle-left">
+        <div class="row-toggle-name">Contenido +18</div>
+        <div class="row-toggle-desc">Oculta a usuarios sin el toggle activado</div>
+      </div>
+      <div class="tg${meta.adult?' on':''}" id="tg-adult" onclick="this.classList.toggle('on')"></div>
+    </div>
+
+    <button class="btn-save" id="btn-save" onclick="saveMetadata()">
+      <i class="ti ti-device-floppy"></i> Guardar cambios
+    </button>
+    <div class="save-msg" id="save-msg"></div>`;
+}
+
+function renderGenreTags() {
+  return currentGenres.map((g,i) => `
+    <div class="genre-tag">
+      <span>${g}</span>
+      <button onclick="removeGenre(${i})"><i class="ti ti-x"></i></button>
+    </div>`).join('');
+}
+
+function addGenre() {
+  const inp = document.getElementById('genre-input');
+  const val = inp.value.trim();
+  if (!val || currentGenres.includes(val)) { inp.value=''; return; }
+  currentGenres.push(val);
+  inp.value = '';
+  document.getElementById('genre-wrap').innerHTML = renderGenreTags();
+}
+
+function removeGenre(i) {
+  currentGenres.splice(i, 1);
+  document.getElementById('genre-wrap').innerHTML = renderGenreTags();
+}
+
+async function saveMetadata() {
+  if (!currentManga) return;
+  const btn = document.getElementById('btn-save');
+  const msg = document.getElementById('save-msg');
+  btn.disabled = true;
+  btn.innerHTML = '<div class="loading-spin"></div>';
+  msg.textContent = '';
+  const rankVal = document.getElementById('f-ranking').value.trim();
+  const body = {
+    type:    document.getElementById('f-type').value,
+    status:  document.getElementById('f-status').value,
+    ranking: rankVal !== '' ? parseInt(rankVal) : null,
+    genres:  currentGenres,
+    synopsis:document.getElementById('f-synopsis').value.trim(),
+    adult:   document.getElementById('tg-adult').classList.contains('on')
+  };
+  try {
+    const r    = await fetch(`/api/mangas/${encodeURIComponent(currentManga.name)}/metadata`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + TOKEN },
+      body: JSON.stringify(body)
+    });
+    const data = await r.json();
+    if (data.ok) {
+      msg.className = 'save-msg ok';
+      msg.innerHTML = '<i class="ti ti-check"></i> Guardado correctamente';
+      const idx = allMangas.findIndex(m => m.name === currentManga.name);
+      if (idx >= 0) allMangas[idx].metadata = data.metadata;
+      setTimeout(() => { msg.textContent=''; }, 3000);
+    } else { throw new Error(data.error); }
+  } catch(e) {
+    msg.className = 'save-msg err';
+    msg.innerHTML = '<i class="ti ti-alert-circle"></i> ' + e.message;
+  }
+  btn.disabled = false;
+  btn.innerHTML = '<i class="ti ti-device-floppy"></i> Guardado ✓';
+  setTimeout(() => { btn.innerHTML = '<i class="ti ti-device-floppy"></i> Guardar cambios'; }, 2500);
+}
+
+loadMangas();
+</script>
+</body>
+</html>

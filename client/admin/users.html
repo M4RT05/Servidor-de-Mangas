@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover">
+  <title>Gestionar Usuarios — MangaServer</title>
+  <link href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.34.0/dist/tabler-icons.min.css" rel="stylesheet">
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:#0d1117;color:#e6edf3;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;min-height:100vh;padding:0;}
+    .topbar{background:#161b27;border-bottom:1px solid #30363d;padding:14px 20px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:10;}
+    .topbar a{color:#7d8590;text-decoration:none;font-size:14px;display:flex;align-items:center;gap:5px;}
+    .topbar a:hover{color:#e6edf3;}
+    .topbar h1{font-size:16px;font-weight:700;flex:1;}
+    .wrap{max-width:640px;margin:0 auto;padding:20px 16px calc(40px + env(safe-area-inset-bottom,20px));}
+    .card{background:#161b27;border:1px solid #30363d;border-radius:16px;padding:20px;margin-bottom:16px;}
+    h2{font-size:15px;font-weight:700;color:#e6edf3;margin-bottom:14px;}
+    label{display:block;font-size:12px;font-weight:600;color:#7d8590;margin-bottom:4px;margin-top:10px;}
+    input,select{width:100%;background:#1c2333;border:1px solid #30363d;border-radius:10px;padding:10px 13px;font-size:14px;color:#e6edf3;outline:none;transition:border-color .2s;}
+    input:focus,select:focus{border-color:#F5B800;}
+    input::placeholder{color:#7d8590;}
+    .btn{padding:10px 18px;border-radius:10px;border:none;cursor:pointer;font-size:13px;font-weight:700;transition:opacity .15s;}
+    .btn:hover{opacity:.85;}
+    .btn-pri{background:#F5B800;color:#0d1117;}
+    .btn-del{background:rgba(231,76,60,.15);color:#e74c3c;border:1px solid rgba(231,76,60,.3);}
+    .btn-edit{background:rgba(88,166,255,.12);color:#58a6ff;border:1px solid rgba(88,166,255,.25);}
+    .btn-sm{padding:6px 13px;font-size:12px;}
+    .msg{font-size:13px;padding:10px 14px;border-radius:10px;margin-bottom:12px;display:none;}
+    .msg.ok{background:rgba(63,185,80,.12);color:#3fb950;border:1px solid rgba(63,185,80,.25);}
+    .msg.err{background:rgba(231,76,60,.12);color:#e74c3c;border:1px solid rgba(231,76,60,.3);}
+    .user-row{display:flex;align-items:center;gap:12px;padding:12px;background:#1c2333;border-radius:12px;margin-bottom:8px;}
+    .user-av{width:36px;height:36px;border-radius:50%;background:#2d2a18;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#F5B800;flex-shrink:0;}
+    .user-info{flex:1;min-width:0;}
+    .user-name{font-size:14px;font-weight:700;color:#e6edf3;}
+    .user-meta{font-size:12px;color:#7d8590;margin-top:2px;}
+    .badge-admin{background:rgba(245,184,0,.15);color:#F5B800;font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;}
+    .badge-reader{background:rgba(125,133,144,.15);color:#7d8590;font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;}
+    .actions{display:flex;gap:6px;flex-shrink:0;}
+    .modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:200;align-items:center;justify-content:center;}
+    .modal-bg.on{display:flex;}
+    .modal{background:#161b27;border:1px solid #30363d;border-radius:16px;padding:24px;width:100%;max-width:400px;margin:16px;}
+    .modal h3{font-size:16px;font-weight:700;margin-bottom:16px;}
+    .modal-actions{display:flex;gap:8px;margin-top:16px;}
+    .loading{color:#7d8590;text-align:center;padding:20px;font-size:14px;}
+    .restrict-wrap{margin-top:6px;}
+    .tgi{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;border-top:1px solid #30363d;}
+    .tgi:first-child{border-top:none;}
+    .tglb{font-size:13px;font-weight:600;color:#e6edf3;}
+    .tg{width:42px;height:24px;border-radius:12px;background:#30363d;cursor:pointer;position:relative;transition:background .2s;flex-shrink:0;}
+    .tg.on{background:#F5B800;}
+    .tg::after{content:'';position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;transition:transform .2s;}
+    .tg.on::after{transform:translateX(18px);}
+    .veto-picker{margin-top:8px;display:none;}
+    .veto-picker input{margin-top:0;margin-bottom:8px;}
+    .veto-list{max-height:180px;overflow-y:auto;border:1px solid #30363d;border-radius:10px;background:#1c2333;}
+    .veto-item{display:flex;align-items:center;gap:8px;padding:8px 12px;font-size:13px;color:#e6edf3;border-bottom:1px solid #232a3a;cursor:pointer;}
+    .veto-item:last-child{border-bottom:none;}
+    .veto-item input{width:auto;margin:0;}
+    .veto-count{font-size:11px;color:#7d8590;margin-top:6px;}
+  </style>
+</head>
+<body>
+<div class="topbar">
+  <a href="/"><i class="ti ti-arrow-left"></i> Volver</a>
+  <h1>Gestionar Usuarios</h1>
+</div>
+<div class="wrap">
+  <div class="msg" id="msg"></div>
+
+  <!-- Crear usuario -->
+  <div class="card">
+    <h2>Agregar Usuario</h2>
+    <label>Nombre de usuario</label>
+    <input type="text" id="new-username" placeholder="ej. lector01" autocomplete="off">
+    <label>Contraseña</label>
+    <input type="password" id="new-password" placeholder="Contraseña segura">
+    <label>Rol</label>
+    <select id="new-role" onchange="toggleRoleExtras('new')">
+      <option value="reader">Lector</option>
+      <option value="admin">Administrador</option>
+    </select>
+
+    <div class="restrict-wrap" id="restrict-wrap-new">
+      <div class="tgi">
+        <span class="tglb">Permitir contenido +18</span>
+        <div class="tg on" id="tg-adult-new" onclick="this.classList.toggle('on')"></div>
+      </div>
+      <div class="tgi">
+        <span class="tglb">Vetar mangas específicos</span>
+        <div class="tg" id="tg-veto-new" onclick="toggleVetoPicker('new')"></div>
+      </div>
+      <div class="veto-picker" id="veto-picker-new">
+        <input type="text" id="veto-search-new" placeholder="Buscar manga..." oninput="filterVetoList('new')">
+        <div class="veto-list" id="veto-list-new"></div>
+        <div class="veto-count" id="veto-count-new">0 mangas seleccionados</div>
+      </div>
+    </div>
+
+    <div style="margin-top:14px;">
+      <button class="btn btn-pri" onclick="createUser()"><i class="ti ti-user-plus" style="font-size:14px;"></i> Crear usuario</button>
+    </div>
+  </div>
+
+  <!-- Lista usuarios -->
+  <div class="card">
+    <h2>Usuarios existentes</h2>
+    <div id="user-list"><div class="loading">Cargando...</div></div>
+  </div>
+</div>
+
+<!-- Modal cambiar contraseña -->
+<div class="modal-bg" id="modal-pw">
+  <div class="modal">
+    <h3>Cambiar contraseña</h3>
+    <input type="hidden" id="edit-id">
+    <label>Nueva contraseña</label>
+    <input type="password" id="edit-pw" placeholder="Nueva contraseña">
+    <label>Rol</label>
+    <select id="edit-role" onchange="toggleRoleExtras('edit')"><option value="reader">Lector</option><option value="admin">Administrador</option></select>
+
+    <div class="restrict-wrap" id="restrict-wrap-edit">
+      <div class="tgi">
+        <span class="tglb">Permitir contenido +18</span>
+        <div class="tg on" id="tg-adult-edit" onclick="this.classList.toggle('on')"></div>
+      </div>
+      <div class="tgi">
+        <span class="tglb">Vetar mangas específicos</span>
+        <div class="tg" id="tg-veto-edit" onclick="toggleVetoPicker('edit')"></div>
+      </div>
+      <div class="veto-picker" id="veto-picker-edit">
+        <input type="text" id="veto-search-edit" placeholder="Buscar manga..." oninput="filterVetoList('edit')">
+        <div class="veto-list" id="veto-list-edit"></div>
+        <div class="veto-count" id="veto-count-edit">0 mangas seleccionados</div>
+      </div>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn" style="flex:1;background:#1c2333;color:#7d8590;border:1px solid #30363d;" onclick="closeModal()">Cancelar</button>
+      <button class="btn btn-pri" style="flex:2;" onclick="saveEdit()">Guardar cambios</button>
+    </div>
+  </div>
+</div>
+
+<script src="/js/api.js"></script>
+<script>
+function showMsg(text, type) {
+  const el = document.getElementById('msg');
+  el.textContent = text;
+  el.className = 'msg ' + type;
+  el.style.display = 'block';
+  setTimeout(() => el.style.display = 'none', 3500);
+}
+
+// ── Estado de usuarios y mangas (para el selector de veto) ──────────────────
+let usersById  = {};
+let allMangas  = null; // se carga perezosamente, solo si se abre el selector
+const vetoSelected = { new: new Set(), edit: new Set() };
+
+async function loadUsers() {
+  const users = await API.getUsers();
+  if (!Array.isArray(users)) return;
+  usersById = {};
+  users.forEach(u => usersById[u.id] = u);
+  const me = API.getUsername();
+  document.getElementById('user-list').innerHTML = users.map(u => `
+    <div class="user-row">
+      <div class="user-av">${u.username.slice(0,2).toUpperCase()}</div>
+      <div class="user-info">
+        <div class="user-name">${u.username} ${u.username === me ? '<span style="font-size:11px;color:#7d8590;">(tú)</span>' : ''}</div>
+        <div class="user-meta">${new Date(u.createdAt).toLocaleDateString('es')} &nbsp;<span class="${u.role==='admin'?'badge-admin':'badge-reader'}">${u.role==='admin'?'Admin':'Lector'}</span>
+          ${u.role==='reader' && u.canViewAdult===false ? ' <span class="badge-reader">Sin +18</span>' : ''}
+          ${u.role==='reader' && u.blockedMangas?.length ? ` <span class="badge-reader">${u.blockedMangas.length} vetados</span>` : ''}
+        </div>
+      </div>
+      <div class="actions">
+        <button class="btn btn-edit btn-sm" onclick="openEdit('${u.id}')"><i class="ti ti-pencil" style="font-size:13px;"></i></button>
+        ${u.username !== me ? `<button class="btn btn-del btn-sm" onclick="deleteUser('${u.id}','${u.username}')"><i class="ti ti-trash" style="font-size:13px;"></i></button>` : ''}
+      </div>
+    </div>`).join('') || '<p style="color:#7d8590;font-size:13px;">No hay usuarios.</p>';
+}
+
+// ── Mostrar/ocultar las opciones de restricción según el rol elegido ────────
+// (un admin nunca está restringido, así que esas opciones no aplican)
+function toggleRoleExtras(prefix) {
+  const roleEl = document.getElementById(prefix === 'new' ? 'new-role' : 'edit-role');
+  const wrap   = document.getElementById('restrict-wrap-' + prefix);
+  wrap.style.display = roleEl.value === 'reader' ? 'block' : 'none';
+}
+
+// ── Selector de mangas vetados ───────────────────────────────────────────────
+async function ensureMangaListLoaded() {
+  if (allMangas) return allMangas;
+  allMangas = await API.getMangas();
+  if (!Array.isArray(allMangas)) allMangas = [];
+  return allMangas;
+}
+
+async function toggleVetoPicker(prefix) {
+  const tg     = document.getElementById('tg-veto-' + prefix);
+  const picker = document.getElementById('veto-picker-' + prefix);
+  tg.classList.toggle('on');
+  const on = tg.classList.contains('on');
+  picker.style.display = on ? 'block' : 'none';
+  if (on) {
+    await ensureMangaListLoaded();
+    renderVetoList(prefix);
+  }
+}
+
+function renderVetoList(prefix, filterText = '') {
+  const list = document.getElementById('veto-list-' + prefix);
+  const sel  = vetoSelected[prefix];
+  const f    = filterText.trim().toLowerCase();
+  const items = (allMangas || []).filter(m => !f || m.name.toLowerCase().includes(f));
+  list.innerHTML = items.map(m => `
+    <label class="veto-item">
+      <input type="checkbox" data-name="${m.name}" ${sel.has(m.name) ? 'checked' : ''} onchange="onVetoCheck('${prefix}', this)">
+      <span>${m.name}</span>
+    </label>`).join('') || '<p style="color:#7d8590;font-size:12px;padding:10px;">Sin resultados.</p>';
+}
+
+function onVetoCheck(prefix, input) {
+  const name = input.dataset.name;
+  if (input.checked) vetoSelected[prefix].add(name);
+  else vetoSelected[prefix].delete(name);
+  updateVetoCount(prefix);
+}
+
+function updateVetoCount(prefix) {
+  const n = vetoSelected[prefix].size;
+  document.getElementById('veto-count-' + prefix).textContent = `${n} manga${n === 1 ? '' : 's'} seleccionado${n === 1 ? '' : 's'}`;
+}
+
+function filterVetoList(prefix) {
+  renderVetoList(prefix, document.getElementById('veto-search-' + prefix).value);
+}
+
+function resetVetoState(prefix) {
+  vetoSelected[prefix].clear();
+  document.getElementById('tg-veto-' + prefix).classList.remove('on');
+  document.getElementById('veto-picker-' + prefix).style.display = 'none';
+  document.getElementById('veto-search-' + prefix).value = '';
+  updateVetoCount(prefix);
+}
+
+// ── Crear usuario ─────────────────────────────────────────────────────────────
+async function createUser() {
+  const username = document.getElementById('new-username').value.trim();
+  const password = document.getElementById('new-password').value.trim();
+  const role     = document.getElementById('new-role').value;
+  if (!username || !password) { showMsg('Completa todos los campos.', 'err'); return; }
+
+  const restrictions = role === 'reader' ? {
+    canViewAdult:  document.getElementById('tg-adult-new').classList.contains('on'),
+    blockedMangas: document.getElementById('tg-veto-new').classList.contains('on') ? [...vetoSelected.new] : []
+  } : {};
+
+  const res = await API.createUser(username, password, role, restrictions);
+  if (res?.ok) {
+    showMsg(`Usuario "${username}" creado.`, 'ok');
+    document.getElementById('new-username').value = '';
+    document.getElementById('new-password').value = '';
+    document.getElementById('tg-adult-new').classList.add('on');
+    resetVetoState('new');
+    loadUsers();
+  } else {
+    showMsg(res?.error || 'Error al crear usuario.', 'err');
+  }
+}
+
+// ── Editar usuario ────────────────────────────────────────────────────────────
+function openEdit(id) {
+  const u = usersById[id];
+  if (!u) return;
+
+  document.getElementById('edit-id').value = id;
+  document.getElementById('edit-pw').value = '';
+  document.getElementById('edit-role').value = u.role;
+  toggleRoleExtras('edit');
+
+  document.getElementById('tg-adult-edit').classList.toggle('on', u.canViewAdult !== false);
+  vetoSelected.edit = new Set(Array.isArray(u.blockedMangas) ? u.blockedMangas : []);
+  document.getElementById('tg-veto-edit').classList.toggle('on', vetoSelected.edit.size > 0);
+  document.getElementById('veto-picker-edit').style.display = vetoSelected.edit.size > 0 ? 'block' : 'none';
+  document.getElementById('veto-search-edit').value = '';
+  updateVetoCount('edit');
+  if (vetoSelected.edit.size > 0) ensureMangaListLoaded().then(() => renderVetoList('edit'));
+
+  document.getElementById('modal-pw').classList.add('on');
+  document.querySelector('#modal-pw .modal h3').textContent = `Editar: ${u.username}`;
+}
+function closeModal() { document.getElementById('modal-pw').classList.remove('on'); }
+
+async function saveEdit() {
+  const id   = document.getElementById('edit-id').value;
+  const pw   = document.getElementById('edit-pw').value.trim();
+  const role = document.getElementById('edit-role').value;
+  const data = { role };
+  if (pw) data.password = pw;
+  if (role === 'reader') {
+    data.canViewAdult  = document.getElementById('tg-adult-edit').classList.contains('on');
+    data.blockedMangas = document.getElementById('tg-veto-edit').classList.contains('on') ? [...vetoSelected.edit] : [];
+  } else {
+    data.canViewAdult  = true;
+    data.blockedMangas = [];
+  }
+  const res = await API.updateUser(id, data);
+  if (res?.ok) { showMsg('Usuario actualizado.', 'ok'); closeModal(); loadUsers(); }
+  else showMsg(res?.error || 'Error al actualizar.', 'err');
+}
+
+async function deleteUser(id, username) {
+  if (!confirm(`¿Eliminar al usuario "${username}"? Esta acción no se puede deshacer.`)) return;
+  const res = await API.deleteUser(id);
+  if (res?.ok) { showMsg(`Usuario "${username}" eliminado.`, 'ok'); loadUsers(); }
+  else showMsg(res?.error || 'Error al eliminar.', 'err');
+}
+
+document.getElementById('modal-pw').addEventListener('click', e => { if(e.target === document.getElementById('modal-pw')) closeModal(); });
+
+// Verificar que es admin
+(async () => {
+  await new Promise(r => setTimeout(r, 400)); // esperar a que api.js verifique el token
+  if (API.getRole() !== 'admin') { alert('Sin permiso.'); window.location.href = '/'; }
+  else loadUsers();
+})();
+</script>
+</body>
+</html>

@@ -1,23 +1,38 @@
-### AL ###
-#Template for AL projects for Dynamics 365 Business Central
-#launch.json folder
-.vscode/
-#Cache folder
-.alcache/
-#Symbols folder
-.alpackages/
-#Snapshots folder
-.snapshots/
-#Testing Output folder
-.output/
-#Extension App-file
-*.app
-#Rapid Application Development File
-rad.json
-#Translation Base-file
-*.g.xlf
-#License-files
-*.bclicense
-*.flf
-#Test results file
-TestResults.xml
+# ── DEPENDENCIAS ──────────────────────────────────────────────────────────────
+node_modules/
+package-lock.json
+
+# ── VARIABLES DE ENTORNO (contraseña y JWT — NUNCA subir) ─────────────────────
+.env
+
+# ── DATOS DE USUARIOS (información personal y hashes de contraseña) ───────────
+server/data/users.json
+server/data/avatars/
+
+# ── DATOS DE LECTURA (progreso e historial personal) ─────────────────────────
+server/progress.json
+server/detected_dates.json
+
+# ── SCRAPER — datos de seguimiento y archivos runtime ─────────────────────────
+# seguimiento.json tiene URLs y slugs de tu colección personal; usa seguimiento.example.json como plantilla
+scraper/seguimiento.json
+# estado runtime de rotación de dominios de Ikigai
+scraper/ikigai_estado.json
+# reporte HTML generado automáticamente con historial de escaneos embebido
+scraper/reporte.html
+# lock de PID: se crea al ejecutar el scraper y se borra al terminar
+scraper/scraper.lock
+# backups de seguimiento que el scraper puede crear (ej. seguimiento.json.bak)
+scraper/seguimiento.json.bak
+
+# ── CARPETA DE MANGAS (archivos pesados) ──────────────────────────────────────
+main/
+
+# ── SISTEMA OPERATIVO ─────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── LOGS ──────────────────────────────────────────────────────────────────────
+*.log
+npm-debug.log*
