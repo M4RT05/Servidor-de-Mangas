@@ -12,6 +12,11 @@ server/data/avatars/
 # ── DATOS DE LECTURA (progreso e historial personal) ─────────────────────────
 server/progress.json
 server/detected_dates.json
+# entradas de progreso huérfanas (mangas borrados/renombrados) generadas por manga.js
+server/progress_orphans.json
+
+# ── BACKUPS AUTOMÁTICOS (contienen copias de progress.json, etc.) ────────────
+server/backups/
 
 # ── SCRAPER — datos de seguimiento y archivos runtime ─────────────────────────
 # seguimiento.json tiene URLs y slugs de tu colección personal; usa seguimiento.example.json como plantilla
@@ -24,6 +29,14 @@ scraper/reporte.html
 scraper/scraper.lock
 # backups de seguimiento que el scraper puede crear (ej. seguimiento.json.bak)
 scraper/seguimiento.json.bak
+# dump de HTML crudo que Selenium guarda para depurar bloqueos/CAPTCHAs
+scraper/debug_selenium.html
+
+# ── CACHÉ / ÍNDICES GENERADOS (regenerables, no versionar) ────────────────────
+# snapshot completo de tu librería (catalogIndex.js lo reconstruye solo)
+server/catalog_index.json
+# caché de miniaturas en disco (thumbnails.js) — binarios pesados y regenerables
+server/data/thumb_cache/
 
 # ── CARPETA DE MANGAS (archivos pesados) ──────────────────────────────────────
 main/

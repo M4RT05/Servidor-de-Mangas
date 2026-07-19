@@ -28,6 +28,15 @@
     <!-- INICIO -->
     <div id="p-inicio" class="pg on">
       <div class="pgh"><h1>Bienvenido</h1><p>Tu biblioteca personal</p></div>
+      <!-- ── FEATURED CAROUSEL ─────────────────────────────────────────────── -->
+      <div id="feat-wrap" style="display:none;margin-bottom:24px;">
+        <div class="feat-carousel">
+          <div id="feat-slides"></div>
+          <button class="feat-arr feat-prev" onclick="carouselPrev()">&#8249;</button>
+          <button class="feat-arr feat-next" onclick="carouselNext()">&#8250;</button>
+        </div>
+        <div class="feat-indicators" id="feat-indicators"></div>
+      </div>
       <div class="hst">Seguir Leyendo</div>
       <div id="cont-reading"><div class="sk-row-list" id="sk-reading" style="padding:0 0 4px;">
         <div class="sk-row"><div class="sk-thumb sk-shine"></div><div style="flex:1;display:flex;flex-direction:column;gap:7px;"><div class="sk-line sk-shine" style="width:75%;height:13px;border-radius:6px;"></div><div class="sk-line sk-shine" style="width:45%;height:10px;border-radius:5px;"></div></div></div>
@@ -163,6 +172,162 @@
   </div>
 </div>
 
+<!-- ═══════════════════════════════════════════════════════════════════
+     LECTOR (antes reader.html, documento aparte — ahora una página más
+     del SPA: se muestra/oculta con .on, sin recargar la página) 
+     ═══════════════════════════════════════════════════════════════════ -->
+<div id="p-reader">
+  <div id="loader">Cargando capítulo...</div>
+
+  <div id="top-bar">
+    <div class="trow1">
+      <button class="t-back" onclick="goBack()" title="Volver al manga" aria-label="Volver">
+        <i class="ti ti-arrow-left"></i>
+      </button>
+      <div class="t-title-wrap">
+        <div class="t-manga" id="t-title" onclick="goBack()" title="Volver al manga">Cargando...</div>
+        <nav class="chapter-nav" aria-label="Navegación de capítulos">
+          <button class="t-arrow" id="t-prev" disabled onclick="prevChap()" aria-label="Capítulo anterior">‹</button>
+          <button class="t-chapnum-btn" id="t-chapnum" onclick="openChapDrawer()" aria-label="Seleccionar capítulo">
+            <span id="t-chapnum-label">—</span>
+          </button>
+          <button class="t-arrow" id="t-next" disabled onclick="nextChap()" aria-label="Capítulo siguiente">›</button>
+        </nav>
+      </div>
+      <div class="t-avatar" id="t-avatar" aria-label="Perfil">M</div>
+    </div>
+    <div class="trow2">
+      <div class="tcfg-card">
+        <button class="t-cfg" onclick="openCfg()" aria-label="Abrir configuración">
+          <i class="ti ti-adjustments-horizontal" style="font-size:14px;"></i>
+          Configuración
+        </button>
+        <button class="t-fs" id="t-fs-btn" onclick="toggleFS()" title="Pantalla completa" aria-label="Pantalla completa">
+          <i class="ti ti-arrows-maximize"></i>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SCROLL READER -->
+  <div id="reader-wrap">
+    <div id="scroll-reader"></div>
+    <div class="sp-bot"></div>
+  </div>
+
+  <!-- PAGE READER (fixed, se activa solo en modo página) -->
+  <div id="page-reader">
+    <div id="ptl" onclick="prevPage()"></div>
+    <div id="ptm" onclick="toggleBars()"></div>
+    <div id="ptr" onclick="nextPage()"></div>
+    <img id="page-img" src="" alt="">
+  </div>
+
+  <!-- FLOATING PANEL -->
+  <div id="float-panel" class="hidden">
+    <button class="fb" id="fb-night" onclick="toggleNight()" title="Modo noche">
+      <i class="ti ti-moon"></i>
+    </button>
+    <button class="fb" id="fb-play" onclick="togglePlay()" title="Auto-scroll">
+      <i class="ti ti-player-play-filled"></i>
+    </button>
+  </div>
+
+  <!-- BOTTOM BAR -->
+  <div id="bot-bar">
+    <button class="b-chap" id="b-prev" disabled onclick="prevChap()" title="Capítulo anterior">
+      <i class="ti ti-chevron-left"></i>
+    </button>
+    <button class="b-act" id="b-fs-btn" onclick="toggleFS()" title="Pantalla completa">
+      <i class="ti ti-arrows-maximize"></i>
+    </button>
+    <button class="b-page" onclick="scrollToTop()" id="b-page-info" title="Ir al inicio">
+      <i class="ti ti-book" style="font-size:13px;"></i>
+      <span id="b-page-num">1 / 1</span>
+      <i class="ti ti-chevron-up" style="font-size:11px;color:var(--mut);"></i>
+    </button>
+    <button class="b-act" onclick="openCfg()" title="Configuración">
+      <i class="ti ti-adjustments-horizontal"></i>
+    </button>
+    <button class="b-chap" id="b-next" disabled onclick="nextChap()" title="Siguiente capítulo">
+      <i class="ti ti-chevron-right"></i>
+    </button>
+  </div>
+
+  <!-- CHAPTER DRAWER -->
+  <div id="chap-drawer-bg" onclick="closeChapDrawer()"></div>
+  <div id="chap-drawer">
+    <div class="drawer-header">
+      <span class="drawer-title">Seleccionar capítulo</span>
+      <button class="drawer-close" onclick="closeChapDrawer()"><i class="ti ti-x"></i></button>
+    </div>
+    <div class="drawer-list" id="chap-drawer-list"></div>
+  </div>
+
+  <!-- CONFIG SHEET -->
+  <div id="cfg-bg" onclick="closeCfg()"></div>
+  <div id="cfg-sheet">
+    <div class="cs-title">
+      <span><i class="ti ti-adjustments-horizontal" style="vertical-align:middle;margin-right:7px;font-size:17px;"></i>Opciones de lectura</span>
+      <button class="cs-close" onclick="closeCfg()"><i class="ti ti-x"></i></button>
+    </div>
+
+    <div class="cs-label">Modo de lectura</div>
+    <div class="mode-btns">
+      <button class="mode-btn" id="btn-scroll" onclick="setMode('scroll')">
+        <i class="ti ti-align-justify"></i> Scroll
+      </button>
+      <button class="mode-btn" id="btn-page" onclick="setMode('page')">
+        <i class="ti ti-layout-bottombar" style="font-size:15px;"></i> Páginas
+      </button>
+    </div>
+
+    <div class="cs-sep"></div>
+    <div class="cs-label">Desplazamiento automático</div>
+    <div class="cfg-row">
+      <div class="cfg-rl">
+        <i class="ti ti-player-play cfg-icon"></i>
+        <div class="cfg-txt">
+          <div class="cfg-name">Desplazamiento automático</div>
+          <div class="cfg-desc">Scroll continuo automático</div>
+        </div>
+      </div>
+      <div class="tg" id="tg-as" onclick="toggleAutoScroll()"></div>
+    </div>
+    <div id="speed-row" style="display:none;">
+      <div class="spd-top">
+        <span class="spd-lbl">Velocidad</span>
+        <span class="spd-val" id="spd-val">130px/s</span>
+      </div>
+      <input type="range" id="spd-slider" min="10" max="500" value="130" oninput="setSpeed(this.value)">
+    </div>
+
+    <div class="cs-sep"></div>
+    <div class="cs-label">Comodidad visual</div>
+    <div class="cfg-row">
+      <div class="cfg-rl">
+        <i class="ti ti-moon cfg-icon"></i>
+        <div class="cfg-txt">
+          <div class="cfg-name">Modo noche</div>
+          <div class="cfg-desc">Reduce brillo y luz azul</div>
+        </div>
+      </div>
+      <div class="tg" id="tg-night" onclick="toggleNight()"></div>
+    </div>
+    <div class="cs-sep"></div>
+    <div class="cfg-row">
+      <div class="cfg-rl">
+        <i class="ti ti-pin cfg-icon"></i>
+        <div class="cfg-txt">
+          <div class="cfg-name">Mostrar en pantalla</div>
+          <div class="cfg-desc">Panel flotante con controles rápidos</div>
+        </div>
+      </div>
+      <div class="tg" id="tg-screen" onclick="toggleScreen()"></div>
+    </div>
+  </div>
+</div>
+
 <!-- FILTER MODAL -->
 <div id="filter-overlay" onclick="closeFilter()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:300;"></div>
 <div id="filter-panel" style="display:none;position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;background:var(--surf);border-radius:20px 20px 0 0;z-index:301;padding:20px 16px calc(30px + env(safe-area-inset-bottom,16px));max-height:80vh;overflow-y:auto;">
@@ -195,6 +360,10 @@
   </div>
   <div class="pst">Configuración</div>
   <div class="tgi"><span class="tglb">Contenido +18</span><div class="tg" id="toggle-adult" onclick="toggleAdult(this)"></div></div>
+  <div class="tgi"><span class="tglb">Solo +18</span><div class="tg" id="toggle-only-adult" onclick="toggleOnlyAdult(this)"></div></div>
+  <div class="tgi"><span class="tglb">Mangas</span><div class="tg on" id="toggle-show-manga" onclick="toggleShowType('manga', this)"></div></div>
+  <div class="tgi"><span class="tglb">Manhwas</span><div class="tg on" id="toggle-show-manhwa" onclick="toggleShowType('manhwa', this)"></div></div>
+  <div class="tgi"><span class="tglb">Manhuas</span><div class="tg on" id="toggle-show-manhua" onclick="toggleShowType('manhua', this)"></div></div>
   <div class="pst">Tema</div>
   <div class="theme-grid">
     <button class="theme-btn" data-theme="" onclick="setTheme('')">
@@ -247,6 +416,7 @@
 <script src="js/ui.js"></script>
 <script src="js/detail.js"></script>
 <script src="js/app.js"></script>
+<script src="js/reader.js"></script>
 <script>
 // ── PC LAYOUT SWITCHER ───────────────────────────────────────────────────────
 function applyPCLayout() {

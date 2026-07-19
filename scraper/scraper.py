@@ -1,16 +1,19 @@
 """
 ╔══════════════════════════════════════════════════════════════════════╗
-║       📚  M4RTO SCRAPER  v1.6                                        ║
+║ M4RTO SCRAPER  v1.8                                                  ║
 ║                                                                      ║
 ║  Sitios soportados:                                                  ║
 ║    • Olympus Scanlation   (API JSON)                                 ║
-║    • Temple Scan          (WordPress/Madara)                         ║
-║    • Dragon Translation   (WordPress/Madara)                         ║
-║    • ManhwasWEB           (API JSON)                                 ║
 ║    • Nexus Scanlation     (API JSON, imágenes con descramble)        ║
+║    • Temple Scan          (WordPress/Madara)                         ║
+║    • ManhwasWEB           (API JSON)                                 ║
+║    • Dragon Translation   (WordPress/Madara)                         ║
 ║    • Ikigai Mangas        (SSR Qwik, dominios rotativos)             ║
+║    • LeerCapitulo         (plataforma propia, imágenes vía Selenium) ║
+║    • Tauro Scan           (WordPress/Madara)                         ║
 ║                                                                      ║
-║  Instalar deps: pip install requests beautifulsoup4 Pillow           ║
+║  Instalar deps: pip install requests beautifulsoup4 Pillow tqdm      ║
+║                 pycryptodome selenium                                ║
 ╚══════════════════════════════════════════════════════════════════════╝
 """
 
@@ -26,6 +29,7 @@ import logging.handlers
 import threading
 import subprocess
 import importlib.util
+import unicodedata
 from abc import ABC, abstractmethod
 from datetime import datetime
 from pathlib import Path
@@ -41,6 +45,11 @@ _PAQUETES = {
     "PIL":       "Pillow",
     "tqdm":      "tqdm",
     "Crypto":    "pycryptodome",  # usado por ManhwasWeb para capítulos cifrados
+    "selenium":  "selenium",      # usado por LeerCapitulo (siempre) y como
+                                   # fallback vía navegador real en otras
+                                   # fuentes — antes faltaba acá, así que
+                                   # nunca se instalaba solo con correr
+                                   # el scraper la primera vez.
 }
 
 def _auto_instalar():
@@ -133,7 +142,7 @@ IKIGAI_ESTADO_PATH = SCRIPT_DIR / "ikigai_estado.json"
 # capítulos nuevos. El scraper corre indefinidamente: escanea, espera
 # este intervalo, vuelve a escanear. Para correr UNA sola vez y salir,
 # usar el flag --una-vez al ejecutar el script.
-INTERVALO_HORAS   = 3
+INTERVALO_HORAS   = 1
 
 # ── Reintentos de red genéricos (páginas, APIs) ──────────────────────
 # Aplica a hacer_get()/hacer_post(): páginas de manga, APIs de
@@ -174,6 +183,20 @@ CHROMEDRIVER_VERSION_FALLBACK = "149"
 # nuevo, no se acumula.
 DEBUG_SELENIUM_PATH = SCRIPT_DIR / "debug_selenium.html"
 
+# Cuando Selenium SOLO encuentra imágenes vía el selector de respaldo
+# genérico (los selectores específicos del lector no encontraron
+# nada), es señal de que la página no es realmente el capítulo sino
+# una página de error/caída (ej: banner "404", ícono de "cerrar",
+# ambos recogidos igual por ser <img> genéricas). Si además la
+# cantidad de imágenes encontradas es baja, es casi seguro que se
+# trata de eso y no de un capítulo real con markup atípico — un
+# capítulo real casi siempre trae bastantes más páginas que esto.
+# Por debajo de este umbral, se descarta el resultado completo
+# (se trata como "sin imágenes" → error/reintento) en vez de
+# devolverlo para descarga. Por encima, se asume que es un capítulo
+# real con un lector no estándar y se deja pasar (con warning igual).
+UMBRAL_FALLBACK_SOSPECHOSO = 5
+
 # ── Límite de tiempo por manga ───────────────────────────────────────
 # Tiempo máximo total que se le da a UN manga (todos sus capítulos
 # pendientes) dentro de un mismo ciclo de escaneo. Si se supera, se
@@ -193,7 +216,7 @@ TIMEOUT_MANGA_SEG = 20 * 60  # 20 minutos
 #      seguimiento.json (que sigue siendo 100% opcional)
 # Cualquier fuente nueva que no esté listada acá simplemente cae al
 # final — no rompe nada, ni en el orden de escaneo ni en la prioridad.
-ORDEN_FUENTES = ["olympus", "nexus", "temple", "manhwaweb", "dragon", "ikigai"]
+ORDEN_FUENTES = ["olympus", "nexus", "temple", "manhwaweb", "dragon", "ikigai", "leercapitulo", "taurus"]
 
 # Perfiles de filtro de imagen por sitio (dimensiones mínimas, ratio
 # máximo, umbral de "ícono cuadrado", tolerancia de ancho respecto al
@@ -203,7 +226,7 @@ ORDEN_FUENTES = ["olympus", "nexus", "temple", "manhwaweb", "dragon", "ikigai"]
 # más fácil encontrarlo y ajustarlo sin tener que buscarlo adentro de
 # un método de 200 líneas.
 FILTROS = {
-    "olympus":   {"ancho_min": 400, "alto_min": 400, "ratio_max": 3.5, "cuadrado_max": 500, "tol_pct": 15, "fallback_min": 2},
+    "olympus":   {"ancho_min": 200, "alto_min": 200, "ratio_max": 3.5, "cuadrado_max": 500, "tol_pct": 15, "fallback_min": 2},
     "temple":    {"ancho_min": 150, "alto_min": 150, "ratio_max": 4.0, "cuadrado_max": 400, "tol_pct": 30, "fallback_min": 2},
     "dragon":    {"ancho_min": 150, "alto_min": 150, "ratio_max": 4.0, "cuadrado_max": 500, "tol_pct": 20, "fallback_min": 2},
     "manhwaweb": {"ancho_min": 300, "alto_min": 300, "ratio_max": 4.0, "cuadrado_max": 400, "tol_pct": 30, "fallback_min": 2},
@@ -212,6 +235,15 @@ FILTROS = {
     # exacta en obtener_imagenes (más confiable, ver esa función) —
     # este perfil es solo una red de seguridad secundaria.
     "ikigai":    {"ancho_min": 300, "alto_min": 300, "ratio_max": 4.0, "cuadrado_max": 400, "tol_pct": 25, "fallback_min": 2},
+    # Valores de partida (sin datos reales de resolución todavía — el
+    # sitio no expone dimensiones antes de descargar). tol_pct relajado
+    # a propósito porque no sabemos aún qué tan parejo es el ancho entre
+    # páginas. Ajustar después de la primera corrida real con --una-vez.
+    "leercapitulo": {"ancho_min": 150, "alto_min": 150, "ratio_max": 4.0, "cuadrado_max": 400, "tol_pct": 30, "fallback_min": 2},
+    # Mismo perfil que Dragon: también es Madara/WP-manga estándar, sin
+    # datos propios de resolución todavía — ajustar tras la primera
+    # corrida real con --una-vez si hace falta.
+    "taurus":     {"ancho_min": 150, "alto_min": 150, "ratio_max": 4.0, "cuadrado_max": 500, "tol_pct": 20, "fallback_min": 2},
 }
 
 # Prioridad reservada para contenido que apareció en la carpeta de un
@@ -272,27 +304,56 @@ def validar_multi_fuente(mangas: list[dict]):
                        f"fuente ({', '.join(repetidas)}) en seguimiento.json "
                        f"— revisar si es un copy-paste sin terminar de editar.")
 
-        # Dos fuentes DISTINTAS con la misma prioridad efectiva: en un
-        # empate gana la que escaneó primero, sin avisar nada — mejor
-        # detectarlo acá y sugerir desambiguar a mano.
-        por_prioridad: dict[int, set] = {}
+        # Dos fuentes DISTINTAS con la misma prioridad efectiva.
+        #
+        # La prioridad AUTOMÁTICA (derivada de ORDEN_FUENTES) nunca puede
+        # empatar entre dos fuentes distintas — cada una tiene un índice
+        # único. Así que cualquier empate que aparezca acá SIEMPRE fue
+        # puesto a mano por alguien en 'prioridad_fuente'. Dos casos:
+        #
+        #   - Si TODAS las entradas empatadas lo fijaron a mano → es
+        #     "doble prioridad" deliberada, una configuración soportada.
+        #     Se informa cómo se resuelve (gana quien descargue primero,
+        #     y esa versión queda fija — ver comparación de prioridad en
+        #     _descargar_caps_nuevos), no se sugiere "arreglar" nada.
+        #   - Si alguna quedó SIN fijar (coincide con la de otra por
+        #     casualidad) → sí conviene avisar, porque probablemente no
+        #     fue intencional.
+        por_prioridad: dict[int, list[dict]] = {}
         for e in entradas:
             p = prioridad_efectiva(e)
-            por_prioridad.setdefault(p, set()).add(e.get("fuente", "?"))
-        for p, fs in por_prioridad.items():
-            if len(fs) > 1:
+            por_prioridad.setdefault(p, []).append(e)
+        for p, es in por_prioridad.items():
+            fs = sorted({e.get("fuente", "?") for e in es})
+            if len(fs) <= 1:
+                continue
+            todas_manuales = all(e.get("prioridad_fuente") is not None for e in es)
+            if todas_manuales:
+                log.info(f"  ℹ  '{carpeta}' — {', '.join(fs)} comparten prioridad "
+                         f"manual ({p}): doble prioridad soportada. Si un capítulo "
+                         f"nuevo aparece en más de una al mismo tiempo, se queda "
+                         f"la que se descargue primero y esa versión no se "
+                         f"reemplaza después.")
+            else:
                 log.warning(f"  ⚠  '{carpeta}' tiene fuentes distintas "
-                           f"({', '.join(sorted(fs))}) con la MISMA prioridad "
-                           f"({p}) — conviene desambiguar con 'prioridad_fuente' "
-                           f"manual en seguimiento.json para que no dependa del "
-                           f"orden de escaneo.")
+                           f"({', '.join(fs)}) con la MISMA prioridad ({p}) sin "
+                           f"que todas la hayan fijado a mano — probablemente sin "
+                           f"querer. Si es intencional, fijá 'prioridad_fuente' "
+                           f"manual en las {len(fs)} entradas para dejarlo claro.")
 
 # ── Olympus: páginas de novedades a escanear para recuperar slugs ───
-# Solo se usa para auto-recuperar el slug de un manga si el guardado
-# en seguimiento.json ya venció (la URL da 404). El listado de QUÉ
-# descargar de cada manga viene siempre de su página de serie
-# completa, no de estas páginas de novedades.
-OLYMPUS_MAX_PAGINAS_NOVEDADES = 20
+# Fallback SECUNDARIO de recuperación de slug (después del catálogo
+# completo /api/series/list, que es más rápido y es el primer intento).
+# Se dispara tanto si el slug guardado da 404 como si la API de
+# capítulos falla por error de conexión persistente — en ambos casos
+# puede significar "el slug venció". Empíricamente (2026-07-11):
+# Olympus reordena /capitulos?page=N cada vez que un manga saca
+# capítulo nuevo, empujándolo a la página 1; con el total de páginas
+# actual (57, antes >800), la página 25 ya cubre ~9 meses de
+# antigüedad — de sobra para cualquier manga que se siga actualizando.
+# El listado de QUÉ descargar de cada manga viene siempre de su
+# página de serie completa, no de estas páginas de novedades.
+OLYMPUS_MAX_PAGINAS_NOVEDADES = 25
 
 # ── Detector de bloqueo (BlockDetector) ──────────────────────────────
 # Si un dominio específico acumula este número de errores CONSECUTIVOS
@@ -392,11 +453,13 @@ def normalizar_url_manga(manga_cfg: dict) -> bool:
     y el manga sigue funcionando con el campo 'slug' de siempre.
 
     Soporta las URLs típicas de cada fuente:
-      Olympus:    https://olympusxyz.com/series/comic-{slug}
-      Temple:     https://{dominio}/manga/{slug}/  (o variantes con prefijo)
-      Dragon:     https://dragontranslation.org/manga/{slug}/
-      ManhwasWEB: https://manhwaweb.com/manhwa/{slug}
-      Nexus:      https://nexusscanlation.com/series/{slug}
+      Olympus:      https://olympusxyz.com/series/comic-{slug}
+      Temple:       https://{dominio}/manga/{slug}/  (o variantes con prefijo)
+      Dragon:       https://dragontranslation.org/manga/{slug}/
+      ManhwasWEB:   https://manhwaweb.com/manhwa/{slug}
+      Nexus:        https://nexusscanlation.com/series/{slug}
+      LeerCapitulo: https://www.leercapitulo.co/manga/{id}/{slug-largo}/
+      Tauro:        https://lectortaurus.com/manga/{slug}/
 
     Retorna True si modificó manga_cfg (para saber si hay que guardar
     seguimiento.json), False si no había nada que normalizar.
@@ -436,7 +499,7 @@ def normalizar_url_manga(manga_cfg: dict) -> bool:
         m = re.search(r"series/(.+)$", path)
         if m:
             slug_extraido = m.group(1).split("/")[0]
-    elif fuente in ("temple", "dragon"):
+    elif fuente in ("temple", "dragon", "taurus"):
         # .../manga/{slug}/  o  .../serie/{slug}/  etc — tomar el
         # último segmento no vacío del path como slug.
         partes = [p for p in path.split("/") if p]
@@ -446,6 +509,13 @@ def normalizar_url_manga(manga_cfg: dict) -> bool:
                 slug_extraido = partes[1]
             else:
                 slug_extraido = partes[-1]
+    elif fuente == "leercapitulo":
+        # .../manga/{id}/{slug-largo}/  — acá el "slug" que usamos
+        # internamente son DOS segmentos juntos (id + slug legible),
+        # no uno solo como en Temple/Dragon, así que se unen con "/".
+        partes = [p for p in path.split("/") if p]
+        if partes and partes[0] == "manga" and len(partes) > 1:
+            slug_extraido = "/".join(partes[1:])
 
     if not slug_extraido:
         log.warning(f"  ⚠  No se pudo extraer el slug de url_manga para "
@@ -1276,6 +1346,223 @@ class ScraperBase(ABC):
         """
         return datos
 
+    # ── Bootstrap de Selenium (compartido) ────────────────────────────
+    # Extraído de MadaraScraper para que cualquier scraper que necesite
+    # ejecutar JS en un navegador real (ej: LeerCapitulo) lo reuse sin
+    # duplicar la detección de Brave, descarga de ChromeDriver, limpieza
+    # de perfil stale, etc. El comportamiento es idéntico al que tenía
+    # MadaraScraper antes de este refactor.
+
+    @staticmethod
+    def _limpiar_perfil_brave_stale() -> None:
+        """
+        Limpia residuos del perfil dedicado de Selenium (BRAVE_PROFILE_DIR)
+        antes de lanzar una nueva sesión.
+
+        Motivo: si una corrida anterior terminó abruptamente (script
+        cortado, Brave crasheado, proceso matado a la fuerza) puede
+        quedar un proceso brave.exe huérfano y/o archivos de lock
+        (SingletonLock/SingletonCookie/SingletonSocket) sosteniendo el
+        perfil. Mientras eso exista, CUALQUIER intento de abrir Brave
+        con ese mismo --user-data-dir crashea al instante con:
+            "session not created: Chrome failed to start: crashed.
+             (session not created: DevToolsActivePort file doesn't exist)"
+
+        Solo apunta a procesos cuya línea de comando referencia
+        BRAVE_PROFILE_DIR — nunca toca el Brave personal del usuario.
+        Es best-effort: cualquier fallo acá se ignora y el flujo normal
+        de _crear_driver_selenium sigue su curso.
+        """
+        # 1) Terminar procesos huérfanos atados a este perfil específico
+        try:
+            ps_cmd = (
+                "Get-CimInstance Win32_Process | "
+                f"Where-Object {{ $_.CommandLine -like '*{BRAVE_PROFILE_DIR}*' }} | "
+                "Select-Object -ExpandProperty ProcessId"
+            )
+            resultado = subprocess.run(
+                ["powershell", "-NoProfile", "-NonInteractive", "-Command", ps_cmd],
+                capture_output=True, text=True, timeout=10
+            )
+            pids = [p.strip() for p in resultado.stdout.splitlines() if p.strip().isdigit()]
+            for pid in pids:
+                try:
+                    subprocess.run(
+                        ["taskkill", "/F", "/PID", pid],
+                        capture_output=True, timeout=5
+                    )
+                    log.info(f"  [Selenium] Proceso huérfano del perfil terminado (PID {pid})")
+                except Exception:
+                    pass
+            if pids:
+                # Dar tiempo al SO para liberar el handle del lock antes de reintentar
+                time.sleep(1.5)
+        except Exception as e:
+            log.debug(f"  [Selenium] No se pudo verificar procesos huérfanos: {e}")
+
+        # 2) Borrar archivos de lock residuales del perfil
+        for nombre in ("SingletonLock", "SingletonCookie", "SingletonSocket"):
+            lock_path = Path(BRAVE_PROFILE_DIR) / nombre
+            try:
+                if lock_path.exists():
+                    lock_path.unlink()
+                    log.info(f"  [Selenium] Lock residual eliminado: {nombre}")
+            except Exception as e:
+                log.debug(f"  [Selenium] No se pudo eliminar {nombre}: {e}")
+
+    def _crear_driver_selenium(self):
+        """
+        Arma y lanza una instancia de Brave (o Chrome como fallback)
+        con el perfil de trabajo dedicado (BRAVE_PROFILE_DIR), que
+        persiste entre sesiones — guarda cookies, extensiones, config.
+        Descarga el ChromeDriver correcto automáticamente.
+
+        Retorna el driver ya lanzado y con navigator.webdriver ocultado,
+        o None si no se pudo lanzar (queda logueado el motivo).
+        """
+        import zipfile
+        import urllib.request
+
+        try:
+            from selenium import webdriver
+            from selenium.webdriver.chrome.options import Options as ChromeOptions
+            from selenium.webdriver.chrome.service import Service as ChromeService
+        except ImportError:
+            log.error("  Instalar: pip install selenium")
+            return None
+
+        # ── Detectar Brave ────────────────────────────────────────────
+        brave_paths = [
+            os.path.join(os.environ.get("PROGRAMFILES", ""), "BraveSoftware", "Brave-Browser", "Application", "brave.exe"),
+            os.path.join(os.environ.get("PROGRAMFILES(X86)", ""), "BraveSoftware", "Brave-Browser", "Application", "brave.exe"),
+            os.path.expanduser(os.path.join("~", "AppData", "Local", "BraveSoftware", "Brave-Browser", "Application", "brave.exe")),
+        ]
+        ruta_brave = next((p for p in brave_paths if os.path.isfile(p)), None)
+
+        # ── Versión de Brave ──────────────────────────────────────────
+        def _version_brave(ruta: str) -> str:
+            try:
+                lv = os.path.join(os.path.dirname(ruta), "Last Version")
+                if os.path.isfile(lv):
+                    return open(lv).read().strip()
+            except Exception:
+                pass
+            try:
+                import winreg
+                for hive in (winreg.HKEY_CURRENT_USER, winreg.HKEY_LOCAL_MACHINE):
+                    try:
+                        key = winreg.OpenKey(hive, r"SOFTWARE\BraveSoftware\Brave-Browser\BLBeacon")
+                        v, _ = winreg.QueryValueEx(key, "version")
+                        winreg.CloseKey(key)
+                        return v
+                    except Exception:
+                        continue
+            except Exception:
+                pass
+            return ""
+
+        # ── ChromeDriver compatible ───────────────────────────────────
+        def _obtener_driver_path(version: str) -> str | None:
+            major      = version.split(".")[0] if version else CHROMEDRIVER_VERSION_FALLBACK
+            cache_dir  = Path(os.path.expanduser("~")) / ".m4rto_drivers"
+            cache_dir.mkdir(exist_ok=True)
+            driver_exe = cache_dir / f"chromedriver_{major}.exe"
+            if driver_exe.exists():
+                return str(driver_exe)
+            log.info(f"  [Selenium] Descargando ChromeDriver para Brave {major}...")
+            try:
+                api = f"https://googlechromelabs.github.io/chrome-for-testing/LATEST_RELEASE_{major}"
+                with urllib.request.urlopen(api, timeout=10) as r:
+                    driver_version = r.read().decode().strip()
+                zip_url  = (f"https://storage.googleapis.com/chrome-for-testing-public/"
+                            f"{driver_version}/win64/chromedriver-win64.zip")
+                zip_path = cache_dir / "chromedriver.zip"
+                urllib.request.urlretrieve(zip_url, zip_path)
+                with zipfile.ZipFile(zip_path, "r") as z:
+                    for member in z.namelist():
+                        if member.endswith("chromedriver.exe"):
+                            with z.open(member) as src, open(driver_exe, "wb") as dst:
+                                dst.write(src.read())
+                            break
+                zip_path.unlink()
+                log.info(f"  [Selenium] ChromeDriver {driver_version} listo")
+                return str(driver_exe)
+            except Exception as e:
+                log.warning(f"  [Selenium] Error descargando driver: {e}")
+                return None
+
+        # ── Configurar Brave ──────────────────────────────────────────
+        opts        = ChromeOptions()
+        driver_path = None
+
+        if ruta_brave and os.path.isfile(ruta_brave):
+            opts.binary_location = ruta_brave
+            version     = _version_brave(ruta_brave)
+            driver_path = _obtener_driver_path(version)
+            log.info(f"  [Selenium] Brave {version}")
+
+            # Perfil de trabajo dedicado — persiste entre sesiones
+            # (ver BRAVE_PROFILE_DIR en §1, no interfiere con tu Brave personal)
+            opts.add_argument(f"--user-data-dir={BRAVE_PROFILE_DIR}")
+            opts.add_argument("--profile-directory=Default")
+        else:
+            log.info("  [Selenium] Usando Chrome")
+
+        if SELENIUM_HEADLESS:
+            opts.add_argument("--headless=new")
+        opts.add_argument("--no-sandbox")
+        opts.add_argument("--disable-dev-shm-usage")
+        opts.add_argument("--disable-gpu")
+        opts.add_argument("--window-size=1920,1080")
+        opts.add_argument("--disable-logging")
+        opts.add_argument("--log-level=3")
+        # Puerto de debug FIJO en vez del efímero (0) que usa ChromeDriver
+        # por default — con puerto 0 el lanzamiento crashea sistemáticamente
+        # en esta combinación de Brave/Windows (ver notas en README/changelog
+        # del scraper); con puerto fijo funciona de forma consistente.
+        opts.add_argument("--remote-debugging-port=9515")
+        opts.add_argument(f"user-agent={HEADERS_BASE['User-Agent']}")
+        opts.add_experimental_option("excludeSwitches", ["enable-automation", "enable-logging", "disable-features", "test-type", "allow-pre-commit-input"])
+        opts.add_experimental_option("useAutomationExtension", False)
+
+        # Limpieza preventiva del perfil: evita que un lock residual de
+        # una corrida anterior (crash, Ctrl+C, kill a la fuerza) haga
+        # fallar el lanzamiento antes de siquiera intentarlo.
+        self._limpiar_perfil_brave_stale()
+
+        driver = None
+        MAX_INTENTOS_LANZAMIENTO = 2
+        for intento in range(1, MAX_INTENTOS_LANZAMIENTO + 1):
+            try:
+                if driver_path:
+                    driver = webdriver.Chrome(service=ChromeService(driver_path), options=opts)
+                else:
+                    driver = webdriver.Chrome(options=opts)
+                break  # lanzamiento exitoso, seguir con el resto del método
+            except Exception as e:
+                driver = None
+                lock_residual = "DevToolsActivePort" in str(e)
+                if lock_residual and intento < MAX_INTENTOS_LANZAMIENTO:
+                    log.warning(
+                        f"  [Selenium] Brave no arrancó (perfil bloqueado por una "
+                        f"sesión anterior) — limpiando y reintentando "
+                        f"({intento}/{MAX_INTENTOS_LANZAMIENTO})..."
+                    )
+                    self._limpiar_perfil_brave_stale()
+                    time.sleep(2)
+                    continue
+                log.error(f"  [Selenium] Error: {e}")
+                return None
+
+        try:
+            driver.execute_script(
+                "Object.defineProperty(navigator,'webdriver',{get:()=>undefined})"
+            )
+        except Exception:
+            pass
+
+        return driver
+
 # ══════════════════════════════════════════════════════════════════════
 # §7  OLYMPUS SCANLATION
 # ══════════════════════════════════════════════════════════════════════
@@ -1314,15 +1601,23 @@ class OlympusScraper(ScraperBase):
 
         Antes esto intentaba resolver dinámicamente vía
         BASE_REDIRECT (olympus.pages.dev), pero esa página no
-        siempre redirige al dominio real y producía URLs rotas
-        como "dashboard.olympus.pages.dev" (que no existe).
-        El dominio real, confirmado directamente capturando los
-        requests del navegador, es siempre dashboard.olympusxyz.com.
+        siempre redirige al dominio real y producía URLs rotas.
+
+        El backend real, confirmado directamente capturando los
+        requests del navegador (2026-07-07), es panel.olympusxyz.com
+        — antes era dashboard.olympusxyz.com, el sitio cambió el
+        subdominio de su API sin previo aviso (el dominio principal
+        olympusxyz.com nunca cambió; solo el subdominio del backend).
+
+        Nota: olympus.pages.dev en ese momento redirigía a un dominio
+        "olympusbiblioteca.com" que resultó ser una página de aviso
+        de "nos mudamos" — NO el backend real. Por eso no conviene
+        resolver el dominio vía ese redirect.
         """
         if self._api_base:
             return self._api_base
         dominio = urlparse(self.FALLBACK_BASE).netloc  # olympusxyz.com
-        self._api_base = f"https://dashboard.{dominio}/api"
+        self._api_base = f"https://panel.{dominio}/api"
         log.info(f"  [Olympus] API base: {self._api_base}")
         return self._api_base
 
@@ -1415,41 +1710,185 @@ class OlympusScraper(ScraperBase):
         s = re.sub(r"-\d{8,}$", "", s)
         return s.strip("-").replace("-", " ")
 
-    def _buscar_slug_vigente(self, slug_vencido: str) -> str | None:
+    @staticmethod
+    def _normalizar_nombre(texto: str) -> str:
         """
-        Si el slug guardado ya no resuelve, busca en las páginas de
-        novedades (/capitulos) un slug cuyo nombre base coincida.
-        Como obtener_novedades() ya escanea MAX_PAGINAS páginas,
-        lo reutilizamos como fuente de slugs vigentes.
+        Normaliza un título para comparación exacta ignorando tildes,
+        mayúsculas, comas, dos puntos y demás puntuación — se queda
+        solo con letras, números y espacios.
+        'La Regresión 100: ¡Del Jugador!' → 'la regresion 100 del jugador'
         """
-        nombre_base = self._extraer_nombre_base(slug_vencido)
-        palabras    = set(nombre_base.lower().split())
-        if not palabras:
+        if not texto:
+            return ""
+        texto = unicodedata.normalize("NFKD", texto)
+        texto = "".join(c for c in texto if not unicodedata.combining(c))
+        texto = re.sub(r"[^a-zA-Z0-9\s]", "", texto)
+        return re.sub(r"\s+", " ", texto).strip().lower()
+
+    def _obtener_catalogo_completo(self) -> list[dict]:
+        """
+        Trae el catálogo completo de series de Olympus en una sola
+        llamada: GET {WEB_BASE}/api/series/list (proxeado por el
+        frontend, sin necesitar el subdominio panel.* ni headers de
+        firma — solo Accept + Referer).
+
+        Devuelve una lista de {id, name, slug} (851 entradas al
+        2026-07-08, comics + novelas). No está paginado.
+
+        Usado como PRIMER intento para recuperar el slug vigente de un
+        manga cuando el guardado en seguimiento.json ya no resuelve
+        (404, o falla la conexión persistentemente), sin depender de
+        que ese manga haya tenido actividad reciente en las páginas de
+        novedades — cubre TODO el catálogo, activo o no. Si esto no
+        encuentra nada, _buscar_slug_en_novedades() es el fallback
+        secundario (más lento, pero cubre el caso de que esta request
+        en sí falle o el manga no esté en esta vista por algún motivo).
+        """
+        url = f"{self.WEB_BASE}/api/series/list"
+        headers = {"Accept": "application/json", "Referer": f"{self.WEB_BASE}/"}
+        r = hacer_get(url, self.session, headers=headers)
+        if not r or r.status_code != 200:
+            log.warning(f"  [Olympus] No se pudo obtener el catálogo completo "
+                       f"de series (status={r.status_code if r else 'sin respuesta'})")
+            return []
+        try:
+            data = r.json().get("data", [])
+        except Exception as e:
+            log.warning(f"  [Olympus] Catálogo de series: respuesta no es JSON válido: {e}")
+            return []
+        return data
+
+    def _buscar_slug_en_catalogo(self, manga_cfg: dict | None,
+                                  nombre_exacto: str) -> str | None:
+        """
+        Recupera el slug vigente de un manga buscando en el catálogo
+        completo (/api/series/list), en dos pasos:
+
+          1. Por manga_id (si ya lo teníamos guardado) — comparación
+             numérica exacta, sin ambigüedad posible, ya que el ID
+             es estable y no cambia aunque el slug sí.
+          2. Si no hay manga_id o no aparece, por nombre EXACTO
+             normalizado (sin tildes/puntuación/mayúsculas) contra
+             el campo 'name' de cada entrada del catálogo. Si hay
+             0 o más de 1 coincidencia, no elige nada automático.
+        """
+        catalogo = self._obtener_catalogo_completo()
+        if not catalogo:
+            return None
+
+        manga_id = str((manga_cfg or {}).get("manga_id", "")).strip()
+
+        if manga_id:
+            for c in catalogo:
+                if str(c.get("id", "")) == manga_id:
+                    log.info(f"  [Olympus] '{nombre_exacto}' recuperado por "
+                             f"manga_id={manga_id} → slug={c.get('slug')}")
+                    return c.get("slug")
+
+        objetivo = self._normalizar_nombre(nombre_exacto)
+        if not objetivo:
+            return None
+
+        coincidencias = [c for c in catalogo
+                         if self._normalizar_nombre(c.get("name", "")) == objetivo]
+
+        if len(coincidencias) == 1:
+            slug_encontrado = coincidencias[0].get("slug")
+            log.info(f"  [Olympus] '{nombre_exacto}' recuperado por nombre "
+                     f"exacto → slug={slug_encontrado}")
+            return slug_encontrado
+
+        if len(coincidencias) > 1:
+            log.warning(f"  [Olympus] '{nombre_exacto}' — "
+                       f"{len(coincidencias)} coincidencias exactas por "
+                       f"nombre en el catálogo (¿título duplicado?), no se "
+                       f"puede elegir automáticamente: "
+                       f"{[c.get('slug') for c in coincidencias]}")
+        else:
+            log.warning(f"  [Olympus] '{nombre_exacto}' — no se encontró "
+                       f"ninguna coincidencia exacta en el catálogo completo "
+                       f"({len(catalogo)} series revisadas).")
+
+        return None
+
+    def _buscar_slug_en_novedades(self, nombre_exacto: str) -> str | None:
+        """
+        Fallback SECUNDARIO de recuperación de slug — solo se llama si
+        _buscar_slug_en_catalogo() no encontró nada (o el catálogo
+        completo en sí falló). Recorre hasta OLYMPUS_MAX_PAGINAS_NOVEDADES
+        páginas de /capitulos (últimos capítulos publicados) buscando el
+        manga por nombre EXACTO normalizado.
+
+        Más lento que el catálogo (son ~25 requests en vez de 1), pero
+        cubre el caso de que el manga no haya aparecido en /api/series/list
+        por lo que sea (ej. esa request falló, o el manga no está en esa
+        vista por algún motivo). No matchea por manga_id porque esta vista
+        no expone el ID numérico del manga, solo su slug.
+        """
+        objetivo = self._normalizar_nombre(nombre_exacto)
+        if not objetivo:
             return None
 
         novedades = self.obtener_novedades()
-        candidatos = {}
-        for nov in novedades:
-            candidatos.setdefault(nov["manga_slug"], nov.get("manga_id", ""))
+        if not novedades:
+            return None
 
-        mejor_slug = None
-        mejor_score = 0.0
-        for cand_slug in candidatos:
-            cand_nombre  = self._extraer_nombre_base(cand_slug)
-            cand_palabras = set(cand_nombre.lower().split())
-            if not cand_palabras:
-                continue
-            interseccion = len(palabras & cand_palabras)
-            score = interseccion / max(len(palabras), len(cand_palabras))
-            if score > mejor_score:
-                mejor_score = score
-                mejor_slug  = cand_slug
+        # Un mismo manga aparece varias veces en novedades (una por cada
+        # capítulo reciente) — quedarnos con un slug/título por manga.
+        vistos_slug = {}
+        for n in novedades:
+            slug_n = n.get("manga_slug", "")
+            if slug_n and slug_n not in vistos_slug:
+                vistos_slug[slug_n] = n.get("manga_titulo", "")
 
-        if mejor_slug and mejor_score >= 0.6:
-            log.info(f"  [Olympus] Slug vencido → recuperado por nombre "
-                     f"(score={mejor_score:.2f}): {mejor_slug}")
-            return mejor_slug
+        coincidencias = [s for s, titulo in vistos_slug.items()
+                         if self._normalizar_nombre(titulo) == objetivo]
+
+        if len(coincidencias) == 1:
+            log.info(f"  [Olympus] '{nombre_exacto}' recuperado por nombre "
+                     f"exacto en novedades (últimas "
+                     f"{self.MAX_PAGINAS} páginas) → slug={coincidencias[0]}")
+            return coincidencias[0]
+
+        if len(coincidencias) > 1:
+            log.warning(f"  [Olympus] '{nombre_exacto}' — "
+                       f"{len(coincidencias)} coincidencias exactas por "
+                       f"nombre en novedades, no se puede elegir "
+                       f"automáticamente: {coincidencias}")
+        else:
+            log.warning(f"  [Olympus] '{nombre_exacto}' — no se encontró "
+                       f"tampoco en las últimas {self.MAX_PAGINAS} páginas "
+                       f"de novedades.")
+
         return None
+
+    def _recuperar_slug_vencido(self, manga_cfg: dict | None,
+                                 nombre_legible: str) -> str | None:
+        """
+        Intenta recuperar el slug vigente de un manga cuyo slug guardado
+        ya no resuelve, en dos pasos (del más rápido/confiable al más
+        lento/último recurso):
+
+          1. Catálogo completo (_buscar_slug_en_catalogo): 1 sola
+             request, matchea por manga_id (si lo tenemos guardado) o
+             por nombre exacto. Cubre TODO el catálogo, activo o no.
+          2. Novedades (_buscar_slug_en_novedades): más lento (recorre
+             hasta MAX_PAGINAS páginas de /capitulos), pero es una
+             segunda red de seguridad para cuando el catálogo no tuvo
+             la entrada o esa request en sí falló. Solo matchea por
+             nombre (no hay manga_id en esta vista).
+
+        Devuelve None si ninguno de los dos encuentra nada (o hay
+        ambigüedad) — ahí hace falta intervención manual.
+        """
+        slug_nuevo = self._buscar_slug_en_catalogo(manga_cfg, nombre_legible)
+        if slug_nuevo:
+            return slug_nuevo
+
+        log.info(f"  [Olympus] '{nombre_legible}' — no se encontró por "
+                 f"catálogo completo, probando en las últimas "
+                 f"{self.MAX_PAGINAS} páginas de novedades...")
+        return self._buscar_slug_en_novedades(nombre_legible)
 
     def obtener_capitulos(self, slug: str, manga_cfg: dict = None,
                           reporte_global: "ReporteEscaneo" = None) -> list[dict]:
@@ -1524,69 +1963,107 @@ class OlympusScraper(ScraperBase):
 
         r = _pedir_pagina(slug_usar, 1)
 
-        # Solo un 404 explícito es señal real de "slug vencido". Cualquier
-        # otra cosa (5xx persistente tras reintentos, error de red) es un
-        # problema transitorio — no tiene sentido buscar un slug nuevo si
-        # el slug actual en realidad está bien y el servidor es el que
-        # tuvo un problema puntual.
-        slug_parece_vencido = (r is not None and r.status_code == 404)
+        # Señal de "slug vencido": puede ser un 404 explícito (confirmado,
+        # fuerte) o un fallo total de conexión (timeout/error de red tras
+        # los reintentos de _pedir_pagina). En la práctica ambos pueden
+        # significar lo mismo si el manga_id no cambió — antes solo el 404
+        # disparaba la recuperación automática, así que un manga cuyo slug
+        # fallaba con error de conexión en vez de 404 nunca se intentaba
+        # recuperar, aunque tuviéramos el manga_id guardado (caso real:
+        # 'Sin fin skills', confirmado con un 404 limpio a mano por fuera
+        # del scraper — la corrida automática solo vio el error de conexión).
+        slug_404       = (r is not None and r.status_code == 404)
+        fallo_conexion = (r is None)
 
-        if not r or slug_parece_vencido:
-            if not r:
+        if slug_404 or fallo_conexion:
+            nombre_legible = (manga_cfg.get("nombre_carpeta", slug)
+                              if manga_cfg else slug)
+
+            if fallo_conexion:
                 log.warning(f"  [Olympus] No se pudo consultar la API para "
                            f"'{slug_usar}' tras varios reintentos (problema "
-                           f"de servidor o de red) — se reintentará en el "
-                           f"próximo escaneo")
-                return []
+                           f"de servidor o de red) — probando recuperar el "
+                           f"slug vigente por las dudas de que haya vencido...")
+            else:
+                log.warning(f"  [Olympus] Slug '{slug_usar}' no resuelve "
+                           f"(404) — buscando '{nombre_legible}'...")
 
-            log.warning(f"  [Olympus] Slug '{slug_usar}' no resuelve (404) — "
-                       f"buscando slug vigente por nombre...")
-            slug_nuevo = self._buscar_slug_vigente(slug_usar)
+            slug_nuevo = self._recuperar_slug_vencido(manga_cfg, nombre_legible)
             if slug_nuevo:
                 slug_usar = slug_nuevo
-                r = _pedir_pagina(slug_usar, 1)
-                if manga_cfg is not None and r and r.status_code == 200:
+                # Persistir el slug recuperado YA, independientemente de si
+                # el reintento de abajo tiene éxito — lo encontramos por
+                # manga_id o nombre exacto, es confiable. Si no se persiste
+                # acá y el reintento inmediato falla por otro hipo de red,
+                # el próximo escaneo volvería a arrancar del slug viejo
+                # (muerto) en vez de partir ya del recuperado.
+                # IMPORTANTE: si el manga tiene 'url_manga' (URL completa
+                # pegada a mano), hay que actualizarla TAMBIÉN acá. Si no,
+                # normalizar_url_manga() —que corre al principio de CADA
+                # escaneo, antes de procesar cualquier manga— va a ver que
+                # 'url_manga' (con el slug viejo) no coincide con el
+                # 'slug' recién recuperado, y va a PISAR el slug bueno con
+                # el viejo (muerto) extraído de la URL desactualizada.
+                # Eso forzaría este mismo ciclo de fallo+recuperación en
+                # TODOS los escaneos futuros, no solo cuando el slug
+                # rote de verdad — hay que mantener los dos campos en
+                # sync siempre que se actualice uno de los dos.
+                if manga_cfg is not None:
                     manga_cfg["slug"] = f"comic-{slug_usar}"
-            if not r or r.status_code != 200:
-                # No se pudo recuperar el slug automáticamente. El único
-                # recurso automático que existe (buscar por nombre entre
-                # las páginas de novedades recientes) depende de que el
-                # manga haya tenido actividad reciente en TODO el sitio,
-                # no solo en este manga puntual — si no salió ahí, no hay
-                # forma de que el scraper lo encuentre solo (el buscador
-                # interno de Olympus está fuera de servicio al día de
-                # este código, así que tampoco se puede usar esa vía).
-                #
-                # Si la segunda consulta dio un error de SERVIDOR (no 404),
-                # el slug recuperado probablemente esté bien — fue mala
-                # suerte de timing con un problema transitorio. Avisar
-                # eso de forma distinta a "definitivamente hace falta
-                # actualizar el slug a mano", para no generar pánico
-                # innecesario por un problema que se resuelve solo.
-                nombre_legible = (manga_cfg.get("nombre_carpeta", slug)
-                                  if manga_cfg else slug)
+                    if manga_cfg.get("url_manga"):
+                        manga_cfg["url_manga"] = (
+                            f"{self.WEB_BASE}/series/comic-{slug_usar}"
+                        )
+                r = _pedir_pagina(slug_usar, 1)
 
+            if not r or r.status_code != 200:
+                # Si la consulta con el slug recuperado (o el original)
+                # dio un error de SERVIDOR (no 404), probablemente el slug
+                # esté bien y haya sido mala suerte de timing — avisar
+                # distinto de "definitivamente hace falta actualizar a
+                # mano", para no generar pánico por algo que se resuelve solo.
                 if slug_nuevo and r and r.status_code >= 500:
                     log.warning(
                         f"  [Olympus] '{nombre_legible}' — se encontró el "
-                        f"slug vigente ({slug_nuevo}) pero el servidor "
-                        f"respondió {r.status_code} en el reintento. "
-                        f"Probablemente un problema transitorio — se "
-                        f"reintentará en el próximo escaneo, no hace falta "
-                        f"acción manual por ahora."
+                        f"slug vigente ({slug_nuevo}, ya persistido) pero "
+                        f"el servidor respondió {r.status_code} en el "
+                        f"reintento. Probablemente transitorio — se "
+                        f"reintentará en el próximo escaneo."
                     )
-                    if manga_cfg is not None:
-                        manga_cfg["slug"] = f"comic-{slug_nuevo}"
                     return []
 
+                if fallo_conexion and not slug_nuevo:
+                    # No hubo 404 confirmado Y tampoco se pudo recuperar
+                    # nada por catálogo ni novedades — puede ser de verdad
+                    # solo un problema de red transitorio, sin que el slug
+                    # esté vencido. No escalar a "acción manual", solo
+                    # reintentar en el próximo escaneo.
+                    log.warning(
+                        f"  [Olympus] '{nombre_legible}' — no se pudo "
+                        f"confirmar si el slug venció (no hubo 404, fue "
+                        f"error de conexión) ni recuperarlo por las dudas — "
+                        f"se reintentará en el próximo escaneo."
+                    )
+                    return []
+
+                # Acá sí es un caso confirmado: o hubo 404 explícito, o se
+                # encontró un slug nuevo pero ni siquiera ese resolvió bien
+                # (raro). En ambos casos, ni catálogo ni novedades dieron
+                # una coincidencia utilizable — requiere acción manual.
                 log.error(
                     f"  ⚠️  [Olympus] '{nombre_legible}' — el slug guardado "
-                    f"venció y no se pudo recuperar solo (no tuvo actividad "
-                    f"reciente en las últimas {self.MAX_PAGINAS} páginas de "
-                    f"novedades). ACCIÓN MANUAL NECESARIA: buscá el manga en "
+                    f"venció y no se pudo recuperar solo (ni por manga_id "
+                    f"ni por nombre exacto en el catálogo completo, ni en "
+                    f"las últimas {self.MAX_PAGINAS} páginas de novedades — "
+                    f"revisá el log de arriba: puede ser que no haya "
+                    f"coincidencia, o que haya más de una y sea ambiguo). "
+                    f"ACCIÓN MANUAL NECESARIA: buscá el manga en "
                     f"https://olympusxyz.com/ y actualizá el campo 'slug' "
                     f"(o agregá 'url_manga' con la URL completa) en "
-                    f"seguimiento.json para este manga."
+                    f"seguimiento.json para este manga. Si el título en "
+                    f"'nombre_carpeta' no coincide EXACTO (con tildes) con "
+                    f"el nombre real del manga en el sitio, corregilo — la "
+                    f"recuperación por nombre necesita coincidencia exacta."
                 )
                 if reporte_global is not None:
                     reporte_global.error(
@@ -1749,8 +2226,18 @@ class OlympusScraper(ScraperBase):
                     urls_html.append(src)
 
             if urls_html:
-                # Deduplicar preservando el orden de aparición en el HTML
-                # (que ya viene en el orden correcto de lectura)
+                # Deduplicar preservando el orden de aparición en el HTML.
+                # El HTML es SSR y las <img> ya vienen en el orden REAL de
+                # lectura — ese es el orden que hay que respetar y devolver
+                # tal cual, SIN reordenar por número de archivo.
+                #
+                # Antes acá se hacía un .sort() por el número extraído del
+                # nombre del archivo ({pagina}_{subpagina}.webp). Se sacó:
+                # confirmado con casos reales (cap. largos, 40+ imgs) que
+                # ese número no es 1:1 con el orden real de lectura — puede
+                # haber resubidas de páginas, lotes mezclados o colisiones
+                # de numeración entre subdominios de CDN — y reordenar por
+                # ahí terminaba desordenando la segunda mitad del capítulo.
                 vistos = set()
                 urls_unicas = []
                 for u in urls_html:
@@ -1758,10 +2245,12 @@ class OlympusScraper(ScraperBase):
                         vistos.add(u)
                         urls_unicas.append(u)
 
-                # Ordenar por el número de página/subpágina extraído de la
-                # URL. Hay dos formatos vistos: "{pagina}_{subpagina}.webp"
-                # y "{n}.webp" simple (sin sub-página) — soportar ambos,
-                # si no, todo cae en el mismo grupo y se pierde el orden.
+                # Chequeo pasivo, solo diagnóstico: NO reordena nada. Compara
+                # qué orden habría dado el número de archivo (viejo criterio)
+                # contra el orden real del HTML. Si difieren, es señal de que
+                # ESTE capítulo puntual podría venir con el HTML desordenado
+                # (algo que no debería pasar en un sitio SSR, pero mejor
+                # tener la alarma que descubrirlo leyendo el manga).
                 def _clave_orden(u: str):
                     mo = re.search(r"/(\d+)_(\d+)\.webp", u)
                     if mo:
@@ -1770,7 +2259,15 @@ class OlympusScraper(ScraperBase):
                     if mo2:
                         return (int(mo2.group(1)), 0)
                     return (9999, 9999)
-                urls_unicas.sort(key=_clave_orden)
+                orden_por_numero = sorted(urls_unicas, key=_clave_orden)
+                if orden_por_numero != urls_unicas:
+                    log.warning(
+                        f"  [Olympus] ⚠ cap_id={cap_id}: el orden de aparición "
+                        f"en el HTML no coincide con el orden que sugiere el "
+                        f"número de archivo. Se está usando el orden del HTML "
+                        f"(es el correcto por defecto) — si el capítulo queda "
+                        f"desordenado igual, revisar manualmente este cap_id."
+                    )
 
                 log.info(f"  [Olympus] {len(urls_unicas)} imágenes extraídas "
                          f"directamente del HTML del capítulo (cap_id={cap_id})")
@@ -2189,125 +2686,20 @@ class MadaraScraper(ScraperBase):
 
     def _obtener_imagenes_selenium(self, cap_url: str) -> list[str]:
         """
-        Abre Brave con un perfil de trabajo dedicado (brave-scraper)
-        que persiste entre sesiones — guarda cookies, extensiones, config.
-        Descarga el ChromeDriver correcto automáticamente.
+        Lanza el driver vía el bootstrap compartido (ScraperBase.
+        _crear_driver_selenium) y ejecuta el flujo específico de Madara:
+        esperar redirección JS a dominio externo (ej: Temple → blayvia.com),
+        esperar carga del lector, y extraer imágenes por selector + regex.
         """
         import re as _re
-        import zipfile
-        import urllib.request
+        from selenium.webdriver.common.by import By
+        from selenium.webdriver.support.ui import WebDriverWait
 
-        try:
-            from selenium import webdriver
-            from selenium.webdriver.chrome.options import Options as ChromeOptions
-            from selenium.webdriver.chrome.service import Service as ChromeService
-            from selenium.webdriver.common.by import By
-            from selenium.webdriver.support.ui import WebDriverWait
-        except ImportError:
-            log.error("  Instalar: pip install selenium")
+        driver = self._crear_driver_selenium()
+        if not driver:
             return []
 
-        # ── Detectar Brave ────────────────────────────────────────────
-        brave_paths = [
-            os.path.join(os.environ.get("PROGRAMFILES", ""), "BraveSoftware", "Brave-Browser", "Application", "brave.exe"),
-            os.path.join(os.environ.get("PROGRAMFILES(X86)", ""), "BraveSoftware", "Brave-Browser", "Application", "brave.exe"),
-            os.path.expanduser(os.path.join("~", "AppData", "Local", "BraveSoftware", "Brave-Browser", "Application", "brave.exe")),
-        ]
-        ruta_brave = next((p for p in brave_paths if os.path.isfile(p)), None)
-
-        # ── Versión de Brave ──────────────────────────────────────────
-        def _version_brave(ruta: str) -> str:
-            try:
-                lv = os.path.join(os.path.dirname(ruta), "Last Version")
-                if os.path.isfile(lv):
-                    return open(lv).read().strip()
-            except Exception:
-                pass
-            try:
-                import winreg
-                for hive in (winreg.HKEY_CURRENT_USER, winreg.HKEY_LOCAL_MACHINE):
-                    try:
-                        key = winreg.OpenKey(hive, r"SOFTWARE\BraveSoftware\Brave-Browser\BLBeacon")
-                        v, _ = winreg.QueryValueEx(key, "version")
-                        winreg.CloseKey(key)
-                        return v
-                    except Exception:
-                        continue
-            except Exception:
-                pass
-            return ""
-
-        # ── ChromeDriver compatible ───────────────────────────────────
-        def _obtener_driver_path(version: str) -> str | None:
-            major      = version.split(".")[0] if version else CHROMEDRIVER_VERSION_FALLBACK
-            cache_dir  = Path(os.path.expanduser("~")) / ".m4rto_drivers"
-            cache_dir.mkdir(exist_ok=True)
-            driver_exe = cache_dir / f"chromedriver_{major}.exe"
-            if driver_exe.exists():
-                return str(driver_exe)
-            log.info(f"  [Selenium] Descargando ChromeDriver para Brave {major}...")
-            try:
-                api = f"https://googlechromelabs.github.io/chrome-for-testing/LATEST_RELEASE_{major}"
-                with urllib.request.urlopen(api, timeout=10) as r:
-                    driver_version = r.read().decode().strip()
-                zip_url  = (f"https://storage.googleapis.com/chrome-for-testing-public/"
-                            f"{driver_version}/win64/chromedriver-win64.zip")
-                zip_path = cache_dir / "chromedriver.zip"
-                urllib.request.urlretrieve(zip_url, zip_path)
-                with zipfile.ZipFile(zip_path, "r") as z:
-                    for member in z.namelist():
-                        if member.endswith("chromedriver.exe"):
-                            with z.open(member) as src, open(driver_exe, "wb") as dst:
-                                dst.write(src.read())
-                            break
-                zip_path.unlink()
-                log.info(f"  [Selenium] ChromeDriver {driver_version} listo")
-                return str(driver_exe)
-            except Exception as e:
-                log.warning(f"  [Selenium] Error descargando driver: {e}")
-                return None
-
-        # ── Configurar Brave ──────────────────────────────────────────
-        opts        = ChromeOptions()
-        driver_path = None
-
-        if ruta_brave and os.path.isfile(ruta_brave):
-            opts.binary_location = ruta_brave
-            version     = _version_brave(ruta_brave)
-            driver_path = _obtener_driver_path(version)
-            log.info(f"  [Selenium] Brave {version}")
-
-            # Perfil de trabajo dedicado — persiste entre sesiones
-            # (ver BRAVE_PROFILE_DIR en §1, no interfiere con tu Brave personal)
-            opts.add_argument(f"--user-data-dir={BRAVE_PROFILE_DIR}")
-            opts.add_argument("--profile-directory=Default")
-        else:
-            log.info("  [Selenium] Usando Chrome")
-
-        if SELENIUM_HEADLESS:
-            opts.add_argument("--headless=new")
-        opts.add_argument("--no-sandbox")
-        opts.add_argument("--disable-dev-shm-usage")
-        opts.add_argument("--disable-gpu")
-        opts.add_argument("--window-size=1920,1080")
-        opts.add_argument("--disable-blink-features=AutomationControlled")
-        opts.add_argument("--disable-logging")
-        opts.add_argument("--log-level=3")
-        opts.add_argument(f"user-agent={HEADERS_BASE['User-Agent']}")
-        opts.add_experimental_option("excludeSwitches", ["enable-automation", "enable-logging"])
-        opts.add_experimental_option("useAutomationExtension", False)
-
-        driver = None
         try:
-            if driver_path:
-                driver = webdriver.Chrome(service=ChromeService(driver_path), options=opts)
-            else:
-                driver = webdriver.Chrome(options=opts)
-
-            driver.execute_script(
-                "Object.defineProperty(navigator,'webdriver',{get:()=>undefined})"
-            )
-
             driver.get(cap_url)
             url_inicial = driver.current_url
             log.info(f"  [Selenium] {url_inicial}")
@@ -2328,14 +2720,28 @@ class MadaraScraper(ScraperBase):
             vistos   = set()
 
             # 1. Selector directo manga-page-img
-            for img in driver.find_elements(By.CSS_SELECTOR,
+            elementos_lector = driver.find_elements(By.CSS_SELECTOR,
                 "img.manga-page-img, .chapter-images img, .reading-content img, img[src*=WP-manga]"
-            ):
+            )
+            for img in elementos_lector:
                 for attr in ["src", "data-src", "data-lazy-src", "data-original"]:
                     src = (img.get_attribute(attr) or "").strip()
                     if src and src not in vistos and src.startswith("http") and self._es_imagen_valida(src):
                         urls.append(src)
                         vistos.add(src)
+
+            # ¿Existe el contenedor del lector aunque sea sin <img> con src
+            # válido adentro? (ej: contenedor presente pero todo lazy-load
+            # con atributos distintos a los que buscamos). Si existe, NO es
+            # una página de error/redirect — es el reader real, aunque haya
+            # fallado la extracción por algún motivo puntual. Esta señal es
+            # más confiable que el conteo de imágenes para no confundir un
+            # capítulo corto/especial real con una página caída.
+            contenedor_lector_presente = bool(elementos_lector) or bool(
+                driver.find_elements(By.CSS_SELECTOR,
+                    ".reading-content, .chapter-images, .wp-manga-chapter-img"
+                )
+            )
 
             # 2. Regex para WP-manga
             for u in _re.findall(r"https?://[^\s<>]+/WP-manga/data/[^\s<>]+", page_src, _re.IGNORECASE):
@@ -2366,10 +2772,38 @@ class MadaraScraper(ScraperBase):
                 debug_path.write_text(page_src, encoding="utf-8")
                 if not urls:
                     log.warning(f"  [Selenium] Sin imágenes. HTML en {debug_path}")
+                elif contenedor_lector_presente:
+                    # El contenedor del lector SÍ está en el DOM — es la
+                    # página real del capítulo, solo que corto/atípico o
+                    # con markup levemente distinto. No se descarta.
+                    log.warning(f"  [Selenium] {len(urls)} imagen(es) vía fallback "
+                               f"genérico, pero el contenedor del lector SÍ está "
+                               f"presente en el DOM — se asume capítulo real "
+                               f"(posiblemente corto o especial), no página de error. "
+                               f"HTML volcado en {debug_path} para revisar igual.")
+                elif len(urls) <= UMBRAL_FALLBACK_SOSPECHOSO:
+                    # Ni rastro del contenedor del lector en el DOM Y pocas
+                    # imágenes encontradas solo por el fallback genérico:
+                    # con altísima probabilidad es una página de error
+                    # (404, "cerrar", banner decorativo) y NO el
+                    # capítulo real. Se descarta por completo en vez
+                    # de dejarlo pasar — que quede marcado como error
+                    # y se reintente en el próximo escaneo, en vez de
+                    # guardarse en disco como si fuera un capítulo
+                    # válido de 1-2 páginas.
+                    log.warning(f"  [Selenium] {len(urls)} imagen(es) encontradas "
+                               f"SOLO por el fallback genérico (sin contenedor del "
+                               f"lector en el DOM) y por debajo del umbral "
+                               f"({UMBRAL_FALLBACK_SOSPECHOSO}) — se descarta como "
+                               f"página de error, no como capítulo real. "
+                               f"HTML volcado en {debug_path} para revisar.")
+                    return []
                 else:
                     log.warning(f"  [Selenium] {len(urls)} imagen(es) encontradas "
-                               f"SOLO por el fallback genérico (selectores específicos "
-                               f"no encontraron nada) — sospechoso de página de error. "
+                               f"SOLO por el fallback genérico (sin contenedor del "
+                               f"lector en el DOM) — sospechoso, pero la cantidad "
+                               f"supera el umbral así que se deja pasar como capítulo "
+                               f"real con lector no estándar. "
                                f"HTML volcado en {debug_path} para revisar.")
 
             log.info(f"  [Selenium] {len(urls)} imágenes — {driver.current_url}")
@@ -2495,6 +2929,220 @@ class DragonScraper(MadaraScraper):
     @property
     def nombre(self) -> str:
         return "Dragon Translation"
+
+# ══════════════════════════════════════════════════════════════════════
+# §10-B  TAURO SCAN
+# ══════════════════════════════════════════════════════════════════════
+
+class TauroScraper(MadaraScraper):
+    """
+    Tauro Scan — WordPress/Madara. URL fija.
+
+    Particularidad del sitio: tiene capítulos "programados" (bloqueados
+    para no-VIP hasta una fecha de liberación gratuita) marcados en el
+    HTML con la clase `scheduled` en el <li> (y `editor-access` si el
+    usuario ya lo desbloqueó). No hay evidencia real todavía de cómo
+    responde el servidor al pedir la URL de un capítulo bloqueado
+    directamente (puede que la herencia de MadaraScraper.obtener_imagenes
+    ya lo resuelva solo -> 0 imágenes -> queda como error -> se reintenta
+    en el próximo escaneo, igual que un capítulo caído). Si en la
+    práctica no fuera así (ej. trae imágenes de un aviso "hazte VIP" en
+    vez de las reales), hay que agregar acá un chequeo explícito de la
+    clase `scheduled` antes de intentar bajarlo.
+    """
+
+    def __init__(self):
+        super().__init__("https://lectortaurus.com")
+
+    @property
+    def nombre(self) -> str:
+        return "Tauro Scan"
+
+    def _parsear_caps_html(self, soup: BeautifulSoup, slug: str) -> list[dict]:
+        """
+        Override del parseo genérico de MadaraScraper.
+
+        En Tauro cada <li class="wp-manga-chapter"> trae TRES <a>:
+        el título ("Capítulo 106"), la fecha de publicación
+        ("hace 1 día" / "03/07/2026") y el contador de vistas ("1814").
+        El selector genérico `li.wp-manga-chapter a` de la clase base
+        los agarra los tres, y el regex de número le pega al primer
+        dígito que encuentra en CUALQUIERA de los tres textos (ej. el
+        "1" de "hace 1 día" termina poniendo numero=1 a un capítulo
+        que en realidad es el 106). Acá tomamos únicamente el <a>
+        directamente dentro de div.parm-extras (el título), ignorando
+        los que están anidados en div.parm-extras2 (fecha/likes/vistas).
+        """
+        caps = []
+        for li in soup.select("li.wp-manga-chapter"):
+            a = li.select_one("div.parm-extras > a")
+            if not a:
+                continue
+            href = a.get("href", "").strip()
+            if not href or "javascript" in href:
+                continue
+            texto = a.get_text(" ", strip=True)
+            m = re.search(r"(\d+(?:\.\d+)?)", texto)
+            if not m:
+                continue
+            num = float(m.group(1))
+            caps.append({
+                "numero": num,
+                "url":    href if href.startswith("http") else f"{self.base_url}{href}",
+                "titulo": texto,
+                "slug":   slug,
+            })
+        return caps
+
+    def obtener_imagenes(self, cap_url: str, slug: str, numero) -> list[str]:
+        """
+        Confirmado contra HTML real (cap 1: 34/34 imágenes, orden
+        correcto 001__001, 001__002... según registro_progreso.json):
+        el lector de Tauro SÍ viene resuelto por SSR, como <img
+        class="wp-manga-chapter-img"> dentro de <div class="page-break">
+        — exactamente el mismo patrón que ya cubre la Estrategia 1b de
+        MadaraScraper. En ese HTML de prueba las 34 apariciones de
+        /WP-manga/data/ en TODA la página eran esas 34 <img> del lector
+        (ninguna miniatura/sugerido colado), pero en vez de confiar en
+        que eso se mantenga así para siempre, acá se selecciona
+        directo por los <img> reales (scoped), no por regex a ciegas
+        sobre el texto completo de la página — así no importa si algún
+        otro manga de este sitio tiene una carátula o carrusel de
+        sugeridos usando el mismo path /WP-manga/data/ en otro lado del
+        HTML, nunca se va a colar.
+        """
+        r = hacer_get(cap_url, self.session)
+        if r:
+            soup = BeautifulSoup(r.text, "html.parser")
+            urls, vistos = [], set()
+            for img in soup.select("div.page-break img, .wp-manga-chapter-img"):
+                src = img.get("data-src") or img.get("data-lazy-src") or img.get("src") or ""
+                src = src.strip()
+                if src and src not in vistos and src.startswith("http") and self._es_imagen_valida(src):
+                    urls.append(src)
+                    vistos.add(src)
+            if urls:
+                log.info(f"  [{self.nombre}] {len(urls)} imágenes vía requests (SSR)")
+                return urls
+
+        return super().obtener_imagenes(cap_url, slug, numero)
+
+    def _obtener_imagenes_selenium(self, cap_url: str) -> list[str]:
+        """
+        Igual que el fallback de MadaraScraper, pero sin el
+        WebDriverWait(20) que espera una redirección a otro dominio
+        (Tauro no redirige — las imágenes son del mismo dominio, solo
+        lazy-loaded por JS) y con sondeo de estabilización de la
+        cantidad de imágenes en vez de un time.sleep(5) fijo. Ese
+        WebDriverWait de 20s siempre expiraba sin hacer nada útil en
+        Tauro — era el cuello de botella real, no la descarga en sí.
+        El resto de la lógica (selectores, contenedor del lector,
+        umbral anti-página-de-error) queda idéntico al de la clase
+        base para no perder esas protecciones.
+        """
+        from selenium.webdriver.common.by import By
+
+        driver = self._crear_driver_selenium()
+        if not driver:
+            return []
+
+        try:
+            driver.get(cap_url)
+            log.info(f"  [Selenium] {driver.current_url}")
+
+            # Sondeo de estabilización: se corta apenas la cantidad de
+            # imágenes del lector deja de crecer durante 2 chequeos
+            # seguidos, en vez de esperar un tiempo fijo a ciegas.
+            MAX_ESPERA_SEG    = 15
+            ESTABLE_REQUERIDO = 2
+            prev_count = -1
+            estable    = 0
+            inicio     = time.time()
+            while time.time() - inicio < MAX_ESPERA_SEG:
+                count = len(driver.find_elements(By.CSS_SELECTOR,
+                    "img.manga-page-img, .chapter-images img, .reading-content img, img[src*=WP-manga]"
+                ))
+                if count > 0 and count == prev_count:
+                    estable += 1
+                    if estable >= ESTABLE_REQUERIDO:
+                        break
+                else:
+                    estable = 0
+                prev_count = count
+                time.sleep(0.5)
+
+            page_src = driver.page_source
+            urls, vistos = [], set()
+
+            elementos_lector = driver.find_elements(By.CSS_SELECTOR,
+                "img.manga-page-img, .chapter-images img, .reading-content img, img[src*=WP-manga]"
+            )
+            for img in elementos_lector:
+                for attr in ["src", "data-src", "data-lazy-src", "data-original"]:
+                    src = (img.get_attribute(attr) or "").strip()
+                    if src and src not in vistos and src.startswith("http") and self._es_imagen_valida(src):
+                        urls.append(src)
+                        vistos.add(src)
+
+            contenedor_lector_presente = bool(elementos_lector) or bool(
+                driver.find_elements(By.CSS_SELECTOR,
+                    ".reading-content, .chapter-images, .wp-manga-chapter-img"
+                )
+            )
+
+            for u in re.findall(r"https?://[^\s<>]+/WP-manga/data/[^\s<>]+", page_src, re.IGNORECASE):
+                u = u.strip(".,;)'\"")
+                if u not in vistos:
+                    urls.append(u)
+                    vistos.add(u)
+
+            usado_fallback_general = False
+            if not urls:
+                usado_fallback_general = True
+                for img in driver.find_elements(By.CSS_SELECTOR, "img"):
+                    for attr in ["src", "data-src", "data-lazy-src"]:
+                        src = (img.get_attribute(attr) or "").strip()
+                        if src and src not in vistos and src.startswith("http") and self._es_imagen_valida(src):
+                            urls.append(src)
+                            vistos.add(src)
+
+            if not urls or usado_fallback_general:
+                debug_path = DEBUG_SELENIUM_PATH
+                debug_path.write_text(page_src, encoding="utf-8")
+                if not urls:
+                    log.warning(f"  [Selenium] Sin imágenes. HTML en {debug_path}")
+                elif contenedor_lector_presente:
+                    log.warning(f"  [Selenium] {len(urls)} imagen(es) vía fallback "
+                               f"genérico, pero el contenedor del lector SÍ está "
+                               f"presente en el DOM — se asume capítulo real. "
+                               f"HTML volcado en {debug_path} para revisar igual.")
+                elif len(urls) <= UMBRAL_FALLBACK_SOSPECHOSO:
+                    log.warning(f"  [Selenium] {len(urls)} imagen(es) encontradas "
+                               f"SOLO por el fallback genérico (sin contenedor del "
+                               f"lector en el DOM) y por debajo del umbral "
+                               f"({UMBRAL_FALLBACK_SOSPECHOSO}) — se descarta como "
+                               f"página de error, no como capítulo real. "
+                               f"HTML volcado en {debug_path} para revisar.")
+                    return []
+                else:
+                    log.warning(f"  [Selenium] {len(urls)} imagen(es) encontradas "
+                               f"SOLO por el fallback genérico (sin contenedor del "
+                               f"lector en el DOM) — sospechoso, pero la cantidad "
+                               f"supera el umbral así que se deja pasar. "
+                               f"HTML volcado en {debug_path} para revisar.")
+
+            log.info(f"  [Selenium] {len(urls)} imágenes — {driver.current_url}")
+            return urls
+
+        except Exception as e:
+            log.error(f"  [Selenium] Error: {e}")
+            return []
+        finally:
+            if driver:
+                try:
+                    driver.quit()
+                except Exception:
+                    pass
 
 # ══════════════════════════════════════════════════════════════════════
 # §11  MANHWAS WEB
@@ -3050,6 +3698,186 @@ class IkigaiScraper(ScraperBase):
         return [u for u in candidatas if u.startswith(prefijo)]
 
 
+# ══════════════════════════════════════════════════════════════════════
+# §11d  LEERCAPITULO
+# ══════════════════════════════════════════════════════════════════════
+
+class LeerCapituloScraper(ScraperBase):
+    """
+    LeerCapitulo (leercapitulo.co).
+
+    Plataforma propia (NO Madara/WordPress — sin rastro de wp-manga en
+    el HTML). Lista de capítulos: HTML directo, sin AJAX. Imágenes: el
+    contenido real viaja en un blob ofuscado (#array_data, ~62 símbolos
+    de charset, N segmentos = N páginas del capítulo) que se decodifica
+    client-side por JS pesadamente ofuscado (usa el Deobfuscator de
+    "synchrony", visto en el APK de Mihon/Tachiyomi de este sitio). En
+    vez de reimplementar ese algoritmo, se deja que un navegador real
+    (Selenium) ejecute el JS y se lee el resultado ya renderizado en
+    el DOM (`.comic_wraCon img`) — igual de robusto y mucho menos
+    frágil que reversear un cifrado que puede cambiar sin aviso.
+
+    slug: se guarda el path completo tal cual aparece en la URL,
+    "{id}/{slug-largo}" (ej: "7mbadjh023/pensaste-que-podrias-..."),
+    igual que Olympus combina ID + slug. No hace falta separarlos en
+    dos campos — se usa directo para armar tanto la URL del manga
+    como la de cada capítulo.
+    """
+
+    BASE_URL = "https://www.leercapitulo.co"
+
+    def __init__(self):
+        super().__init__()
+        self.session.headers.update({"Referer": self.BASE_URL + "/"})
+
+    @property
+    def nombre(self) -> str:
+        return "LeerCapitulo"
+
+    def obtener_capitulos(self, slug: str) -> list[dict]:
+        """
+        Parsea la lista de capítulos directo del HTML de la página del
+        manga — confirmado que viene completa ahí (selector
+        `.chapter-list a.xanh`), sin necesidad de AJAX.
+        """
+        url = f"{self.BASE_URL}/manga/{slug}/"
+        r = hacer_get(url, self.session)
+        if not r:
+            raise SitioRotoError(
+                f"No se pudo obtener la página del manga '{slug}' en "
+                f"LeerCapitulo — el manga pudo haber sido removido o "
+                f"la URL/slug guardado en seguimiento.json cambió"
+            )
+
+        soup = BeautifulSoup(r.text, "html.parser")
+        enlaces = soup.select(".chapter-list a.xanh")
+        if not enlaces:
+            raise SitioRotoError(
+                f"La página de '{slug}' respondió 200 pero no se encontró "
+                f"NINGÚN capítulo con el selector '.chapter-list a.xanh' — "
+                f"posible cambio de estructura en el sitio"
+            )
+
+        caps = []
+        for a in enlaces:
+            href = (a.get("href") or "").strip()
+            if not href:
+                continue
+            texto = a.get_text(" ", strip=True) or a.get("title", "")
+            m = re.search(r"(\d+(?:\.\d+)?)", texto)
+            if not m:
+                continue
+            num = float(m.group(1))
+            caps.append({
+                "numero": num,
+                "url":    href if href.startswith("http") else f"{self.BASE_URL}{href}",
+                "titulo": texto,
+                "slug":   slug,
+            })
+
+        caps.sort(key=lambda x: x["numero"])
+        return caps
+
+    def obtener_imagenes(self, cap_url: str, slug: str, numero) -> list[str]:
+        """
+        Las imágenes SIEMPRE están detrás del JS ofuscado (#array_data
+        nunca aparece resuelto en el HTML crudo) — no tiene sentido
+        intentar primero con requests como en Madara, se va directo a
+        Selenium.
+
+        El sitio tiene dos modos de lectura (dropdown `.loadImgType`):
+        "Uno por uno" (default — solo renderiza la página actual en
+        .comic_wraCon, el resto espera que el usuario haga clic en
+        "Próximo") y "Todo en uno" (renderiza TODAS las páginas de
+        una). Sin forzar el segundo modo, solo se ve 1 imagen por
+        capítulo sea cual sea su cantidad real de páginas.
+        """
+        from selenium.webdriver.common.by import By
+        from selenium.webdriver.support.ui import WebDriverWait, Select
+
+        driver = self._crear_driver_selenium()
+        if not driver:
+            return []
+
+        try:
+            driver.get(cap_url)
+
+            # ── Forzar modo "Todo en uno" ──────────────────────────
+            # Sin esto el reader queda en modo paginado y solo se ve
+            # la página 1 del capítulo.
+            try:
+                WebDriverWait(driver, 10).until(
+                    lambda d: d.find_elements(By.CSS_SELECTOR, "select.loadImgType")
+                )
+                select_el = driver.find_element(By.CSS_SELECTOR, "select.loadImgType")
+                Select(select_el).select_by_value("1")
+                log.info(f"  [LeerCapitulo] Modo 'Todo en uno' activado")
+            except Exception as e:
+                log.warning(f"  [LeerCapitulo] No se pudo forzar modo 'Todo en "
+                           f"uno' (¿cambió el selector?): {e} — puede que solo "
+                           f"se recupere 1 página")
+
+            # ── Esperar a que .comic_wraCon termine de llenarse ────
+            # No sabemos de antemano cuántas páginas tiene el capítulo,
+            # así que se sondea la cantidad de <img> cada 1s y se corta
+            # cuando se mantiene estable 2 veces seguidas (o al llegar
+            # al tope de espera).
+            MAX_ESPERA_SEG    = 25
+            ESTABLE_REQUERIDO = 2
+            prev_count = -1
+            estable    = 0
+            inicio     = time.time()
+            while time.time() - inicio < MAX_ESPERA_SEG:
+                count = len(driver.find_elements(By.CSS_SELECTOR, ".comic_wraCon img"))
+                if count > 0 and count == prev_count:
+                    estable += 1
+                    if estable >= ESTABLE_REQUERIDO:
+                        break
+                else:
+                    estable = 0
+                prev_count = count
+                time.sleep(1)
+
+            urls   = []
+            vistos = set()
+            for img in driver.find_elements(By.CSS_SELECTOR, ".comic_wraCon img"):
+                for attr in ["src", "data-src", "data-lazy-src"]:
+                    src = (img.get_attribute(attr) or "").strip()
+                    if src and src not in vistos and src.startswith("http"):
+                        urls.append(src)
+                        vistos.add(src)
+
+            if not urls:
+                # Fallback genérico + volcado de debug, igual que Madara,
+                # por si .comic_wraCon cambia de nombre/clase en el sitio.
+                for img in driver.find_elements(By.CSS_SELECTOR, "img"):
+                    for attr in ["src", "data-src", "data-lazy-src"]:
+                        src = (img.get_attribute(attr) or "").strip()
+                        if (src and src not in vistos and src.startswith("http")
+                                and any(src.lower().split("?")[0].endswith(ext)
+                                        for ext in [".jpg", ".jpeg", ".png", ".webp", ".gif"])):
+                            urls.append(src)
+                            vistos.add(src)
+                debug_path = DEBUG_SELENIUM_PATH
+                debug_path.write_text(driver.page_source, encoding="utf-8")
+                if urls:
+                    log.warning(f"  [LeerCapitulo] {len(urls)} imagen(es) vía fallback "
+                               f"genérico (.comic_wraCon vacío) — HTML volcado en "
+                               f"{debug_path} para revisar.")
+                else:
+                    log.warning(f"  [LeerCapitulo] Sin imágenes. HTML en {debug_path}")
+
+            log.info(f"  [LeerCapitulo] {len(urls)} imágenes — {driver.current_url}")
+            return urls
+
+        except Exception as e:
+            log.error(f"  [LeerCapitulo] Error: {e}")
+            return []
+        finally:
+            try:
+                driver.quit()
+            except Exception:
+                pass
 
 
 def crear_scraper(fuente: str) -> ScraperBase | None:
@@ -3061,6 +3889,8 @@ def crear_scraper(fuente: str) -> ScraperBase | None:
         "manhwaweb": ManhwasWebScraper,
         "nexus":     NexusScraper,
         "ikigai":    IkigaiScraper,
+        "leercapitulo": LeerCapituloScraper,
+        "taurus":     TauroScraper,
     }
     cls = scrapers.get(fuente)
     if not cls:
@@ -3201,8 +4031,11 @@ def _descargar_caps_nuevos(caps_nuevos: list[dict], manga_cfg: dict,
     nombre           = manga_cfg["nombre_carpeta"]
     prioridad_propia = prioridad_efectiva(manga_cfg)  # SIEMPRE un número
     t_inicio_manga   = time.time()
-    omitidos_cubiertos = 0  # resumen al final, en vez de 1 línea por capítulo
-    omitidos_legado    = 0
+    omitidos_mejor   = 0  # cubierto por una fuente de prioridad estrictamente mejor
+    omitidos_empate  = 0  # cubierto por una fuente de la MISMA prioridad manual
+                           # (doble prioridad) — gana quien lo haya descargado
+                           # primero, sin importar el orden de escaneo del ciclo
+    omitidos_legado  = 0
 
     for idx_cap, cap in enumerate(caps_nuevos):
         num      = cap["numero"]
@@ -3258,8 +4091,20 @@ def _descargar_caps_nuevos(caps_nuevos: list[dict], manga_cfg: dict,
             else:
                 # Caso 3: es de OTRA fuente real y distinta a la
                 # nuestra — acá sí corresponde comparar prioridades.
+                #
+                # Empate (prioridad_propia == prio_previa): esto es el
+                # sistema de "doble prioridad" — dos fuentes declaradas
+                # a mano como igual de confiables para este manga. Acá
+                # NO se recalcula nada por ORDEN_FUENTES ni se favorece
+                # a ninguna fuente por convención: gana la que ya está
+                # descargada (quien haya llegado primero, en este ciclo
+                # o en uno anterior), y esa versión queda fija — la
+                # fuente empatada nunca la reemplaza después.
                 if prio_previa is not None and prioridad_propia >= prio_previa:
-                    omitidos_cubiertos += 1
+                    if prioridad_propia == prio_previa:
+                        omitidos_empate += 1
+                    else:
+                        omitidos_mejor += 1
                     if fuente_previa == FUENTE_EXTERNA:
                         # Nada puede tener mejor prioridad que
                         # 'externa' (rango 0) — jamás va a hacer
@@ -3369,10 +4214,13 @@ def _descargar_caps_nuevos(caps_nuevos: list[dict], manga_cfg: dict,
 
         time.sleep(1)
 
-    if omitidos_cubiertos or omitidos_legado:
+    if omitidos_mejor or omitidos_empate or omitidos_legado:
         partes = []
-        if omitidos_cubiertos:
-            partes.append(f"{omitidos_cubiertos} ya cubierto(s) por otra fuente de mayor prioridad")
+        if omitidos_mejor:
+            partes.append(f"{omitidos_mejor} ya cubierto(s) por otra fuente de mejor prioridad")
+        if omitidos_empate:
+            partes.append(f"{omitidos_empate} ya cubierto(s) por otra fuente de IGUAL prioridad "
+                          f"(doble prioridad, ganó quien lo descargó primero)")
         if omitidos_legado:
             partes.append(f"{omitidos_legado} sin metadata de fuente (legado)")
         log.info(f"    ⏭  {', '.join(partes)}, omitidos sin descargar")
@@ -3412,6 +4260,7 @@ def escanear_olympus(mangas_olympus: list[dict], carpeta_base: Path,
     total = 0
 
     for manga_cfg in mangas_olympus:
+        log.info("")
         nombre        = manga_cfg["nombre_carpeta"]
         slug_guardado = manga_cfg.get("slug", "")
         ultimo        = float(manga_cfg.get("ultimo_capitulo", 0))
@@ -3748,6 +4597,38 @@ class ReporteEscaneo:
         """
         self._manga(nombre, fuente)["bloqueos"].append(_truncar_mensaje(mensaje))
 
+    def imprimir_resumen_terminal(self):
+        """
+        Imprime al log un resumen agrupado por manga de todo lo que tuvo
+        algún problema en este ciclo (errores, capítulos parciales,
+        bloqueos anti rate-limit). No repite las advertencias sueltas
+        (esas ya se ven en vivo y suelen ser informativas, no fallas),
+        pero sí las cuenta si están presentes.
+
+        Se llama al final de ciclo_escaneo(), después de que ya se
+        procesaron todos los mangas — así, en vez de tener que scrollear
+        para juntar qué falló, queda todo en un solo bloque compacto al
+        final del log de ese ciclo.
+        """
+        con_problemas = {
+            nombre: info for nombre, info in self._mangas.items()
+            if info["errores"] or info["parciales"] or info["bloqueos"]
+        }
+        if not con_problemas:
+            return
+
+        log.info("")
+        log.info("  ── Resumen de incidencias del ciclo ──")
+        for nombre, info in con_problemas.items():
+            partes = []
+            if info["errores"]:
+                partes.append(f"{len(info['errores'])} error(es)")
+            if info["parciales"]:
+                partes.append(f"{len(info['parciales'])} capítulo(s) parcial(es)")
+            if info["bloqueos"]:
+                partes.append(f"{len(info['bloqueos'])} bloqueo(s) anti rate-limit")
+            log.info(f"    • {nombre} [{info['fuente']}]: {', '.join(partes)}")
+
     def _resumen(self) -> dict:
         caps_ok    = sum(len(m["exitos"])    for m in self._mangas.values())
         caps_parc  = sum(len(m["parciales"]) for m in self._mangas.values())
@@ -4073,6 +4954,9 @@ def ciclo_escaneo():
     mangas       = [m for m in data.get("mangas", []) if m.get("activo", True)]
     reporte      = ReporteEscaneo()
 
+    log.info(f"  📂 {carpeta_base}")
+    log.info(f"  📚 {len(mangas)} manga(s) activos")
+
     # Si algún manga tiene 'url_manga' (URL completa pegada del navegador),
     # extraer el slug automáticamente antes de procesar nada.
     hubo_cambios_url = False
@@ -4081,9 +4965,7 @@ def ciclo_escaneo():
             hubo_cambios_url = True
     if hubo_cambios_url:
         guardar_seguimiento(data)
-
-    log.info(f"  📂 {carpeta_base}")
-    log.info(f"  📚 {len(mangas)} manga(s) activos")
+        log.info("")
 
     # Avisos de cordura (no frenan nada) sobre configuraciones de
     # seguimiento.json que probablemente sean un error humano.
@@ -4129,7 +5011,7 @@ def ciclo_escaneo():
     ))
 
     for fuente, lista in sitios.items():
-        icono = {"nexus":"🔗","temple":"🏯","dragon":"🐉","manhwaweb":"📚","ikigai":"🌸"}.get(fuente,"📖")
+        icono = {"nexus":"🔗","temple":"🏯","dragon":"🐉","manhwaweb":"📚","ikigai":"🌸","leercapitulo":"📕","taurus":"🐂"}.get(fuente,"📖")
         log.info(f"\n  ┌─ {icono}  {fuente.title()} ({len(lista)} manga(s))")
         n_fuente = 0
         for manga_cfg in lista:
@@ -4161,6 +5043,10 @@ def ciclo_escaneo():
         log.info(f"  📄 Reporte actualizado: {REPORTE_PATH}")
     except Exception as e:
         log.error(f"  No se pudo generar el reporte HTML: {e}")
+
+    # Resumen agrupado de todo lo que tuvo problemas este ciclo (si hubo
+    # algo) — antes había que scrollear todo el log para juntarlo a mano.
+    reporte.imprimir_resumen_terminal()
 
     log.info("")
     log.info("╔" + "═"*58 + "╗")
@@ -4243,7 +5129,7 @@ def _liberar_lock():
 
 def main():
     log.info("╔══════════════════════════════════════════╗")
-    log.info("║       📚  M4RTO SCRAPER  v1.0            ║")
+    log.info("║       📚  M4RTO SCRAPER  v1.9            ║")
     log.info("╚══════════════════════════════════════════╝")
     log.info(f"Configuración: {SEGUIMIENTO_PATH}")
     log.info(f"Intervalo: cada {INTERVALO_HORAS} horas")

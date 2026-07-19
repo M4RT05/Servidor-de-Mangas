@@ -86,6 +86,10 @@
         <div class="tg on" id="tg-adult-new" onclick="this.classList.toggle('on')"></div>
       </div>
       <div class="tgi">
+        <span class="tglb">Permitir contenido normal</span>
+        <div class="tg on" id="tg-normal-new" onclick="this.classList.toggle('on')"></div>
+      </div>
+      <div class="tgi">
         <span class="tglb">Vetar mangas específicos</span>
         <div class="tg" id="tg-veto-new" onclick="toggleVetoPicker('new')"></div>
       </div>
@@ -124,6 +128,10 @@
         <div class="tg on" id="tg-adult-edit" onclick="this.classList.toggle('on')"></div>
       </div>
       <div class="tgi">
+        <span class="tglb">Permitir contenido normal</span>
+        <div class="tg on" id="tg-normal-edit" onclick="this.classList.toggle('on')"></div>
+      </div>
+      <div class="tgi">
         <span class="tglb">Vetar mangas específicos</span>
         <div class="tg" id="tg-veto-edit" onclick="toggleVetoPicker('edit')"></div>
       </div>
@@ -143,6 +151,15 @@
 
 <script src="/js/api.js"></script>
 <script>
+// Mismo criterio que en client/js/ui.js: todo texto que no sea HTML armado
+// por este código (username, nombre de manga) pasa por acá antes de ir a
+// innerHTML o a un atributo (incluyendo atributos onclick="...").
+function esc(str) {
+  return String(str ?? '').replace(/[&<>"']/g, c => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[c]));
+}
+
 function showMsg(text, type) {
   const el = document.getElementById('msg');
   el.textContent = text;
@@ -164,17 +181,18 @@ async function loadUsers() {
   const me = API.getUsername();
   document.getElementById('user-list').innerHTML = users.map(u => `
     <div class="user-row">
-      <div class="user-av">${u.username.slice(0,2).toUpperCase()}</div>
+      <div class="user-av">${esc(u.username.slice(0,2).toUpperCase())}</div>
       <div class="user-info">
-        <div class="user-name">${u.username} ${u.username === me ? '<span style="font-size:11px;color:#7d8590;">(tú)</span>' : ''}</div>
+        <div class="user-name">${esc(u.username)} ${u.username === me ? '<span style="font-size:11px;color:#7d8590;">(tú)</span>' : ''}</div>
         <div class="user-meta">${new Date(u.createdAt).toLocaleDateString('es')} &nbsp;<span class="${u.role==='admin'?'badge-admin':'badge-reader'}">${u.role==='admin'?'Admin':'Lector'}</span>
           ${u.role==='reader' && u.canViewAdult===false ? ' <span class="badge-reader">Sin +18</span>' : ''}
+          ${u.role==='reader' && u.canViewNormal===false ? ' <span class="badge-reader">Solo +18</span>' : ''}
           ${u.role==='reader' && u.blockedMangas?.length ? ` <span class="badge-reader">${u.blockedMangas.length} vetados</span>` : ''}
         </div>
       </div>
       <div class="actions">
         <button class="btn btn-edit btn-sm" onclick="openEdit('${u.id}')"><i class="ti ti-pencil" style="font-size:13px;"></i></button>
-        ${u.username !== me ? `<button class="btn btn-del btn-sm" onclick="deleteUser('${u.id}','${u.username}')"><i class="ti ti-trash" style="font-size:13px;"></i></button>` : ''}
+        ${u.username !== me ? `<button class="btn btn-del btn-sm" onclick="deleteUser('${u.id}','${esc(u.username)}')"><i class="ti ti-trash" style="font-size:13px;"></i></button>` : ''}
       </div>
     </div>`).join('') || '<p style="color:#7d8590;font-size:13px;">No hay usuarios.</p>';
 }
@@ -214,8 +232,8 @@ function renderVetoList(prefix, filterText = '') {
   const items = (allMangas || []).filter(m => !f || m.name.toLowerCase().includes(f));
   list.innerHTML = items.map(m => `
     <label class="veto-item">
-      <input type="checkbox" data-name="${m.name}" ${sel.has(m.name) ? 'checked' : ''} onchange="onVetoCheck('${prefix}', this)">
-      <span>${m.name}</span>
+      <input type="checkbox" data-name="${esc(m.name)}" ${sel.has(m.name) ? 'checked' : ''} onchange="onVetoCheck('${prefix}', this)">
+      <span>${esc(m.name)}</span>
     </label>`).join('') || '<p style="color:#7d8590;font-size:12px;padding:10px;">Sin resultados.</p>';
 }
 
@@ -252,8 +270,13 @@ async function createUser() {
 
   const restrictions = role === 'reader' ? {
     canViewAdult:  document.getElementById('tg-adult-new').classList.contains('on'),
+    canViewNormal: document.getElementById('tg-normal-new').classList.contains('on'),
     blockedMangas: document.getElementById('tg-veto-new').classList.contains('on') ? [...vetoSelected.new] : []
   } : {};
+  if (role === 'reader' && !restrictions.canViewAdult && !restrictions.canViewNormal) {
+    showMsg('No podés desactivar "+18" y "normal" al mismo tiempo: el usuario se quedaría sin ningún manga para ver.', 'err');
+    return;
+  }
 
   const res = await API.createUser(username, password, role, restrictions);
   if (res?.ok) {
@@ -261,6 +284,7 @@ async function createUser() {
     document.getElementById('new-username').value = '';
     document.getElementById('new-password').value = '';
     document.getElementById('tg-adult-new').classList.add('on');
+    document.getElementById('tg-normal-new').classList.add('on');
     resetVetoState('new');
     loadUsers();
   } else {
@@ -279,6 +303,7 @@ function openEdit(id) {
   toggleRoleExtras('edit');
 
   document.getElementById('tg-adult-edit').classList.toggle('on', u.canViewAdult !== false);
+  document.getElementById('tg-normal-edit').classList.toggle('on', u.canViewNormal !== false);
   vetoSelected.edit = new Set(Array.isArray(u.blockedMangas) ? u.blockedMangas : []);
   document.getElementById('tg-veto-edit').classList.toggle('on', vetoSelected.edit.size > 0);
   document.getElementById('veto-picker-edit').style.display = vetoSelected.edit.size > 0 ? 'block' : 'none';
@@ -299,9 +324,15 @@ async function saveEdit() {
   if (pw) data.password = pw;
   if (role === 'reader') {
     data.canViewAdult  = document.getElementById('tg-adult-edit').classList.contains('on');
+    data.canViewNormal = document.getElementById('tg-normal-edit').classList.contains('on');
     data.blockedMangas = document.getElementById('tg-veto-edit').classList.contains('on') ? [...vetoSelected.edit] : [];
+    if (!data.canViewAdult && !data.canViewNormal) {
+      showMsg('No podés desactivar "+18" y "normal" al mismo tiempo: el usuario se quedaría sin ningún manga para ver.', 'err');
+      return;
+    }
   } else {
     data.canViewAdult  = true;
+    data.canViewNormal = true;
     data.blockedMangas = [];
   }
   const res = await API.updateUser(id, data);

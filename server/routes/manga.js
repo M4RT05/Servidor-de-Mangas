@@ -3,37 +3,55 @@ const fs      = require('fs');
 const path    = require('path');
 const router  = express.Router();
 
+const catalogIndex = require('../data/catalogIndex');
+const imageCache   = require('../lib/imageCache');
+const { writeJsonAtomic, formatDate } = require('../lib/fsHelpers');
+
 const PROGRESS_FILE = path.join(__dirname, '../progress.json');
-const DETECTED_FILE = path.join(__dirname, '../detected_dates.json');
+const ORPHANS_FILE  = path.join(__dirname, '../progress_orphans.json');
+const BACKUP_DIR    = path.join(__dirname, '../backups');
 
-let detectedDates = {};
+// Cuántos días debe faltar un manga en TODOS los escaneos completos antes de
+// borrar su historial de forma definitiva. Mientras no pase este tiempo, solo
+// queda "en observación" — nunca se borra en el momento en que desaparece.
+const ORPHAN_GRACE_DAYS = 7;
+// Backups rotativos de progress.json que se guardan antes de cualquier borrado
+// definitivo (bak1 = más reciente, bak5 = más viejo).
+const MAX_PROGRESS_BACKUPS = 5;
 
-// ── CACHÉ EN MEMORIA ──────────────────────────────────────────────────────────
-let _listCache     = null;
-let _listCacheTime = 0;
-const CACHE_TTL    = 5 * 60 * 1000;
+// ── BACKUP ROTATIVO (solo se llama antes de un borrado definitivo, no en
+// cada guardado normal, para no generar I/O innecesario) ─────────────────────
+function backupBeforeDestructiveWrite(filePath) {
+  if (!fs.existsSync(filePath)) return;
+  try {
+    fs.mkdirSync(BACKUP_DIR, { recursive: true });
+    const base = path.basename(filePath);
+    for (let i = MAX_PROGRESS_BACKUPS - 1; i >= 1; i--) {
+      const src = path.join(BACKUP_DIR, `${base}.bak${i}`);
+      const dst = path.join(BACKUP_DIR, `${base}.bak${i + 1}`);
+      if (fs.existsSync(src)) fs.renameSync(src, dst);
+    }
+    fs.copyFileSync(filePath, path.join(BACKUP_DIR, `${base}.bak1`));
+  } catch(e) { console.error('[Backup] Error creando backup:', e.message); }
+}
 
-const _detailCache     = new Map();
-const _detailCacheTime = new Map();
+// ── ORPHAN TRACKING (mangas que no aparecieron en el último escaneo) ────────
+// Formato: { "NombreManga": "2026-07-09T12:00:00.000Z" } → fecha en que se
+// notó ausente por primera vez. Solo se borra su progreso si sigue ausente
+// después de ORPHAN_GRACE_DAYS días consecutivos.
+function loadOrphans() {
+  if (!fs.existsSync(ORPHANS_FILE)) return {};
+  try { return JSON.parse(fs.readFileSync(ORPHANS_FILE, 'utf8')); } catch { return {}; }
+}
+function saveOrphans(data) {
+  try { writeJsonAtomic(ORPHANS_FILE, data); } catch(e) { console.error('[Progress] Error guardando orphans:', e.message); }
+}
 
+// ── CACHÉ DE PROGRESO (por usuario, TTL corto — esto SÍ sigue siendo un
+// archivo propio que conviene no releer en cada request) ────────────────────
 let _progressCache     = null;
 let _progressCacheTime = 0;
 const PROGRESS_TTL     = 10 * 1000;
-
-const _imageCache     = new Map();
-const IMAGE_CACHE_TTL = 30 * 60 * 1000;
-
-function invalidateCache() {
-  _listCache = null;
-  _detailCache.clear();
-  _detailCacheTime.clear();
-}
-function invalidateMangaCache(name) {
-  _detailCache.delete(name);
-  _detailCacheTime.delete(name);
-  _listCache = null;
-  _progressCache = null;
-}
 
 // ── PROGRESO POR USUARIO ─────────────────────────────────────────────────────
 // Formato: { "userId": { "mangaName": { readChapters, lastChapter, lastPage } } }
@@ -45,14 +63,11 @@ function _loadRawProgress() {
   if (!fs.existsSync(PROGRESS_FILE)) { _progressCache = {}; _progressCacheTime = now; return {}; }
   try {
     let data = JSON.parse(fs.readFileSync(PROGRESS_FILE, 'utf8'));
-    // Detectar formato viejo: las claves son nombres de manga (strings sin estructura de userId)
-    // En el formato nuevo, las claves son IDs de usuario numéricos/cortos
-    // Heurística: si algún valor tiene directamente readChapters[] es formato viejo
     const keys = Object.keys(data);
     if (keys.length > 0 && data[keys[0]]?.readChapters) {
       console.log('[Progress] Migrando formato viejo → nuevo (por usuario)...');
       const migrated = { __legacy__: data };
-      fs.writeFileSync(PROGRESS_FILE, JSON.stringify(migrated));
+      writeJsonAtomic(PROGRESS_FILE, migrated);
       data = migrated;
     }
     _progressCache = data;
@@ -64,15 +79,13 @@ function _loadRawProgress() {
 function getProgress(userId) {
   const all = _loadRawProgress();
   const key = String(userId || '__legacy__');
-  // Si no hay datos para este usuario, intentar con __legacy__ (migración gradual)
   if (all[key] && Object.keys(all[key]).length > 0) return all[key];
   if (all['__legacy__'] && Object.keys(all['__legacy__']).length > 0) {
-    // Migrar __legacy__ a este usuario la primera vez que accede
     all[key] = { ...all['__legacy__'] };
     delete all['__legacy__'];
     _progressCache = all;
     _progressCacheTime = Date.now();
-    fs.writeFile(PROGRESS_FILE, JSON.stringify(all), () => {});
+    try { writeJsonAtomic(PROGRESS_FILE, all); } catch(e) { console.error('[Progress] Error migrando:', e.message); }
     console.log(`[Progress] Migrado __legacy__ → usuario ${key}`);
     return all[key];
   }
@@ -85,408 +98,197 @@ function saveProgress(userId, data) {
   all[key] = data;
   _progressCache = all;
   _progressCacheTime = Date.now();
-  fs.writeFile(PROGRESS_FILE, JSON.stringify(all), err => {
-    if (err) console.error('[Progress] Error guardando:', err.message);
-  });
+  try { writeJsonAtomic(PROGRESS_FILE, all); }
+  catch(e) { console.error('[Progress] Error guardando:', e.message); }
 }
 
-// ── LIMPIEZA DE PROGRESS ─────────────────────────────────────────────────────
-function cleanProgress(validMangas) {
-  if (!fs.existsSync(PROGRESS_FILE)) return;
-  try {
-    const all      = _loadRawProgress();
-    const validSet = new Set(validMangas);
-    let removed    = 0;
-    // Iterar por cada usuario y limpiar sus mangas huérfanos
+// ── LIMPIEZA DE PROGRESO Y FECHAS (con período de gracia) ────────────────────
+// Regla de seguridad #1: si el escaneo de carpetas de este arranque no fue
+// completo (algún MANGA_PATH_N configurado en .env no estaba disponible, o
+// tiró un error a mitad de camino), NO se borra absolutamente nada.
+//
+// Regla de seguridad #2: incluso con un escaneo completo, un manga que ya no
+// aparece no se borra de inmediato — se marca "en observación" con la fecha
+// en que se notó ausente por primera vez (progress_orphans.json). Solo si
+// sigue faltando en escaneos completos posteriores durante ORPHAN_GRACE_DAYS
+// días seguidos, se borra su historial (con backup previo).
+function runProgressCleanup(validMangas, scanComplete) {
+  if (!scanComplete) {
+    console.warn('[Progress] Limpieza omitida: no se pudo escanear alguna carpeta configurada en este arranque. No se borra nada.');
+    return;
+  }
+
+  const validSet = new Set(validMangas);
+  const orphans  = loadOrphans();
+  const now      = Date.now();
+  const graceMs  = ORPHAN_GRACE_DAYS * 24 * 60 * 60 * 1000;
+  const detectedDates = catalogIndex.detectedDatesRef;
+
+  const all = _loadRawProgress();
+  const trackedNames = new Set();
+  for (const userId of Object.keys(all)) {
+    const userProgress = all[userId];
+    if (typeof userProgress !== 'object') continue;
+    Object.keys(userProgress).forEach(m => trackedNames.add(m));
+  }
+  Object.keys(detectedDates).forEach(key => trackedNames.add(key.split('/')[0]));
+
+  for (const name of Object.keys(orphans)) {
+    if (validSet.has(name)) delete orphans[name];
+  }
+
+  const toDelete = [];
+  for (const name of trackedNames) {
+    if (validSet.has(name)) continue;
+    if (!orphans[name]) { orphans[name] = now; continue; }
+    if (now - orphans[name] >= graceMs) toDelete.push(name);
+  }
+
+  if (toDelete.length > 0) {
+    backupBeforeDestructiveWrite(PROGRESS_FILE);
+
+    let removedProgress = 0;
     for (const userId of Object.keys(all)) {
       const userProgress = all[userId];
       if (typeof userProgress !== 'object') continue;
-      for (const manga of Object.keys(userProgress)) {
-        if (!validSet.has(manga)) { delete userProgress[manga]; removed++; }
+      for (const manga of toDelete) {
+        if (userProgress[manga]) { delete userProgress[manga]; removedProgress++; }
       }
     }
-    if (removed > 0) {
-      console.log(`[Progress] Limpieza: ${removed} entrada(s) huérfana(s) eliminadas.`);
-      fs.writeFileSync(PROGRESS_FILE, JSON.stringify(all));
+    if (removedProgress > 0) {
+      writeJsonAtomic(PROGRESS_FILE, all);
       _progressCache = all;
       _progressCacheTime = Date.now();
     }
-  } catch(e) { console.error('[Progress] Error en limpieza:', e.message); }
-}
 
-// ── FECHAS DETECTADAS ─────────────────────────────────────────────────────────
-function loadDetectedDates() {
-  if (!fs.existsSync(DETECTED_FILE)) return {};
-  try { return JSON.parse(fs.readFileSync(DETECTED_FILE, 'utf8')); } catch { return {}; }
-}
-function saveDetectedDates() {
-  fs.writeFile(DETECTED_FILE, JSON.stringify(detectedDates, null, 2), err => {
-    if (err) console.error('[Watcher]', err.message);
-  });
-}
-function getDetectedDate(manga, chapter) {
-  const key = chapter ? `${manga}/${chapter}` : manga;
-  return detectedDates[key] ? new Date(detectedDates[key]) : null;
-}
-
-// ── LIMPIEZA DE DETECTED_DATES (mejora #7) ────────────────────────────────────
-function cleanDetectedDates(validMangas) {
-  const validSet = new Set(validMangas);
-  let removed = 0;
-  for (const key of Object.keys(detectedDates)) {
-    const manga = key.split('/')[0];
-    if (!validSet.has(manga)) { delete detectedDates[key]; removed++; }
-  }
-  if (removed > 0) {
-    console.log(`[Watcher] Limpieza: ${removed} fecha(s) huérfana(s) eliminadas.`);
-    saveDetectedDates();
-  }
-}
-
-// ── WATCHER (mejora #5: soporte MANGA_PATH_2) ─────────────────────────────────
-let watchers = [];
-
-function startWatcher() {
-  detectedDates = loadDetectedDates();
-  const roots = getMangaRoots();
-  if (!roots.length) { console.warn('[Watcher] No se encontraron carpetas de mangas.'); return; }
-
-  const existing  = new Set(Object.keys(detectedDates));
-  const allMangas = [];
-
-  // Escanear todos los roots
-  for (const root of roots) {
-    if (!fs.existsSync(root)) continue;
-    try {
-      fs.readdirSync(root).forEach(manga => {
-        const mp = path.join(root, manga);
-        if (!fs.statSync(mp).isDirectory()) return;
-        allMangas.push(manga);
-        if (!existing.has(manga)) detectedDates[manga] = getFolderDate(mp).toISOString();
-        getChapters(mp).forEach(ch => {
-          const k = `${manga}/${ch}`;
-          if (!existing.has(k)) detectedDates[k] = getFolderDate(path.join(mp, ch)).toISOString();
-        });
-      });
-    } catch(e) { console.error(`[Watcher] Error escaneando ${root}:`, e.message); }
-  }
-
-  saveDetectedDates();
-
-  // Limpiar entradas huérfanas al arrancar
-  cleanProgress(allMangas);
-  cleanDetectedDates(allMangas);
-
-  // Un watcher por cada root (mejora #5)
-  const pending = new Set(); let debounce = null;
-
-  for (const root of roots) {
-    if (!fs.existsSync(root)) continue;
-    try {
-      const w = fs.watch(root, { recursive: true }, (ev, fn) => {
-        if (!fn) return;
-        const parts = fn.split(path.sep);
-        if (parts.length > 2) return;
-        const key = parts.join('/');
-        if (pending.has(key)) return;
-        pending.add(key);
-        clearTimeout(debounce);
-        debounce = setTimeout(() => {
-          for (const k of pending) {
-            if (!detectedDates[k]) {
-              detectedDates[k] = new Date().toISOString();
-              console.log(`[Watcher] ${k.includes('/') ? 'Nuevo capítulo' : 'Nuevo manga'}: ${k}`);
-            }
-          }
-          pending.clear();
-          saveDetectedDates();
-          invalidateCache();
-          _imageCache.clear();
-        }, 800);
-      });
-      watchers.push(w);
-      console.log(`[Watcher] Monitoreando: ${root}`);
-    } catch(e) { console.warn(`[Watcher] fs.watch no disponible en ${root}:`, e.message); }
-  }
-}
-
-function stopWatcher() { watchers.forEach(w => w.close()); watchers = []; }
-
-// ── HELPERS ───────────────────────────────────────────────────────────────────
-function getMangaRoots() {
-  const candidates = [path.resolve(process.env.MANGA_PATH || './main')];
-  // Soporte dinámico: MANGA_PATH_2, MANGA_PATH_3, MANGA_PATH_4 … hasta donde estén definidas
-  for (let i = 2; process.env[`MANGA_PATH_${i}`]; i++) {
-    candidates.push(path.resolve(process.env[`MANGA_PATH_${i}`]));
-  }
-  const existing = candidates.filter(r => { try { return fs.existsSync(r); } catch { return false; } });
-  // Si ninguna existe devolver igualmente la primera para que los errores sean descriptivos
-  return existing.length > 0 ? existing : candidates.slice(0, 1);
-}
-function getMangaRoot() { return getMangaRoots()[0]; }
-
-function findMangaRoot(name) {
-  for (const root of getMangaRoots()) {
-    try { if (fs.existsSync(path.join(root, name))) return root; } catch {}
-  }
-  return getMangaRoot();
-}
-
-function getMetadata(p) {
-  const f = path.join(p, 'metadata.json');
-  if (!fs.existsSync(f)) return {};
-  try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch { return {}; }
-}
-
-// Ordenamiento natural: maneja 001, 01, 1 correctamente
-function naturalCompare(a, b) {
-  const re = /(\d+)/g;
-  const partsA = String(a).split(re);
-  const partsB = String(b).split(re);
-  for (let i = 0; i < Math.max(partsA.length, partsB.length); i++) {
-    const pa = partsA[i] ?? '';
-    const pb = partsB[i] ?? '';
-    if (i % 2 === 1) {
-      const diff = parseInt(pa || '0', 10) - parseInt(pb || '0', 10);
-      if (diff !== 0) return diff;
-    } else {
-      if (pa < pb) return -1;
-      if (pa > pb) return  1;
+    let removedDates = 0;
+    for (const key of Object.keys(detectedDates)) {
+      if (toDelete.includes(key.split('/')[0])) { delete detectedDates[key]; removedDates++; }
     }
+    if (removedDates > 0) catalogIndex.saveDetectedDatesDebounced();
+
+    toDelete.forEach(name => delete orphans[name]);
+    console.log(`[Progress] Limpieza definitiva tras ${ORPHAN_GRACE_DAYS} días ausentes: ${toDelete.join(', ')} (${removedProgress} entrada(s) de progreso, ${removedDates} fecha(s), backup guardado en ${BACKUP_DIR}).`);
   }
-  return 0;
-}
-function extractNum(str) { const m = String(str).match(/(\d+(?:\.\d+)?)/); return m ? parseFloat(m[1]) : 0; }
 
-function getChapters(mp) {
-  try {
-    return fs.readdirSync(mp)
-      .filter(f => { try { return fs.statSync(path.join(mp, f)).isDirectory(); } catch { return false; } })
-      .sort(naturalCompare);
-  } catch { return []; }
-}
-
-function getImages(cp) {
-  const cached = _imageCache.get(cp);
-  if (cached && (Date.now() - cached.t) < IMAGE_CACHE_TTL) return cached.v;
-  try {
-    const imgs = fs.readdirSync(cp)
-      .filter(f => /\.(jpg|jpeg|png|webp|gif)$/i.test(f))
-      .sort(naturalCompare);
-    _imageCache.set(cp, { v: imgs, t: Date.now() });
-    return imgs;
-  } catch { return []; }
-}
-
-function getCoverUrl(mp, name, chapters) {
-  if (fs.existsSync(path.join(mp, 'cover.jpg')))
-    return `/api/images/${encodeURIComponent(name)}/__cover__/cover.jpg`;
-  if (chapters.length > 0) {
-    const imgs = getImages(path.join(mp, chapters[0]));
-    if (imgs.length > 0)
-      return `/api/images/${encodeURIComponent(name)}/${encodeURIComponent(chapters[0])}/${encodeURIComponent(imgs[0])}`;
+  saveOrphans(orphans);
+  const stillWatching = Object.keys(orphans);
+  if (stillWatching.length > 0) {
+    console.log(`[Progress] En observación (aún no se borra su historial, esperando ${ORPHAN_GRACE_DAYS} días ausentes): ${stillWatching.join(', ')}`);
   }
-  return null;
 }
 
-function formatDate(date) {
-  const diff  = Date.now() - new Date(date).getTime();
-  const mins  = Math.floor(diff / 60000);
-  const hours = Math.floor(diff / 3600000);
-  const days  = Math.floor(diff / 86400000);
-  const weeks = Math.floor(days / 7);
-  const months= Math.floor(days / 30);
-  if (mins  < 60) return `Hace ${mins} min.`;
-  if (hours < 24) return `Hace ${hours} hora${hours > 1 ? 's' : ''}`;
-  if (days  < 7)  return `Hace ${days} día${days > 1 ? 's' : ''}`;
-  if (weeks < 4)  return `Hace ${weeks} semana${weeks > 1 ? 's' : ''}`;
-  return `Hace ${months} mes${months > 1 ? 'es' : ''}`;
-}
-
-function getFolderDate(p) {
-  try { const s = fs.statSync(p); return s.birthtime && s.birthtime.getFullYear() > 1970 ? s.birthtime : s.ctime; }
-  catch { return new Date(0); }
-}
-
-function getEffectiveDate(manga, chapter) {
-  const root = findMangaRoot(manga);
-  return getDetectedDate(manga, chapter) || getFolderDate(
-    chapter ? path.join(root, manga, chapter) : path.join(root, manga)
-  );
-}
+function startWatcher() { catalogIndex.startWatcher(runProgressCleanup); }
+function stopWatcher()  { catalogIndex.stopWatcher(); }
 
 function setCacheHeaders(res, seconds = 30) {
   res.setHeader('Cache-Control', `public, max-age=${seconds}, stale-while-revalidate=${seconds * 2}`);
 }
+// Para respuestas que incluyen datos por usuario mutables (progreso de
+// lectura: capítulos marcados/desmarcados como leídos). "no-store" en vez de
+// "no-cache": no-cache SIGUE permitiendo que el navegador guarde la
+// respuesta y la sirva de su caché si el ETag coincide (vía 304) — y como el
+// progreso puede cambiar sin que cambie nada del catálogo (mismo ETag),
+// el navegador podía servir un cuerpo cacheado con el progreso desactualizado.
+// "no-store" prohíbe ese guardado directamente: cada pedido va sí o sí al
+// servidor y trae el progreso real tal como está en ese momento.
+function setUserDataCacheHeaders(res) {
+  res.setHeader('Cache-Control', 'no-store');
+}
+
+const { visibleTo } = require('../lib/visibility');
 
 // ── RUTAS ─────────────────────────────────────────────────────────────────────
 
-// GET /api/mangas
+// GET /api/mangas — ahora lee directo del índice en memoria, sin tocar disco.
 router.get('/', (req, res) => {
-  const roots = getMangaRoots();
-  if (!roots.length) return res.status(404).json({ error: 'No se encontraron carpetas de mangas.' });
-  const { canViewAdult, blockedMangas } = req.userRestrictions || { canViewAdult: true, blockedMangas: [] };
-  const visible = m => (canViewAdult || !m.metadata.adult) && !blockedMangas.includes(m.name);
-  // El ETag incluye al usuario y sus restricciones: así un 304 nunca puede
-  // devolver (vía caché del navegador) el listado de otro usuario o de un
-  // estado de restricciones anterior. Sin esto, dos sesiones en el mismo
-  // navegador (ej. admin y luego un lector) podían compartir el mismo ETag
-  // y el lector terminaba reusando el listado completo y sin filtrar.
-  const restrictSig = `${req.user?.userId || 'anon'}-${canViewAdult}-${blockedMangas.join(',')}`;
-  try {
-    const now = Date.now();
-    if (_listCache && (now - _listCacheTime) < CACHE_TTL) {
-      const progress = getProgress(req.user?.userId);
-      const fresh = _listCache
-        .filter(visible)
-        .map(m => ({ ...m, progress: progress[m.name] || {} }));
-      const etag  = `"${_listCache.length}-${_listCacheTime}-${restrictSig}"`;
-      if (req.headers['if-none-match'] === etag) return res.status(304).end();
-      res.setHeader('ETag', etag);
-      setCacheHeaders(res, 60);
-      return res.json(fresh);
-    }
-    const progress = getProgress(req.user?.userId);
-    const seen     = new Set();
-    const mangas   = [];
-    for (const root of roots) {
-      fs.readdirSync(root)
-        .filter(f => { try { return fs.statSync(path.join(root, f)).isDirectory(); } catch { return false; } })
-        .sort()
-        .forEach(name => {
-          if (seen.has(name)) return;
-          seen.add(name);
-          const mp       = path.join(root, name);
-          const chapters = getChapters(mp);
-          const meta     = getMetadata(mp);
-          const cover    = getCoverUrl(mp, name, chapters);
-          mangas.push({
-            name, cover, chapterCount: chapters.length,
-            lastChapter:     chapters[chapters.length - 1] || null,
-            lastChapterDate: chapters.length ? getEffectiveDate(name, chapters[chapters.length - 1]) : null,
-            addedDate:       getEffectiveDate(name, null),
-            metadata: {
-              type:    meta.type    || 'Manga',
-              status:  meta.status  || 'Activo',
-              genres:  Array.isArray(meta.genres) ? meta.genres : [],
-              synopsis:meta.synopsis || '',
-              ranking: meta.ranking  ?? null,
-              adult:   meta.adult    || false
-            },
-            progress: progress[name] || {}
-          });
-        });
-    }
-    _listCache     = mangas.map(m => { const { progress: _, ...rest } = m; return rest; });
-    _listCacheTime = now;
-    const etag     = `"${_listCache.length}-${_listCacheTime}-${restrictSig}"`;
-    res.setHeader('ETag', etag);
-    setCacheHeaders(res, 60);
-    res.json(mangas.filter(visible));
-  } catch(err) { res.status(500).json({ error: err.message }); }
+  if (!catalogIndex.getMangaNames().length) return res.status(404).json({ error: 'No se encontraron carpetas de mangas.' });
+  const restrictions = req.userRestrictions || { canViewAdult: false, canViewNormal: false, blockedMangas: [] };
+
+  const progress = getProgress(req.user?.userId);
+  const mangas = catalogIndex.getAllEntries()
+    .filter(e => visibleTo(e, restrictions))
+    .map(e => ({
+      name: e.name, cover: e.cover, chapterCount: e.chapters.length,
+      lastChapter: e.chapters.length ? e.chapters[e.chapters.length - 1].number : null,
+      lastChapterDate: e.lastChapterDate,
+      addedDate: e.addedDate,
+      metadata: e.metadata,
+      progress: progress[e.name] || {}
+    }));
+
+  setUserDataCacheHeaders(res);
+  res.json(mangas);
 });
 
-// GET /api/mangas/latest-paged
-const _latestCache     = new Map();
-const LATEST_CACHE_TTL = 60 * 1000;
-
+// GET /api/mangas/latest-paged — antes escaneaba TODO el catálogo por cada
+// combinación de filtros/página aunque solo se devolvieran 20 items. Ahora
+// arma la lista completa de "últimos capítulos por manga" en memoria (barato:
+// son operaciones de array sobre el índice, no I/O) y recién ahí pagina.
 router.get('/latest-paged', (req, res) => {
   const page      = Math.max(1, parseInt(req.query.page)  || 1);
   const limit     = Math.min(parseInt(req.query.limit) || 20, 50);
-  const { canViewAdult, blockedMangas } = req.userRestrictions || { canViewAdult: true, blockedMangas: [] };
-  // El cliente pide ?adult=true, pero el servidor manda: si el usuario no
-  // tiene permiso, nunca se le muestra, sin importar lo que pida el query.
-  const showAdult = req.query.adult === 'true' && canViewAdult;
-  const cacheKey  = `${page}-${limit}-${showAdult}`;
-  const cached    = _latestCache.get(cacheKey);
-  if (cached && (Date.now() - cached.t) < LATEST_CACHE_TTL) {
-    const progress   = getProgress(req.user?.userId);
-    const freshItems = cached.v.items
-      .filter(g => !blockedMangas.includes(g.manga))
-      .map(g => ({
-        ...g,
-        chapters: g.chapters.map(ch => ({
-          ...ch,
-          read: progress[g.manga]?.readChapters?.includes(ch.chapter) || false
-        }))
-      }));
-    setCacheHeaders(res, 30);
-    return res.json({ ...cached.v, items: freshItems });
-  }
-  try {
-    const progress = getProgress(req.user?.userId);
-    const roots    = getMangaRoots();
-    const seen     = new Set();
-    const groups   = [];
-    for (const root of roots) {
-      const entries = fs.readdirSync(root).filter(f => {
-        try { return fs.statSync(path.join(root, f)).isDirectory(); } catch { return false; }
-      });
-      for (const name of entries) {
-        if (seen.has(name)) continue;
-        seen.add(name);
-        const mp       = path.join(root, name);
-        const chapters = getChapters(mp);
-        if (!chapters.length) continue;
-        const meta = getMetadata(mp);
-        if (!showAdult && meta.adult) continue;
-        const cover = getCoverUrl(mp, name, chapters);
-        const prog  = progress[name] || {};
-        const lastChaps = chapters.slice(-2).reverse().map(ch => {
-          const d = getEffectiveDate(name, ch);
-          return { chapter: ch, date: d, dateLabel: formatDate(d), read: prog.readChapters?.includes(ch) || false };
-        });
-        groups.push({
-          manga: name, cover,
-          status:     meta.status || 'Activo',
-          adult:      meta.adult  || false,
-          type:       meta.type   || 'Manga',
-          latestDate: lastChaps[0]?.date || null,
-          chapters:   lastChaps
-        });
-      }
+  const restrictions = req.userRestrictions || { canViewAdult: false, canViewNormal: false, blockedMangas: [] };
+  const { canViewAdult, canViewNormal, blockedMangas } = restrictions;
+  const showAdult = req.query.adult     === 'true' && canViewAdult;
+  const onlyAdult = req.query.onlyAdult === 'true' && canViewAdult;
+  const typesParam  = String(req.query.types || 'manga,manhwa,manhua').toLowerCase();
+  const enabledTypes = new Set(typesParam.split(',').filter(Boolean));
+
+  const progress = getProgress(req.user?.userId);
+  const groups = [];
+  for (const e of catalogIndex.getAllEntries()) {
+    if (!e.chapters.length) continue;
+    if (blockedMangas.includes(e.name)) continue;
+    if (!enabledTypes.has(String(e.metadata.type).toLowerCase())) continue;
+    if (onlyAdult) {
+      if (!e.metadata.adult) continue;
+    } else {
+      if (!showAdult && e.metadata.adult) continue;
+      if (!canViewNormal && !e.metadata.adult) continue;
     }
-    groups.sort((a, b) => new Date(b.latestDate) - new Date(a.latestDate));
-    const total      = groups.length;
-    const totalPages = Math.ceil(total / limit);
-    const offset     = (page - 1) * limit;
-    const pageItems  = groups.slice(offset, offset + limit);
-    const result     = { items: pageItems, total, page, totalPages, perPage: limit };
-    // Se cachea SIN aplicar el veto de mangas específicos (es un dato por
-    // usuario), para que la caché siga siendo válida para otros usuarios.
-    _latestCache.set(cacheKey, { v: result, t: Date.now() });
-    setCacheHeaders(res, 30);
-    res.json({ ...result, items: pageItems.filter(g => !blockedMangas.includes(g.manga)) });
-  } catch(err) { res.status(500).json({ error: err.message }); }
+    const prog = progress[e.name] || {};
+    const lastChaps = e.chapters.slice(-2).reverse().map(ch => ({
+      chapter: ch.number, date: ch.date, dateLabel: formatDate(ch.date),
+      read: prog.readChapters?.includes(ch.number) || false
+    }));
+    groups.push({
+      manga: e.name, cover: e.cover,
+      status: e.metadata.status, adult: e.metadata.adult, type: e.metadata.type,
+      latestDate: lastChaps[0]?.date || null,
+      chapters: lastChaps
+    });
+  }
+  groups.sort((a, b) => new Date(b.latestDate) - new Date(a.latestDate));
+
+  const total      = groups.length;
+  const totalPages = Math.ceil(total / limit);
+  const offset     = (page - 1) * limit;
+  const pageItems  = groups.slice(offset, offset + limit);
+
+  setUserDataCacheHeaders(res);
+  res.json({ items: pageItems, total, page, totalPages, perPage: limit });
 });
 
 // ── ESTADÍSTICAS ──────────────────────────────────────────────────────────────
 
 // GET /api/mangas/stats/summary
 router.get('/stats/summary', (req, res) => {
-  const roots    = getMangaRoots();
   const progress = getProgress(req.user?.userId);
-  const { canViewAdult, blockedMangas } = req.userRestrictions || { canViewAdult: true, blockedMangas: [] };
-  const seen     = new Set();
+  const restrictions = req.userRestrictions || { canViewAdult: false, canViewNormal: false, blockedMangas: [] };
   let totalMangas = 0, totalChapters = 0;
   const mangaList = [];
 
-  for (const root of roots) {
-    if (!fs.existsSync(root)) continue;
-    fs.readdirSync(root).forEach(name => {
-      if (seen.has(name)) return;
-      try { if (!fs.statSync(path.join(root, name)).isDirectory()) return; } catch { return; }
-      seen.add(name);
-      const mp       = path.join(root, name);
-      const chapters = getChapters(mp);
-      const meta     = getMetadata(mp);
-      // Respetar restricciones: omitir vetados y +18 sin permiso (igual que GET /)
-      if (blockedMangas.includes(name) || (meta.adult && !canViewAdult)) return;
-      const prog     = progress[name] || {};
-      const read     = prog.readChapters?.length || 0;
-      totalMangas++;
-      totalChapters += chapters.length;
-      mangaList.push({ name, total: chapters.length, read, completed: read >= chapters.length && chapters.length > 0, type: meta.type || 'Manga', status: meta.status || 'Activo' });
+  for (const e of catalogIndex.getAllEntries()) {
+    if (!visibleTo(e, restrictions)) continue;
+    const prog = progress[e.name] || {};
+    const read = prog.readChapters?.length || 0;
+    totalMangas++;
+    totalChapters += e.chapters.length;
+    mangaList.push({
+      name: e.name, total: e.chapters.length, read,
+      completed: read >= e.chapters.length && e.chapters.length > 0,
+      type: e.metadata.type, status: e.metadata.status
     });
   }
 
@@ -523,10 +325,6 @@ router.post('/progress/import', (req, res) => {
   const { progress, merge } = req.body;
   if (!progress || typeof progress !== 'object') return res.status(400).json({ error: 'Datos inválidos.' });
 
-  // Detectar formato del archivo importado:
-  // - Formato plano viejo: { "NombreManga": { readChapters:[...] } }
-  // - Formato nuevo con usuario: { "userId": { "NombreManga": { readChapters:[...] } } }
-  // - Formato exportado desde esta app: { exportedAt, progress: { ... } }
   const keys = Object.keys(progress);
   let mangaMap = progress;
 
@@ -534,10 +332,8 @@ router.post('/progress/import', (req, res) => {
     const firstVal = progress[keys[0]];
     if (firstVal && typeof firstVal === 'object' && !Array.isArray(firstVal)) {
       if (firstVal.readChapters && Array.isArray(firstVal.readChapters)) {
-        // Formato plano: clave → objeto con readChapters
         mangaMap = progress;
       } else if (typeof Object.values(firstVal)[0] === 'object') {
-        // Formato anidado (userId → mangas) — tomar primer usuario
         mangaMap = firstVal;
       }
     }
@@ -559,98 +355,69 @@ router.post('/progress/import', (req, res) => {
   }
 
   saveProgress(req.user?.userId, imported);
-  invalidateCache();
   res.json({ ok: true, imported: count, total: Object.keys(imported).length });
 });
 
-// GET /api/mangas/:manga
+// GET /api/mangas/:manga — antes recalculaba imageCount por capítulo con un
+// readdirSync por cada uno en cada cache miss. Ahora sale directo del índice.
 router.get('/:manga', (req, res) => {
   const name = decodeURIComponent(req.params.manga);
-  const root = findMangaRoot(name);
-  const mp   = path.join(root, name);
-  if (!fs.existsSync(mp)) return res.status(404).json({ error: 'Manga no encontrado.' });
+  const entry = catalogIndex.ensureFresh(name);
+  if (!entry) return res.status(404).json({ error: 'Manga no encontrado.' });
 
-  const { canViewAdult, blockedMangas } = req.userRestrictions || { canViewAdult: true, blockedMangas: [] };
-  if (blockedMangas.includes(name)) return res.status(404).json({ error: 'Manga no encontrado.' });
+  const restrictions = req.userRestrictions || { canViewAdult: false, canViewNormal: false, blockedMangas: [] };
+  if (!visibleTo(entry, restrictions)) return res.status(404).json({ error: 'Manga no encontrado.' });
 
-  const now      = Date.now();
   const progress = getProgress(req.user?.userId);
+  const prog = progress[name] || {};
 
-  if (_detailCache.has(name) && (now - _detailCacheTime.get(name)) < CACHE_TTL) {
-    const cached = _detailCache.get(name);
-    if (cached.metadata?.adult && !canViewAdult) return res.status(404).json({ error: 'Manga no encontrado.' });
-    const prog   = progress[name] || {};
-    const etag   = `"${name}-${_detailCacheTime.get(name)}"`;
-    if (req.headers['if-none-match'] === etag) return res.status(304).end();
-    res.setHeader('ETag', etag);
-    setCacheHeaders(res, 60);
-    return res.json({
-      ...cached,
-      chapters: cached.chapters.map(ch => ({ ...ch, read: prog.readChapters?.includes(ch.number) || false })),
-      progress: prog
-    });
-  }
-
-  const chapters = getChapters(mp);
-  const meta     = getMetadata(mp);
-  if (meta.adult && !canViewAdult) return res.status(404).json({ error: 'Manga no encontrado.' });
-  const cover    = getCoverUrl(mp, name, chapters);
-  const prog     = progress[name] || {};
-
-  const data = {
-    name, cover, chapterCount: chapters.length,
-    metadata: {
-      type:    meta.type    || 'Manga',
-      status:  meta.status  || 'Activo',
-      genres:  Array.isArray(meta.genres) ? meta.genres : [],
-      synopsis:meta.synopsis || '',
-      ranking: meta.ranking  ?? null,
-      adult:   meta.adult    || false
-    },
-    chapters: chapters.map(ch => {
-      const d = getEffectiveDate(name, ch);
-      return { number: ch, imageCount: getImages(path.join(mp, ch)).length, read: prog.readChapters?.includes(ch) || false, date: d, dateLabel: formatDate(d) };
-    }),
+  setUserDataCacheHeaders(res);
+  res.json({
+    name: entry.name, cover: entry.cover, chapterCount: entry.chapters.length,
+    metadata: entry.metadata,
+    chapters: entry.chapters.map(ch => ({
+      number: ch.number, imageCount: ch.images.length,
+      read: prog.readChapters?.includes(ch.number) || false,
+      date: ch.date, dateLabel: formatDate(ch.date)
+    })),
     progress: prog
-  };
-
-  const { progress: _, ...toCache } = data;
-  _detailCache.set(name, toCache);
-  _detailCacheTime.set(name, now);
-
-  const etag = `"${name}-${now}"`;
-  res.setHeader('ETag', etag);
-  setCacheHeaders(res, 60);
-  res.json(data);
+  });
 });
 
-// GET /api/mangas/:manga/:chapter/images
+// GET /api/mangas/:manga/:chapter/images — antes hacía readdirSync del
+// capítulo en cada apertura. Ahora la lista de imágenes ya está en el
+// índice, así que esta ruta no toca el disco para nada (salvo el
+// precalentado en background de las primeras páginas).
 router.get('/:manga/:chapter/images', (req, res) => {
-  const name = decodeURIComponent(req.params.manga);
-  const root = findMangaRoot(name);
-  const ch   = decodeURIComponent(req.params.chapter);
-  const mp   = path.join(root, name);
-  const cp   = path.join(mp, ch);
-  if (!fs.existsSync(cp)) return res.status(404).json({ error: 'Capítulo no encontrado.' });
+  const name  = decodeURIComponent(req.params.manga);
+  const ch    = decodeURIComponent(req.params.chapter);
+  const entry = catalogIndex.ensureFresh(name);
+  if (!entry) return res.status(404).json({ error: 'Capítulo no encontrado.' });
 
-  const { canViewAdult, blockedMangas } = req.userRestrictions || { canViewAdult: true, blockedMangas: [] };
-  if (blockedMangas.includes(name)) return res.status(404).json({ error: 'Capítulo no encontrado.' });
-  const meta = getMetadata(mp);
-  if (meta.adult && !canViewAdult) return res.status(404).json({ error: 'Capítulo no encontrado.' });
+  const restrictions = req.userRestrictions || { canViewAdult: false, canViewNormal: false, blockedMangas: [] };
+  if (!visibleTo(entry, restrictions)) return res.status(404).json({ error: 'Capítulo no encontrado.' });
 
-  const chapters = getChapters(mp);
-  const cover    = getCoverUrl(mp, name, chapters);
-  const idx      = chapters.indexOf(ch);
-  const images   = getImages(cp).map(img =>
+  const idx = entry.chapters.findIndex(c => c.number === ch);
+  if (idx === -1) return res.status(404).json({ error: 'Capítulo no encontrado.' });
+  const chapterEntry = entry.chapters[idx];
+
+  const images = chapterEntry.images.map(img =>
     `/api/images/${encodeURIComponent(name)}/${encodeURIComponent(ch)}/${encodeURIComponent(img)}`
   );
 
+  // Precalentar en RAM las primeras páginas mientras el cliente todavía está
+  // en la pantalla de "Cargando capítulo..." — para cuando pida la imagen
+  // real ya está en memoria en vez de tener que ir al disco externo.
+  const root = catalogIndex.findMangaRoot(name);
+  const chapterDir = path.join(root, name, ch);
+  imageCache.warmChapter(chapterEntry.images.map(img => path.resolve(path.join(chapterDir, img))));
+
   setCacheHeaders(res, 300);
   res.json({
-    manga: name, chapter: ch, cover, images, total: images.length,
-    prevChapter: idx > 0 ? chapters[idx - 1] : null,
-    nextChapter: idx < chapters.length - 1 ? chapters[idx + 1] : null,
-    allChapters: chapters
+    manga: name, chapter: ch, cover: entry.cover, images, total: images.length,
+    prevChapter: idx > 0 ? entry.chapters[idx - 1].number : null,
+    nextChapter: idx < entry.chapters.length - 1 ? entry.chapters[idx + 1].number : null,
+    allChapters: entry.chapters.map(c => c.number)
   });
 });
 
@@ -658,17 +425,15 @@ router.get('/:manga/:chapter/images', (req, res) => {
 router.post('/unread', (req, res) => {
   const { manga, chapter } = req.body;
   if (!manga || !chapter) return res.status(400).json({ error: 'Faltan datos.' });
-  const { canViewAdult, blockedMangas } = req.userRestrictions || { canViewAdult: true, blockedMangas: [] };
-  if (blockedMangas.includes(manga)) return res.status(404).json({ error: 'Manga no encontrado.' });
-  if (!canViewAdult) {
-    const meta = getMetadata(path.join(findMangaRoot(manga), manga));
-    if (meta.adult) return res.status(404).json({ error: 'Manga no encontrado.' });
-  }
+  const entry = catalogIndex.getMangaEntry(manga);
+  if (!entry) return res.status(404).json({ error: 'Manga no encontrado.' });
+  const restrictions = req.userRestrictions || { canViewAdult: false, canViewNormal: false, blockedMangas: [] };
+  if (!visibleTo(entry, restrictions)) return res.status(404).json({ error: 'Manga no encontrado.' });
+
   const progress = getProgress(req.user?.userId);
   if (progress[manga]?.readChapters) {
     progress[manga].readChapters = progress[manga].readChapters.filter(c => c !== chapter);
     saveProgress(req.user?.userId, progress);
-    invalidateMangaCache(manga);
   }
   res.json({ ok: true });
 });
@@ -677,20 +442,17 @@ router.post('/unread', (req, res) => {
 router.post('/mark-all-read', (req, res) => {
   const { manga } = req.body;
   if (!manga) return res.status(400).json({ error: 'Falta el nombre del manga.' });
-  const root = findMangaRoot(manga);
-  const mp   = path.join(root, manga);
-  if (!fs.existsSync(mp)) return res.status(404).json({ error: 'Manga no encontrado.' });
-  const { canViewAdult, blockedMangas } = req.userRestrictions || { canViewAdult: true, blockedMangas: [] };
-  if (blockedMangas.includes(manga)) return res.status(404).json({ error: 'Manga no encontrado.' });
-  const meta = getMetadata(mp);
-  if (meta.adult && !canViewAdult) return res.status(404).json({ error: 'Manga no encontrado.' });
-  const chapters = getChapters(mp);
+  const entry = catalogIndex.ensureFresh(manga);
+  if (!entry) return res.status(404).json({ error: 'Manga no encontrado.' });
+  const restrictions = req.userRestrictions || { canViewAdult: false, canViewNormal: false, blockedMangas: [] };
+  if (!visibleTo(entry, restrictions)) return res.status(404).json({ error: 'Manga no encontrado.' });
+
+  const chapters = entry.chapters.map(c => c.number);
   const progress = getProgress(req.user?.userId);
   if (!progress[manga]) progress[manga] = { readChapters: [] };
   progress[manga].readChapters = [...new Set([...(progress[manga].readChapters || []), ...chapters])];
   if (chapters.length > 0) progress[manga].lastChapter = chapters[chapters.length - 1];
   saveProgress(req.user?.userId, progress);
-  invalidateMangaCache(manga);
   res.json({ ok: true });
 });
 
@@ -698,14 +460,13 @@ router.post('/mark-all-read', (req, res) => {
 router.post('/unread-all', (req, res) => {
   const { manga } = req.body;
   if (!manga) return res.status(400).json({ error: 'Falta el nombre del manga.' });
-  const { canViewAdult, blockedMangas } = req.userRestrictions || { canViewAdult: true, blockedMangas: [] };
-  if (blockedMangas.includes(manga)) return res.status(404).json({ error: 'Manga no encontrado.' });
-  if (!canViewAdult) {
-    const meta = getMetadata(path.join(findMangaRoot(manga), manga));
-    if (meta.adult) return res.status(404).json({ error: 'Manga no encontrado.' });
-  }
+  const entry = catalogIndex.getMangaEntry(manga);
+  if (!entry) return res.status(404).json({ error: 'Manga no encontrado.' });
+  const restrictions = req.userRestrictions || { canViewAdult: false, canViewNormal: false, blockedMangas: [] };
+  if (!visibleTo(entry, restrictions)) return res.status(404).json({ error: 'Manga no encontrado.' });
+
   const progress = getProgress(req.user?.userId);
-  if (progress[manga]) { progress[manga].readChapters = []; saveProgress(req.user?.userId, progress); invalidateMangaCache(manga); }
+  if (progress[manga]) { progress[manga].readChapters = []; saveProgress(req.user?.userId, progress); }
   res.json({ ok: true });
 });
 
@@ -713,19 +474,17 @@ router.post('/unread-all', (req, res) => {
 router.post('/progress', (req, res) => {
   const { manga, chapter, page } = req.body;
   if (!manga || !chapter) return res.status(400).json({ error: 'Faltan datos.' });
-  const { canViewAdult, blockedMangas } = req.userRestrictions || { canViewAdult: true, blockedMangas: [] };
-  if (blockedMangas.includes(manga)) return res.status(404).json({ error: 'Manga no encontrado.' });
-  if (!canViewAdult) {
-    const meta = getMetadata(path.join(findMangaRoot(manga), manga));
-    if (meta.adult) return res.status(404).json({ error: 'Manga no encontrado.' });
-  }
+  const entry = catalogIndex.getMangaEntry(manga);
+  if (!entry) return res.status(404).json({ error: 'Manga no encontrado.' });
+  const restrictions = req.userRestrictions || { canViewAdult: false, canViewNormal: false, blockedMangas: [] };
+  if (!visibleTo(entry, restrictions)) return res.status(404).json({ error: 'Manga no encontrado.' });
+
   const progress = getProgress(req.user?.userId);
   if (!progress[manga]) progress[manga] = { readChapters: [] };
   if (!progress[manga].readChapters.includes(chapter)) progress[manga].readChapters.push(chapter);
   progress[manga].lastChapter = chapter;
   progress[manga].lastPage    = page || 0;
   saveProgress(req.user?.userId, progress);
-  invalidateMangaCache(manga);
   res.json({ ok: true });
 });
 
@@ -734,33 +493,43 @@ router.post('/progress', (req, res) => {
 // GET /api/mangas/:manga/metadata
 router.get('/:manga/metadata', (req, res) => {
   const name = decodeURIComponent(req.params.manga);
-  const root = findMangaRoot(name);
-  const mp   = path.join(root, name);
-  if (!fs.existsSync(mp)) return res.status(404).json({ error: 'Manga no encontrado.' });
-  const { canViewAdult, blockedMangas } = req.userRestrictions || { canViewAdult: true, blockedMangas: [] };
-  if (blockedMangas.includes(name)) return res.status(404).json({ error: 'Manga no encontrado.' });
-  const meta = getMetadata(mp);
-  if (meta.adult && !canViewAdult) return res.status(404).json({ error: 'Manga no encontrado.' });
-  res.json(meta);
+  const entry = catalogIndex.getMangaEntry(name);
+  if (!entry) return res.status(404).json({ error: 'Manga no encontrado.' });
+  const restrictions = req.userRestrictions || { canViewAdult: false, canViewNormal: false, blockedMangas: [] };
+  if (!visibleTo(entry, restrictions)) return res.status(404).json({ error: 'Manga no encontrado.' });
+  res.json(entry.metadata);
 });
 
 // PUT /api/mangas/:manga/metadata
+// Géneros que el cliente interpreta como +18 aunque "adult" diga false
+// (client/js/app.js → filterAdult / adultGenres). Deben coincidir.
+const ADULT_MARKER_GENRES = ['hentai','ecchi','adultos','+18','adult','18+'];
+
 router.put('/:manga/metadata', (req, res) => {
   if (req.user?.role !== 'admin') return res.status(403).json({ error: 'Solo administradores.' });
   const name = decodeURIComponent(req.params.manga);
-  const root = findMangaRoot(name);
+  const root = catalogIndex.findMangaRoot(name);
   const mp   = path.join(root, name);
   if (!fs.existsSync(mp)) return res.status(404).json({ error: 'Manga no encontrado.' });
+  const entry = catalogIndex.getMangaEntry(name);
   const allowed = ['type','status','genres','synopsis','ranking','adult'];
-  const current = getMetadata(mp);
+  const current = entry ? entry.metadata : {};
   const updated = { ...current };
   for (const key of allowed) {
     if (req.body[key] !== undefined) updated[key] = req.body[key];
   }
+  // Si el manga queda marcado como NO +18, sacar cualquier género que lo
+  // siga etiquetando como adulto (ej. "Hentai", "+18"). El editor guarda
+  // "adult" y "genres" como campos independientes — si no se hace esto,
+  // pueden quedar desincronizados: el archivo dice adult:false pero el
+  // filtro del cliente lo sigue mostrando como +18 por el género suelto.
+  if (updated.adult === false && Array.isArray(updated.genres)) {
+    updated.genres = updated.genres.filter(g => !ADULT_MARKER_GENRES.includes(String(g).toLowerCase().trim()));
+  }
   const file = path.join(mp, 'metadata.json');
   try {
     fs.writeFileSync(file, JSON.stringify(updated, null, 2));
-    invalidateMangaCache(name);
+    catalogIndex.touchManga(name); // reconstruye esta única entrada del índice
     res.json({ ok: true, metadata: updated });
   } catch(e) { res.status(500).json({ error: e.message }); }
 });
@@ -769,5 +538,3 @@ router.put('/:manga/metadata', (req, res) => {
 module.exports = router;
 module.exports.startWatcher = startWatcher;
 module.exports.stopWatcher  = stopWatcher;
-module.exports.getMetadata    = getMetadata;
-module.exports.findMangaRoot  = findMangaRoot;

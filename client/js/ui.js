@@ -1,12 +1,26 @@
 // ── ui.js — helpers visuales, skeletons, cards, filtros, búsqueda ────────────
 
+// ── ESCAPE HTML ───────────────────────────────────────────────────────────────
+// Todo texto que no sea HTML armado por este mismo código (nombre de manga,
+// género, sinopsis, texto de búsqueda, etc.) pasa por acá antes de ir a
+// innerHTML. Hoy ese texto sale siempre del admin (nombres de carpeta que
+// vos elegís, metadata que cargás a mano) — pero nada en el código impedía
+// que se colara HTML/JS ahí, y eso es frágil ante cualquier cambio futuro
+// (ej. auto-importar sinopsis desde los sitios scrapeados). esc() cierra
+// esa puerta sin cambiar nada visualmente para texto normal.
+function esc(str) {
+  return String(str ?? '').replace(/[&<>"']/g, c => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[c]));
+}
+
 // ── HELPERS VISUALES ─────────────────────────────────────────────────────────
 function synopsisHTML(text, id) {
   const lim = 130;
-  if (!text || text.length <= lim) return`<span>${text||'Sin sinopsis disponible.'}</span>`;
+  if (!text || text.length <= lim) return`<span>${text ? esc(text) : 'Sin sinopsis disponible.'}</span>`;
   const uid = 'syn_'+String(id).replace(/[^a-z0-9]/gi,'_');
-  return`<span id="${uid}_s">${text.slice(0,lim)}<span class="det-mas" onclick="expandSyn('${uid}')"> ... más</span></span>
-    <span id="${uid}_f" style="display:none;">${text}<span class="det-mas" onclick="collapseSyn('${uid}')"> — menos</span></span>`;
+  return`<span id="${uid}_s">${esc(text.slice(0,lim))}<span class="det-mas" onclick="expandSyn('${uid}')"> ... más</span></span>
+    <span id="${uid}_f" style="display:none;">${esc(text)}<span class="det-mas" onclick="collapseSyn('${uid}')"> — menos</span></span>`;
 }
 function expandSyn(uid)   { document.getElementById(uid+'_s').style.display='none'; document.getElementById(uid+'_f').style.display='inline'; }
 function collapseSyn(uid) { document.getElementById(uid+'_s').style.display='inline'; document.getElementById(uid+'_f').style.display='none'; }
@@ -15,7 +29,7 @@ function coverImg(src, alt='', extraClass='') {
   if (!src) return '';
   return `<div class="cover-wrap${extraClass?' '+extraClass:''}">
     <div class="cover-diamond-wrap"><div class="cover-diamond"></div></div>
-    <img src="${imgSrc(src)}" alt="${alt}" onload="this.closest('.cover-wrap').classList.add('cover-loaded')" onerror="this.closest('.cover-wrap').classList.add('cover-loaded')" loading="lazy">
+    <img src="${thumbSrc(src)}" alt="${esc(alt)}" onload="this.closest('.cover-wrap').classList.add('cover-loaded')" onerror="this.closest('.cover-wrap').classList.add('cover-loaded')" loading="lazy">
   </div>`;
 }
 
@@ -45,12 +59,12 @@ function skChapRows(n=8) {
 
 // ── CARDS ─────────────────────────────────────────────────────────────────────
 function seriesCard(m) {
-  const src  = m.cover ? imgSrc(m.cover) : '';
+  const src  = m.cover ? thumbSrc(m.cover) : '';
   const meta = m.metadata || {};
   const coverInner = src
     ? `<div class="cover-wrap">
         <div class="cover-diamond-wrap"><div class="cover-diamond"></div></div>
-        <img src="${src}" alt="${m.name}" loading="lazy"
+        <img src="${src}" alt="${esc(m.name)}" loading="lazy"
           onload="this.closest('.cover-wrap').classList.add('cover-loaded')"
           onerror="this.closest('.cover-wrap').classList.add('cover-loaded')">
       </div>`
@@ -62,7 +76,7 @@ function seriesCard(m) {
       <div class="rank-card-cover">${coverInner}</div>
       <div class="rank-card-grad"></div>
       <div class="rank-card-footer">
-        <div class="rank-card-name">${m.name}</div>
+        <div class="rank-card-name">${esc(m.name)}</div>
         <div class="rank-card-meta">
           ${meta.type?`<span class="${typeClass(meta.type)}">${meta.type}</span>`:''}
           ${meta.status?statusBadge(meta.status):''}
@@ -74,13 +88,13 @@ function seriesCard(m) {
 }
 
 function rankCard(m, i, showBadge=true) {
-  const src  = m.cover ? imgSrc(m.cover) : '';
+  const src  = m.cover ? thumbSrc(m.cover) : '';
   const meta = m.metadata || {};
   const idx  = (typeof i === 'number') ? i : 0;
   const coverInner = src
     ? `<div class="cover-wrap">
         <div class="cover-diamond-wrap"><div class="cover-diamond"></div></div>
-        <img src="${src}" alt="${m.name}" loading="lazy"
+        <img src="${src}" alt="${esc(m.name)}" loading="lazy"
           onload="this.closest('.cover-wrap').classList.add('cover-loaded')"
           onerror="this.closest('.cover-wrap').classList.add('cover-loaded')">
       </div>`
@@ -94,7 +108,7 @@ function rankCard(m, i, showBadge=true) {
       <div class="rank-card-cover">${coverInner}</div>
       <div class="rank-card-grad"></div>
       <div class="rank-card-footer">
-        <div class="rank-card-name">${m.name}</div>
+        <div class="rank-card-name">${esc(m.name)}</div>
         <div class="rank-card-meta">
           ${meta.type?`<span class="${typeClass(meta.type)}">${meta.type}</span>`:''}
           ${meta.status?statusBadge(meta.status):''}
@@ -149,14 +163,14 @@ function renderSearch(q) {
   document.getElementById('sresults').innerHTML = results.length
     ? results.map(m => { const meta = m.metadata||{}; return`<div class="sri" onclick="openDetail('${encodeURIComponent(m.name)}')">
         <div class="sri-cov">${m.cover ? coverImg(m.cover, m.name) : ''}</div>
-        <div class="sri-info"><div class="sri-name">${m.name}</div><div class="sri-meta">
-          ${meta.type?`<span class="${typeClass(meta.type)}">${meta.type}</span>`:''}
+        <div class="sri-info"><div class="sri-name">${esc(m.name)}</div><div class="sri-meta">
+          ${meta.type?`<span class="${typeClass(meta.type)}">${esc(meta.type)}</span>`:''}
           ${meta.status?statusBadge(meta.status):''}
-          ${(meta.genres||[]).slice(0,2).map(g=>`<span class="b bx">${g}</span>`).join('')}
+          ${(meta.genres||[]).slice(0,2).map(g=>`<span class="b bx">${esc(g)}</span>`).join('')}
           ${meta.adult?'<span class="b b18">+18</span>':''}
         </div></div>
         <i class="ti ti-chevron-right" style="color:var(--mut);font-size:16px;flex-shrink:0;"></i>
       </div>`; }).join('')
-    : `<p class="empty">Sin resultados para "${q}"</p>`;
+    : `<p class="empty">Sin resultados para "${esc(q)}"</p>`;
 }
 function clearSearch() { document.getElementById('sinput').value=''; renderSearch(''); document.getElementById('sinput').focus(); }

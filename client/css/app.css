@@ -1,8 +1,8 @@
 /* ── TEMAS ───────────────────────────────────────────────────────────── */
-:root{--bg:#0d1117;--bg-rgb:13,17,23;--surf:#161b27;--card:#1c2333;--acc:#F5B800;--acc-dark:#8a6800;--acc-hover:#e0a800;--acc-text:#0d1117;--text:#e6edf3;--mut:#7d8590;--grn:#3fb950;--brd:#30363d;--teal:#00c9a7;--badge-green:rgba(63,185,80,.15);--badge-blue:rgba(88,166,255,.15);--badge-red:rgba(231,76,60,.15);--badge-yellow:rgba(245,184,0,.15);--badge-teal:rgba(0,201,167,.15);--badge-purple:rgba(160,100,255,.15);--hover:#232d42;--nav-bg:#0d1117;--detail-bg:#0d1117;}
-body.theme-dark{--bg:#111318;--bg-rgb:17,19,24;--surf:#1a1d24;--card:#22262f;--acc:#E0E0E0;--acc-dark:#606060;--acc-hover:#FFFFFF;--acc-text:#111318;--text:#F0F0F0;--mut:#888888;--grn:#22C55E;--brd:#2a2e38;--teal:#A0A0A0;--badge-green:rgba(34,197,94,.18);--badge-blue:rgba(200,200,200,.14);--badge-red:rgba(239,68,68,.18);--badge-yellow:rgba(220,220,100,.16);--badge-teal:rgba(160,160,160,.13);--badge-purple:rgba(180,160,220,.14);--hover:#2c3040;--nav-bg:#0d0f14;--detail-bg:#111318;}
-body.theme-lunar-tide{--bg:#F0F4F8;--bg-rgb:240,244,248;--surf:#E2ECF4;--card:#D0DFF0;--acc:#1A237E;--acc-dark:#0a0f40;--acc-hover:#283593;--acc-text:#F0F4F8;--text:#1A1A2E;--mut:#546E7A;--grn:#2E7D32;--brd:#90A4AE;--teal:#00695C;--badge-green:rgba(46,125,50,.16);--badge-blue:rgba(26,35,126,.14);--badge-red:rgba(198,40,40,.14);--badge-yellow:rgba(230,130,0,.15);--badge-teal:rgba(0,105,92,.14);--badge-purple:rgba(106,27,154,.14);--hover:#C5D4E8;--nav-bg:#CBD8E8;--detail-bg:#E4EDF6;}
-body.theme-white{--bg:#FAFAFA;--bg-rgb:250,250,250;--surf:#F0F0F0;--card:#E6E6E6;--acc:#222222;--acc-dark:#555555;--acc-hover:#444444;--acc-text:#FAFAFA;--text:#111111;--mut:#666666;--grn:#2E7D32;--brd:#D4D4D4;--teal:#00695C;--badge-green:rgba(46,125,50,.14);--badge-blue:rgba(34,34,34,.10);--badge-red:rgba(180,30,30,.13);--badge-yellow:rgba(180,120,0,.13);--badge-teal:rgba(0,105,92,.12);--badge-purple:rgba(90,30,140,.12);--hover:#E0E0E0;--nav-bg:#E8E8E8;--detail-bg:#F5F5F5;}
+:root{--bg:#0d1117;--bg-rgb:13,17,23;--surf:#161b27;--card:#1c2333;--acc:#F5B800;--acc-dark:#8a6800;--acc-hover:#e0a800;--acc-text:#0d1117;--text:#e6edf3;--mut:#7d8590;--grn:#3fb950;--brd:#30363d;--teal:#00c9a7;--badge-green:rgba(63,185,80,.15);--badge-blue:rgba(88,166,255,.15);--badge-red:rgba(231,76,60,.15);--badge-yellow:rgba(245,184,0,.15);--badge-teal:rgba(0,201,167,.15);--badge-purple:rgba(160,100,255,.15);--hover:#232d42;--nav-bg:#0d1117;--detail-bg:#0d1117;--bot-h:60px;--tb-bg:#1e2435;--tb-brd:#2a3045;--tb-set:#0d1117;}
+body.theme-dark{--bg:#111318;--bg-rgb:17,19,24;--surf:#1a1d24;--card:#22262f;--acc:#E0E0E0;--acc-dark:#606060;--acc-hover:#FFFFFF;--acc-text:#111318;--text:#F0F0F0;--mut:#888888;--grn:#22C55E;--brd:#2a2e38;--teal:#A0A0A0;--badge-green:rgba(34,197,94,.18);--badge-blue:rgba(200,200,200,.14);--badge-red:rgba(239,68,68,.18);--badge-yellow:rgba(220,220,100,.16);--badge-teal:rgba(160,160,160,.13);--badge-purple:rgba(180,160,220,.14);--hover:#2c3040;--nav-bg:#0d0f14;--detail-bg:#111318;--tb-bg:#1e2130;--tb-brd:#2e3348;--tb-set:#111318;}
+body.theme-lunar-tide{--bg:#F0F4F8;--bg-rgb:240,244,248;--surf:#E2ECF4;--card:#D0DFF0;--acc:#1A237E;--acc-dark:#0a0f40;--acc-hover:#283593;--acc-text:#F0F4F8;--text:#1A1A2E;--mut:#546E7A;--grn:#2E7D32;--brd:#90A4AE;--teal:#00695C;--badge-green:rgba(46,125,50,.16);--badge-blue:rgba(26,35,126,.14);--badge-red:rgba(198,40,40,.14);--badge-yellow:rgba(230,130,0,.15);--badge-teal:rgba(0,105,92,.14);--badge-purple:rgba(106,27,154,.14);--hover:#C5D4E8;--nav-bg:#CBD8E8;--detail-bg:#E4EDF6;--tb-bg:#C5D5E8;--tb-brd:#90A4AE;--tb-set:#F0F4F8;}
+body.theme-white{--bg:#FAFAFA;--bg-rgb:250,250,250;--surf:#F0F0F0;--card:#E6E6E6;--acc:#222222;--acc-dark:#555555;--acc-hover:#444444;--acc-text:#FAFAFA;--text:#111111;--mut:#666666;--grn:#2E7D32;--brd:#D4D4D4;--teal:#00695C;--badge-green:rgba(46,125,50,.14);--badge-blue:rgba(34,34,34,.10);--badge-red:rgba(180,30,30,.13);--badge-yellow:rgba(180,120,0,.13);--badge-teal:rgba(0,105,92,.12);--badge-purple:rgba(90,30,140,.12);--hover:#E0E0E0;--nav-bg:#E8E8E8;--detail-bg:#F5F5F5;--tb-bg:#E0E0E0;--tb-brd:#CCCCCC;--tb-set:#FAFAFA;}
 
 /* ── RESET BASE ──────────────────────────────────────────────────────── */
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
@@ -582,4 +582,500 @@ body.is-brave .det-body { padding-bottom: 100px !important; }
   display:grid;
   grid-template-columns:repeat(2,1fr);
   gap:14px;
+}
+
+
+/* ── FEATURED CAROUSEL ──────────────────────────────────────────────────────
+   ╔═══════════════════════════════════════════════════════════════════════╗
+   ║  AJUSTES — modificá estos valores para personalizar el carrusel       ║
+   ║  Bloque MÓVIL     → aplica en celular                                 ║
+   ║  Bloque ESCRITORIO → aplica en pantallas ≥ 768 px                    ║
+   ╚═══════════════════════════════════════════════════════════════════════╝ */
+.feat-carousel{
+  /* ── MÓVIL ────────────────────────────────────────────────────────── */
+
+  /* 1 · Contenedor — a medida que cambia el alto, la portada escala sola */
+  --feat-h:300px;              /* alto total del carrusel                  */
+  --feat-hero-h:170px;         /* alto de la sección superior (hero)       */
+                               /* la barra inferior ocupa el resto         */
+
+  /* 2 · Portada principal (la del centro del hero) */
+  --feat-cover-h:170%;          /* alto como % del hero — sube/baja con él  */
+  --feat-cover-x:50%;          /* posición horizontal (50%=centro exacto)  */
+  --feat-cover-y:45px;          /* desplazamiento vertical en px            */
+                               /*  0px=centro, negativo=arriba, positivo=abajo */
+  --feat-cover-focus:center top; /* encuadre de la imagen:                 */
+                               /*  vertical  → top / center / bottom       */
+                               /*  horizontal → left / center / right      */
+
+  /* 3 · Portada secundaria (fondo difuminado detrás de la principal) */
+  --feat-blur:3px;            /* intensidad del desenfoque                */
+  --feat-blur-bright:.80;      /* brillo (0=negro puro, 1=imagen original) */
+  --feat-blur-bright-l:.80;    /* oscuridad del lado IZQUIERDO del overlay */
+                               /*  0=sin overlay negro, 1=negro total      */
+  --feat-blur-sat:.7;          /* saturación (0=gris, 1=colores completos) */
+  --feat-blur-scale:1;         /* escala del fondo (1=normal, 1.2=zoom in) */
+  --feat-blur-focus:center center; /* encuadre del fondo difuminado        */
+
+  /* 4 · Barra inferior (sinopsis + géneros) */
+  --feat-info-pad:13px 16px;   /* padding: vertical horizontal             */
+
+  /* 5 · Portada terciaria (miniatura al lado de la sinopsis) */
+  --feat-thumb-w:60px;         /* ancho — el alto se calcula automáticamente */
+
+  /* 6 · Sinopsis */
+  --feat-syn-sz:11px;          /* tamaño de fuente                         */
+  --feat-syn-lines:3;          /* número de líneas visibles                */
+
+  /* 7 · Título y botón "Ver detalles" */
+  --feat-title-top:16px;       /* línea SUPERIOR: px desde el tope del hero */
+  --feat-title-bottom:110px;   /* línea INFERIOR: px desde el tope del hero */
+                               /* el título no puede crecer más allá de este límite */
+  --feat-title-sz:15px;        /* tamaño del título                        */
+  --feat-title-lines:2;        /* líneas máximas del título (el resto → …) */
+  --feat-title-width:150px;    /* ancho en px — controla dónde salta de línea */
+                               /* más px = líneas más largas, menos px = más cortas */
+  --feat-btn-sz:8px;          /* tamaño del texto del botón               */
+  --feat-btn-pad:7px 13px;     /* padding: vertical horizontal             */
+
+  /* 8 · Flechas de navegación */
+  --feat-arr-size:32px;        /* ancho y alto del círculo de la flecha    */
+  --feat-arr-icon:22px;        /* tamaño del símbolo ‹ › dentro del círculo */
+  --feat-arr-left:10px;        /* posición horizontal de la flecha izquierda */
+  --feat-arr-right:10px;       /* posición horizontal de la flecha derecha */
+  --feat-arr-top: 30px;  /* desplazamiento vertical: negativo=arriba, positivo=abajo */
+
+  /* ── FIN AJUSTES MÓVIL ─────────────────────────────────────────────── */
+
+  position:relative;
+  height:var(--feat-h);
+  border-radius:16px;
+  overflow:hidden;
+  border:1.5px solid var(--acc);
+  box-shadow:0 0 20px -6px var(--acc);
+  background:var(--card);
+}
+.feat-slide{
+  position:absolute;
+  inset:0;
+  opacity:0;
+  transition:opacity .6s ease;
+  pointer-events:none;
+  display:flex;
+  flex-direction:column;
+}
+.feat-slide.feat-active{opacity:1;pointer-events:auto;}
+
+/* sección superior: imagen difuminada + portada principal + título */
+.feat-hero{
+  position:relative;
+  flex:0 0 var(--feat-hero-h);  /* altura controlada por --feat-hero-h */
+  overflow:hidden;
+}
+/* portada secundaria (fondo difuminado) */
+.feat-bg-img{
+  position:absolute;
+  inset:-14px;
+  width:calc(100% + 28px);
+  height:calc(100% + 28px);
+  object-fit:cover;
+  object-position:var(--feat-blur-focus);
+  filter:blur(var(--feat-blur))
+         brightness(var(--feat-blur-bright))
+         saturate(var(--feat-blur-sat));
+  transform:scale(var(--feat-blur-scale));         /* ← escala ajustable */
+  transform-origin:center center;
+  pointer-events:none;
+  user-select:none;
+}
+/* gradiente oscuro en el lado izquierdo para que el texto sea legible */
+.feat-overlay{
+  position:absolute;
+  inset:0;
+  /* --feat-blur-bright-l controla la oscuridad del lado izquierdo */
+  background:linear-gradient(to right,
+    rgb(0 0 0 / var(--feat-blur-bright-l)) 0%,
+    rgb(0 0 0 / calc(var(--feat-blur-bright-l) * 0.7)) 38%,
+    rgb(0 0 0 / .12) 70%,
+    transparent 100%);
+  pointer-events:none;
+}
+/* portada principal (móvil: centrada y ajustable) */
+.feat-cover-hero{
+  position:absolute;
+  left:var(--feat-cover-x);               /* ← posición horizontal ajustable */
+  top:calc(50% + var(--feat-cover-y));    /* ← posición vertical ajustable   */
+  transform:translate(-50%,-50%);
+  height:var(--feat-cover-h);   /* ← escala automáticamente con el contenedor */
+  aspect-ratio:2/3;
+  object-fit:cover;
+  object-position:var(--feat-cover-focus); /* ← encuadre ajustable */
+  border-radius:8px;
+  box-shadow:0 6px 20px rgba(0,0,0,.6);
+  user-select:none;
+  pointer-events:none;
+}
+/* título + botón: arriba-izquierda del hero */
+.feat-hero-text{
+  position:absolute;
+  top:var(--feat-title-top);          /* ← línea superior ajustable */
+  left:16px;
+  right:42%;
+  z-index:3;
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+}
+.feat-title{
+  font-size:var(--feat-title-sz);             /* ← ajustable */
+  font-weight:900;
+  color:#fff;
+  line-height:1.2;
+  text-shadow:0 2px 12px rgba(0,0,0,.95);
+  display:-webkit-box;
+  -webkit-line-clamp:var(--feat-title-lines); /* ← ajustable arriba */
+  -webkit-box-orient:vertical;
+  overflow:hidden;
+  max-width:var(--feat-title-width);  /* ← ancho ajustable */
+  word-break:normal;           /* corta entre palabras completas, nunca a la mitad */
+  /* límite inferior en px: el título no crece más allá de --feat-title-bottom */
+  max-height:calc(var(--feat-title-bottom) - var(--feat-title-top));
+}
+.feat-btn{
+  background:var(--acc);
+  color:var(--acc-text);
+  border:none;
+  padding:var(--feat-btn-pad);                /* ← ajustable */
+  border-radius:20px;
+  font-size:var(--feat-btn-sz);              /* ← ajustable */
+  font-weight:800;
+  cursor:pointer;
+  transition:opacity .15s,transform .15s;
+  align-self:flex-start;
+  white-space:nowrap;
+}
+.feat-btn:hover{opacity:.85;transform:translateY(-1px);}
+
+/* barra inferior: color de página + portada terciaria + sinopsis */
+.feat-info-bar{
+  flex:1;
+  background:var(--bg);
+  display:flex;
+  align-items:flex-start;
+  gap:12px;
+  padding:var(--feat-info-pad);              /* ← ajustable */
+  overflow:hidden;
+}
+/* portada terciaria (miniatura) */
+.feat-thumb-small{
+  width:var(--feat-thumb-w);                 /* ← ajustable */
+  aspect-ratio:2/3;
+  object-fit:cover;
+  border-radius:7px;
+  flex-shrink:0;
+  box-shadow:0 4px 14px rgba(0,0,0,.35);
+}
+.feat-text-block{
+  flex:1;
+  min-width:0;
+  display:flex;
+  flex-direction:column;
+  gap:7px;
+  overflow:hidden;
+}
+.feat-syn{
+  font-size:var(--feat-syn-sz);              /* ← ajustable */
+  color:var(--mut);
+  line-height:1.5;
+  display:-webkit-box;
+  -webkit-line-clamp:var(--feat-syn-lines);  /* ← ajustable */
+  -webkit-box-orient:vertical;
+  overflow:hidden;
+}
+.feat-genres{display:flex;flex-wrap:wrap;gap:5px;}
+.feat-chip{
+  background:var(--card);
+  color:var(--text);
+  border:1px solid var(--brd);
+  padding:3px 9px;
+  border-radius:20px;
+  font-size:10.5px;
+  font-weight:600;
+}
+/* flechas: centradas en el hero, no en el contenedor completo */
+.feat-arr{
+  position:absolute;
+  top:calc(var(--feat-hero-h) / 2 + var(--feat-arr-top));
+  transform:translateY(-50%);
+  z-index:10;
+  background:rgba(0,0,0,.52);
+  backdrop-filter:blur(6px);
+  -webkit-backdrop-filter:blur(6px);
+  color:#fff;
+  border:1px solid rgba(255,255,255,.18);
+  width:var(--feat-arr-size);                /* ← ajustable */
+  height:var(--feat-arr-size);               /* ← ajustable */
+  border-radius:50%;
+  font-size:var(--feat-arr-icon);            /* ← ajustable */
+  line-height:1;
+  cursor:pointer;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  transition:background .18s,transform .18s;
+  padding:0 0 1px;
+  user-select:none;
+}
+.feat-arr:hover{background:rgba(0,0,0,.8);transform:translateY(-50%) scale(1.08);}
+.feat-prev{left:var(--feat-arr-left);}   /* ← ajustable */
+.feat-next{right:var(--feat-arr-right);}  /* ← ajustable */
+/* indicadores de progreso */
+.feat-indicators{display:flex;gap:5px;padding:10px 2px 0;}
+.feat-ind{
+  flex:1;
+  max-width:44px;
+  height:3px;
+  border-radius:3px;
+  background:var(--brd);
+  overflow:hidden;
+  cursor:pointer;
+  transition:opacity .2s;
+}
+.feat-ind:hover{opacity:.7;}
+.feat-ind-fill{height:100%;background:var(--acc);width:0%;border-radius:3px;}
+
+/* ── ESCRITORIO (≥ 768 px) ───────────────────────────────────────────────
+   ╔═══════════════════════════════════════════════════════════════════════╗
+   ║  AJUSTES ESCRITORIO — modificá estos valores para la versión PC       ║
+   ║  Mismas variables que en móvil, para poder personalizar PC igual      ║
+   ║  Valores de partida = lo que ya se ve hoy (no cambia nada hasta que   ║
+   ║  toques un número)                                                    ║
+   ╚═══════════════════════════════════════════════════════════════════════╝ */
+@media(min-width:768px){
+  .feat-carousel{
+    /* 1 · Contenedor */
+    --feat-h:450px;              /* alto total del carrusel                  */
+    --feat-hero-h:292px;         /* alto de la sección superior (hero)       */
+
+    /* 2 · Portada principal — en escritorio va anclada al borde DERECHO,
+       no centrada como en móvil. Por eso acá:
+         --feat-cover-x → distancia desde el borde DERECHO (no horizontal-centro)
+         --feat-cover-y → distancia desde el borde SUPERIOR (no offset desde el centro) */
+    --feat-cover-h:100%;          /* alto como % del hero — sube/baja con él  */
+    --feat-cover-x:0px;           /* distancia desde el borde derecho         */
+    --feat-cover-y:0px;           /* distancia desde el borde superior        */
+    --feat-cover-focus:center top; /* encuadre de la imagen (igual que hoy)  */
+
+    /* 3 · Portada secundaria (fondo difuminado) */
+    --feat-blur:22px;             /* intensidad del desenfoque                */
+    --feat-blur-bright:.28;       /* brillo (0=negro puro, 1=imagen original)  */
+    --feat-blur-bright-l:.80;     /* oscuridad del lado izquierdo del overlay  */
+    --feat-blur-sat:.7;           /* saturación (0=gris, 1=colores completos)  */
+    --feat-blur-scale:1;          /* escala del fondo (1=normal, 1.2=zoom in)  */
+    --feat-blur-focus:center center; /* encuadre del fondo difuminado         */
+
+    /* 4 · Barra inferior */
+    --feat-info-pad:14px 22px;   /* padding: vertical horizontal             */
+
+    /* 5 · Portada terciaria */
+    --feat-thumb-w:66px;         /* ancho — el alto se calcula automáticamente */
+
+    /* 6 · Sinopsis */
+    --feat-syn-sz:13px;           /* tamaño de fuente                         */
+    --feat-syn-lines:3;           /* número de líneas visibles                */
+
+    /* 7 · Título y botón "Ver detalles" */
+    --feat-title-sz:26px;         /* tamaño del título                        */
+    --feat-title-lines:2;         /* líneas máximas del título (el resto → …) */
+    --feat-title-width:150px;     /* ancho en px — controla dónde salta de línea */
+    --feat-btn-sz:13px;          /* tamaño del texto del botón               */
+    --feat-btn-pad:9px 20px;     /* padding: vertical horizontal             */
+
+    /* 8 · Flechas de navegación */
+    --feat-arr-size:36px;         /* ancho y alto del círculo de la flecha    */
+    --feat-arr-icon:22px;         /* tamaño del símbolo ‹ › dentro del círculo */
+    --feat-arr-left:10px;         /* posición horizontal de la flecha izquierda */
+    --feat-arr-right:10px;        /* posición horizontal de la flecha derecha */
+    --feat-arr-top:30px;          /* desplazamiento vertical (negativo=arriba) */
+  }
+  .feat-carousel{
+    --feat-title-top:20px;       /* línea SUPERIOR: px desde el tope del hero */
+    --feat-title-bottom:140px;   /* línea INFERIOR: px desde el tope del hero */
+  }
+  .feat-hero-text{left:20px;gap:12px;}
+  .feat-arr{width:var(--feat-arr-size);height:var(--feat-arr-size);}
+  /* 9 · Ancho máximo — sin esto, el carrusel crece con la pantalla (más
+     ancho en 2K/1440p que en 1080p) y los elementos con posición en px fijos
+     (texto, flechas) quedan desproporcionados respecto al tamaño nuevo. Con
+     un ancho máximo fijo y centrado, se ve EXACTAMENTE igual en cualquier
+     pantalla ≥1080p — más grande que esto solo agrega margen a los costados,
+     no estira el carrusel. Valor de partida = lo que ya ocupa hoy en una
+     pantalla de 1920px (1080p con ventana maximizada), así que a esa
+     resolución no debería cambiar nada. Subilo/bajalo a gusto.
+  */
+  #feat-wrap{--feat-max-width:1800px;max-width:var(--feat-max-width);margin:0 auto 24px;}
+  /* escritorio: portada a la derecha con gradiente de fusión.
+     right/top ahora usan las variables --feat-cover-x/--feat-cover-y de
+     arriba, así que se pueden ajustar sin tocar esta regla. */
+  .feat-cover-hero{
+    left:auto;
+    right:var(--feat-cover-x);
+    top:var(--feat-cover-y);
+    transform:none;
+    border-radius:0;
+    box-shadow:none;
+    object-position:var(--feat-cover-focus); /* encuadre sigue siendo ajustable */
+    -webkit-mask-image:linear-gradient(to right,transparent 0%,white 30%);
+    mask-image:linear-gradient(to right,transparent 0%,white 30%);
+  }
+}
+@media(min-width:1100px){
+  .feat-carousel{
+    --feat-h:500px;
+    --feat-hero-h:330px;
+    --feat-title-sz:30px;
+    --feat-info-pad:16px 26px;
+    --feat-thumb-w:74px;
+    --feat-syn-lines:4;
+  }
+  .feat-carousel{
+    --feat-title-top:24px;
+    --feat-title-bottom:160px;
+  }
+  .feat-hero-text{left:24px;}
+}
+/* pantallas muy pequeñas (<400px) */
+@media(max-width:399px){
+  .feat-hero-text{right:16px;}
+}
+
+/* ════════════════════════════════════════════════
+   LECTOR (integrado a la SPA — antes era reader.html
+   como documento aparte; ahora es una página fija que
+   se superpone a #app, con su propio scroll interno)
+   ════════════════════════════════════════════════ */
+#p-reader{display:none;position:fixed;inset:0;z-index:350;background:var(--tb-set,var(--bg));overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.2) transparent;}
+#p-reader.on{display:block;}
+#p-reader::-webkit-scrollbar{width:4px;}
+#p-reader::-webkit-scrollbar-track{background:transparent;}
+#p-reader::-webkit-scrollbar-thumb{background:rgba(255,255,255,.25);border-radius:4px;}
+
+/* ── TOP BAR ── */
+#top-bar{position:relative;width:100%;background:var(--tb-bg);padding-top:env(safe-area-inset-top, 0px);}
+.trow1{display:flex;align-items:center;padding:10px 14px;gap:10px;max-width:900px;margin:0 auto;}
+.t-back{background:none;border:none;color:var(--mut);cursor:pointer;font-size:20px;padding:0;display:flex;flex-shrink:0;transition:color .15s;}
+.t-back:hover{color:var(--text);}
+.t-title-wrap{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:4px;}
+.t-manga{font-size:13px;font-weight:700;color:var(--text);text-align:center;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;cursor:pointer;transition:color .15s;}
+.t-manga:hover{color:var(--acc);}
+.chapter-nav{display:flex;align-items:center;gap:10px;}
+.t-arrow{background:none;border:none;color:var(--text);font-size:17px;line-height:1;cursor:pointer;padding:2px 6px;border-radius:5px;transition:color .15s,background .15s;}
+.t-arrow:hover{color:var(--acc);background:rgba(245,184,0,.1);}
+.t-arrow:disabled{opacity:.25;cursor:not-allowed;}
+.t-chapnum{font-size:13px;font-weight:700;color:var(--text);min-width:28px;text-align:center;}
+.t-chapnum-btn{display:flex;align-items:center;gap:4px;background:none;border:none;padding:4px 2px;color:var(--text);font-size:13px;font-weight:700;cursor:pointer;transition:color .15s;}
+.t-chapnum-btn:hover{color:var(--acc);}
+
+/* Drawer de capítulos */
+#chap-drawer-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:500;}
+#chap-drawer-bg.on{display:block;}
+#chap-drawer{display:none;position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:520px;background:var(--surf);border-radius:20px 20px 0 0;z-index:501;max-height:70vh;flex-direction:column;overflow:hidden;}
+#chap-drawer.on{display:flex;}
+.drawer-header{display:flex;align-items:center;justify-content:space-between;padding:16px 18px 12px;border-bottom:1px solid var(--brd);flex-shrink:0;}
+.drawer-title{font-size:15px;font-weight:700;color:var(--text);}
+.drawer-close{background:none;border:none;color:var(--mut);font-size:22px;cursor:pointer;padding:0;display:flex;align-items:center;}
+.drawer-list{overflow-y:auto;flex:1;padding:8px 0 calc(16px + env(safe-area-inset-bottom,0px));}
+.drawer-item{display:flex;align-items:center;justify-content:space-between;padding:12px 18px;cursor:pointer;transition:background .12s;font-size:14px;font-weight:600;}
+.drawer-item:hover,.drawer-item:active{background:var(--hover);}
+.drawer-item.current{color:var(--acc);}
+.drawer-item.current .drawer-item-icon{opacity:1;}
+.drawer-item-icon{opacity:0;color:var(--acc);font-size:16px;}
+.t-avatar{width:38px;height:38px;border-radius:50%;background:#2d2a18;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:var(--acc);flex-shrink:0;cursor:pointer;overflow:hidden;}
+.t-avatar img{width:100%;height:100%;object-fit:cover;border-radius:50%;}
+
+/* Fila 2: zona de configuración — mismo color que el fondo de lectura */
+.trow2{background:var(--tb-set);padding:10px 14px;}
+.tcfg-card{display:flex;align-items:center;justify-content:space-between;border:1px solid var(--tb-brd);border-radius:15px;background:var(--tb-set);padding:11px 14px;max-width:900px;margin:0 auto;}
+.t-cfg{display:flex;align-items:center;gap:7px;background:none;border:none;color:var(--mut);font-size:13px;font-weight:500;cursor:pointer;padding:0;transition:color .15s;}
+.t-cfg:hover{color:var(--text);}
+.t-fs{background:none;border:none;color:var(--mut);cursor:pointer;font-size:17px;padding:0;display:flex;align-items:center;transition:color .15s;}
+.t-fs:hover{color:var(--text);}
+
+/* ── READER WRAP ── */
+#reader-wrap{position:relative;width:100%;max-width:720px;margin:0 auto;overflow-x:hidden;}
+#scroll-reader{display:block;}
+#scroll-reader img{width:100%;display:block;min-height:55vh;max-height:none;background:var(--card);object-fit:contain;}
+
+/* ── PAGE READER — fixed, cubre TODO incluyendo la topbar ── */
+#page-reader{display:none;position:fixed;inset:0;background:var(--tb-set,var(--bg));align-items:center;justify-content:center;z-index:20;}
+#page-reader.on{display:flex;}
+#page-img{max-width:100%;max-height:100%;width:auto;height:auto;object-fit:contain;user-select:none;pointer-events:none;display:block;}
+#ptl{position:absolute;left:0;top:0;width:35%;height:100%;cursor:pointer;z-index:5;}
+#ptm{position:absolute;left:35%;top:0;width:30%;height:100%;cursor:pointer;z-index:5;}
+#ptr{position:absolute;right:0;top:0;width:35%;height:100%;cursor:pointer;z-index:5;}
+
+/* ── NIGHT MODE ── */
+body.night #p-reader{background:#060809;}
+body.night #scroll-reader img,
+body.night #page-img{filter:brightness(.76) sepia(.32) contrast(.92) !important;}
+
+/* ── FLOAT PANEL ── */
+#float-panel{position:fixed;right:13px;top:50%;transform:translateY(-50%);background:rgba(22,27,39,.93);border:1px solid var(--brd);border-radius:40px;padding:8px;display:flex;flex-direction:column;gap:8px;z-index:50;backdrop-filter:blur(12px);}
+#float-panel.hidden{display:none !important;}
+.fb{width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,.08);border:none;color:var(--text);cursor:pointer;font-size:18px;display:flex;align-items:center;justify-content:center;transition:all .2s;}
+.fb:hover{background:rgba(255,255,255,.14);}
+.fb.on-night{background:rgba(245,184,0,.2);color:var(--acc);}
+.fb.on-play{background:rgba(63,185,80,.2);color:#3fb950;}
+
+/* ── BOTTOM BAR ── */
+#bot-bar{position:fixed;bottom:calc(14px + env(safe-area-inset-bottom, 0px));left:50%;transform:translateX(-50%);background:rgba(22,27,39,.95);border:1px solid var(--brd);border-radius:50px;padding:7px 9px;display:flex;align-items:center;gap:6px;z-index:100;backdrop-filter:blur(14px);transition:opacity .3s ease;width:max-content;max-width:calc(100vw - 20px);}
+#bot-bar.hidden{opacity:0;pointer-events:none;}
+.b-chap{width:40px;height:40px;border-radius:50%;background:var(--acc);border:none;color:#0d1117;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:background .2s,transform .15s;}
+.b-chap:hover{transform:scale(1.08);}
+.b-chap:disabled{background:#2d3142;color:var(--mut);cursor:not-allowed;opacity:.5;transform:none;}
+.b-chap.last{background:#e74c3c;color:#fff;}
+.b-act{width:34px;height:34px;border-radius:20px;background:rgba(255,255,255,.08);border:none;color:var(--text);cursor:pointer;font-size:15px;display:flex;align-items:center;justify-content:center;transition:background .15s;}
+.b-act:hover{background:rgba(255,255,255,.14);}
+.b-page{display:flex;align-items:center;gap:5px;background:rgba(255,255,255,.08);border-radius:20px;padding:5px 12px;cursor:pointer;font-size:12px;color:var(--text);font-weight:700;white-space:nowrap;transition:background .15s;border:none;}
+.b-page:hover{background:rgba(255,255,255,.13);}
+.sp-bot{height:calc(var(--bot-h) + env(safe-area-inset-bottom, 0px) + 30px);}
+
+/* ── CONFIG SHEET ── */
+#cfg-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:200;}
+#cfg-bg.on{display:block;}
+#cfg-sheet{display:none;position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:520px;background:var(--surf);border-radius:20px 20px 0 0;padding:20px 18px calc(30px + env(safe-area-inset-bottom, 0px));z-index:201;max-height:82vh;overflow-y:auto;}
+#cfg-sheet.on{display:block;}
+.cs-title{font-size:15px;font-weight:700;color:var(--text);margin-bottom:18px;display:flex;align-items:center;justify-content:space-between;}
+.cs-close{background:none;border:none;color:var(--mut);cursor:pointer;font-size:20px;padding:0;}
+.cs-label{font-size:11px;font-weight:600;color:var(--mut);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px;}
+.cs-sep{height:1px;background:var(--brd);margin:16px 0;}
+.mode-btns{display:flex;gap:8px;}
+.mode-btn{flex:1;padding:10px;border-radius:12px;border:1px solid var(--brd);background:none;color:var(--mut);font-size:13px;font-weight:700;cursor:pointer;transition:all .15s;display:flex;align-items:center;justify-content:center;gap:7px;}
+.mode-btn.on{background:var(--acc);color:#0d1117;border-color:var(--acc);}
+.cfg-row{display:flex;align-items:center;justify-content:space-between;padding:10px 0;}
+.cfg-rl{display:flex;align-items:center;gap:11px;flex:1;}
+.cfg-icon{font-size:18px;color:var(--mut);}
+.cfg-txt .cfg-name{font-size:14px;font-weight:600;color:var(--text);}
+.cfg-txt .cfg-desc{font-size:12px;color:var(--mut);margin-top:2px;}
+.tg{width:44px;height:24px;border-radius:12px;background:var(--brd);cursor:pointer;position:relative;transition:background .2s;flex-shrink:0;}
+.tg.on{background:var(--acc);}
+.tg::after{content:'';position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;transition:transform .2s;}
+.tg.on::after{transform:translateX(20px);}
+#speed-row{margin-top:10px;padding:12px 14px;background:rgba(255,255,255,.04);border-radius:12px;}
+.spd-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;}
+.spd-lbl{font-size:13px;color:var(--mut);}
+.spd-val{font-size:13px;font-weight:700;color:var(--acc);}
+#p-reader input[type=range]{width:100%;height:4px;border-radius:2px;-webkit-appearance:none;appearance:none;background:linear-gradient(to right, var(--acc) var(--pct,26%), var(--brd) var(--pct,26%));outline:none;cursor:pointer;}
+#p-reader input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;border-radius:50%;background:var(--acc);cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,.4);}
+#p-reader input[type=range]::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:var(--acc);cursor:pointer;border:none;}
+
+/* ── LOADER ── */
+#loader{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;color:var(--mut);font-size:14px;background:var(--bg);z-index:300;}
+#loader.off{display:none;}
+
+/* ── PC ── */
+@media (min-width:768px){
+  #reader-wrap{max-width:860px;}
+  #bot-bar{max-width:380px;}
+  #float-panel{right:32px;}
 }

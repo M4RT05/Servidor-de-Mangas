@@ -26,10 +26,13 @@ function saveUsers(users) {
   _usersCache = users;
   _usersCacheTime = Date.now();
   fs.mkdirSync(path.dirname(USERS_FILE), { recursive: true });
-  // Escritura asíncrona igual que progress
-  fs.writeFile(USERS_FILE, JSON.stringify(users, null, 2), err => {
-    if (err) console.error('[Users] Error guardando:', err.message);
-  });
+  // Escritura atómica (tmp + rename): evita un users.json corrupto/truncado
+  // si el proceso se cae justo a mitad de un guardado.
+  try {
+    const tmp = USERS_FILE + '.tmp';
+    fs.writeFileSync(tmp, JSON.stringify(users, null, 2));
+    fs.renameSync(tmp, USERS_FILE);
+  } catch(e) { console.error('[Users] Error guardando:', e.message); }
 }
 
 function getUserById(id) {
@@ -39,11 +42,16 @@ function getUserById(id) {
 // Restricciones de contenido de un usuario. Los administradores nunca están
 // restringidos, sin importar lo que tengan guardado en su registro.
 function getUserRestrictions(userId, role) {
-  if (role === 'admin') return { canViewAdult: true, blockedMangas: [] };
+  if (role === 'admin') return { canViewAdult: true, canViewNormal: true, blockedMangas: [] };
   const user = getUserById(userId);
-  if (!user) return { canViewAdult: true, blockedMangas: [] };
+  // Usuario no encontrado (borrado, id inválido, etc.) → sin acceso, nunca
+  // "acceso total". authMiddleware ya debería haber cortado esto antes de
+  // llegar acá (ver resolveUser en middleware/auth.js), esto es una segunda
+  // capa por si algún día se llama a esta función desde otro lado.
+  if (!user) return { canViewAdult: false, canViewNormal: false, blockedMangas: [] };
   return {
-    canViewAdult:  user.canViewAdult !== false, // default true si no está definido (no rompe usuarios viejos)
+    canViewAdult:  user.canViewAdult  !== false, // default true si no está definido (no rompe usuarios viejos)
+    canViewNormal: user.canViewNormal !== false, // ídem, para el modo "solo +18"
     blockedMangas: Array.isArray(user.blockedMangas) ? user.blockedMangas : []
   };
 }

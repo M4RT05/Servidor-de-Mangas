@@ -109,6 +109,15 @@
 const TOKEN = localStorage.getItem('manga_token');
 if (!TOKEN) location.href = '/login.html';
 
+// Mismo criterio que en client/js/ui.js: todo texto que no sea HTML armado
+// por este código (nombre de manga, tipo/estado, géneros, sinopsis, ranking)
+// pasa por acá antes de ir a innerHTML o a un atributo/textarea.
+function esc(str) {
+  return String(str ?? '').replace(/[&<>"']/g, c => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[c]));
+}
+
 let allMangas    = [];
 let currentManga = null;
 let currentGenres= [];
@@ -142,14 +151,14 @@ function renderList(list) {
           ? `<img class="manga-thumb" src="${m.cover}?token=${TOKEN}" onerror="this.style.display='none'">`
           : `<div class="manga-thumb-ph">M</div>`}
         <div class="manga-row-info">
-          <div class="manga-row-name">${m.name}</div>
+          <div class="manga-row-name">${esc(m.name)}</div>
           <div class="manga-row-meta">
-            <span>${m.metadata?.type||'—'}</span>
+            <span>${esc(m.metadata?.type||'—')}</span>
             <span>·</span>
-            <span>${m.metadata?.status||'—'}</span>
+            <span>${esc(m.metadata?.status||'—')}</span>
             <span>·</span>
             <span>${m.chapterCount} caps</span>
-            ${m.metadata?.ranking ? `<span>· Rank #${m.metadata.ranking}</span>` : ''}
+            ${m.metadata?.ranking ? `<span>· Rank #${esc(m.metadata.ranking)}</span>` : ''}
           </div>
         </div>
         <i class="ti ti-chevron-right" style="color:var(--mut);font-size:18px;flex-shrink:0;"></i>
@@ -204,7 +213,7 @@ function renderEditor(manga, meta) {
         ? `<img class="edit-cover" src="${manga.cover}?token=${TOKEN}" alt="">`
         : `<div class="edit-cover-ph">M</div>`}
       <div>
-        <div class="edit-manga-name">${manga.name}</div>
+        <div class="edit-manga-name">${esc(manga.name)}</div>
         <div class="edit-manga-sub">${manga.chapterCount} capítulos disponibles</div>
       </div>
     </div>
@@ -230,7 +239,7 @@ function renderEditor(manga, meta) {
 
     <div class="form-group">
       <label class="form-label">Ranking <span style="font-weight:400;text-transform:none;color:var(--mut);">(vacío = sin ranking)</span></label>
-      <input class="form-input" id="f-ranking" type="number" min="1" placeholder="ej: 1" value="${meta.ranking ?? ''}">
+      <input class="form-input" id="f-ranking" type="number" min="1" placeholder="ej: 1" value="${esc(meta.ranking ?? '')}">
     </div>
 
     <div class="form-group">
@@ -244,7 +253,7 @@ function renderEditor(manga, meta) {
 
     <div class="form-group">
       <label class="form-label">Sinopsis</label>
-      <textarea class="form-input" id="f-synopsis" placeholder="Escribe la sinopsis aquí...">${meta.synopsis||''}</textarea>
+      <textarea class="form-input" id="f-synopsis" placeholder="Escribe la sinopsis aquí...">${esc(meta.synopsis||'')}</textarea>
     </div>
 
     <div class="row-toggle">
@@ -264,7 +273,7 @@ function renderEditor(manga, meta) {
 function renderGenreTags() {
   return currentGenres.map((g,i) => `
     <div class="genre-tag">
-      <span>${g}</span>
+      <span>${esc(g)}</span>
       <button onclick="removeGenre(${i})"><i class="ti ti-x"></i></button>
     </div>`).join('');
 }

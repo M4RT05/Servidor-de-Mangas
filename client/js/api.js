@@ -1,7 +1,34 @@
 // ── API CLIENT CON CACHÉ EN MEMORIA ──────────────────────────────────────────
 const API = {
   getToken()    { return localStorage.getItem('manga_token'); },
-  getUsername() { return localStorage.getItem('manga_username') || 'Usuario'; },
+  // Antes esto dependía 100% de que la verificación asíncrona (la IIFE al
+  // final de este archivo) ya hubiera guardado manga_username en
+  // localStorage. Si algo llamaba a getUsername() ANTES de que esa
+  // verificación contestara — más probable cuanto más lenta la red (ej.
+  // Tailscale vs LAN) — caía al valor genérico 'Usuario', y con eso la
+  // caché/ETag de la lista de mangas quedaba guardada bajo una clave
+  // compartida entre cualquier cuenta que pisara esa carrera. Ahora, si
+  // todavía no está en localStorage, se decodifica directo del JWT (que ya
+  // está disponible al instante, sin red) — el username viaja en el propio
+  // token desde el login (ver server/routes/auth.js, jwt.sign).
+  getUsername() {
+    const stored = localStorage.getItem('manga_username');
+    if (stored) return stored;
+    return this._usernameFromToken() || 'Usuario';
+  },
+  _usernameFromToken() {
+    try {
+      const token = this.getToken();
+      if (!token) return null;
+      const b64  = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+      // atob() por sí solo da bytes crudos, no texto UTF-8 — sin este paso,
+      // un username con tildes/ñ (algo bien común acá) queda ilegible.
+      const json = decodeURIComponent(atob(b64).split('').map(c =>
+        '%' + c.charCodeAt(0).toString(16).padStart(2, '0')
+      ).join(''));
+      return JSON.parse(json).username || null;
+    } catch { return null; }
+  },
   getRole()     { return localStorage.getItem('manga_role') || 'reader'; },
   isAdmin()     { return this.getRole() === 'admin'; },
 
@@ -11,6 +38,16 @@ const API = {
   imgSrc(src) {
     if (!src) return '';
     return src + (src.includes('?') ? '&' : '?') + 'token=' + this.getToken();
+  },
+
+  // Igual que imgSrc, pero pide la versión miniatura (WebP, ~400px) en vez
+  // de la portada completa — para tarjetas de grilla, nunca para el lector.
+  // Si el server no puede generar la miniatura (sharp no instalado, etc.)
+  // devuelve la portada completa igual, así que no hay riesgo de romper nada
+  // usando esto de más.
+  thumbSrc(src) {
+    if (!src) return '';
+    return this.imgSrc(src) + '&thumb=1';
   },
 
   // ── CACHÉ EN MEMORIA ───────────────────────────────────────────────────────

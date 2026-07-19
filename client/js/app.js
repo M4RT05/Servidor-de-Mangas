@@ -15,21 +15,45 @@ let _filterPushed   = false;
 let _userPushed     = false;
 let _skipPop        = false;
 let capPage         = 1;
+const _scrollSave   = {};   // guarda scrollTop de cada página antes de entrar al detalle
 
 const BLANK = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
 
 // ── HELPERS ───────────────────────────────────────────────────────────────────
 function imgSrc(src)      { return API.imgSrc(src); }
-function isAdultEnabled() { return localStorage.getItem('adult_content') === 'true'; }
+function thumbSrc(src)    { return API.thumbSrc(src); }
+function isAdultEnabled()     { return localStorage.getItem('adult_content')      === 'true'; }
+function isOnlyAdultEnabled() { return localStorage.getItem('only_adult_content') === 'true'; }
+// "Mostrar mangas/manhwas/manhuas": tres botones independientes, todos
+// activos por defecto. Si el usuario apaga uno, ese tipo de contenido
+// desaparece de todos lados (Inicio, Series, Rankings, Capítulos, búsqueda),
+// igual de completo que como ya funciona +18.
+function isTypeEnabled(type) {
+  const key = 'show_' + String(type || 'Manga').toLowerCase();
+  return localStorage.getItem(key) !== 'false'; // default: activo
+}
 function isPC()           { return window.innerWidth >= 768; }
 
+const ADULT_MARKER_GENRES = ['hentai','ecchi','adultos','+18','adult','18+'];
+function isAdultManga(m) {
+  if (m.metadata?.adult || m.adult) return true;
+  const genres = (m.metadata?.genres || []).map(g => g.toLowerCase());
+  return genres.some(g => ADULT_MARKER_GENRES.includes(g));
+}
+// "Contenido +18" (isAdultEnabled) muestra u oculta lo +18. "Solo +18"
+// (isOnlyAdultEnabled) es el espejo: cuando está activo, deja ÚNICAMENTE lo
+// +18 y oculta todo lo demás — en Inicio, Series, Rankings, Capítulos,
+// búsqueda y la lista de géneros, igual que +18 afecta a todo eso hoy.
+// También aplica acá el filtro de tipo (Manga/Manhwa/Manhua).
 function filterAdult(list) {
-  if (isAdultEnabled()) return list;
-  const adultGenres = ['hentai','ecchi','adultos','+18','adult','18+'];
+  const onlyAdult = isOnlyAdultEnabled();
+  const showAdult = isAdultEnabled();
   return list.filter(m => {
-    if (m.metadata?.adult || m.adult) return false;
-    const genres = (m.metadata?.genres || []).map(g => g.toLowerCase());
-    return !genres.some(g => adultGenres.includes(g));
+    const adult = isAdultManga(m);
+    if (onlyAdult) { if (!adult) return false; }
+    else if (!showAdult && adult) return false;
+    if (!isTypeEnabled(m.metadata?.type || m.type)) return false;
+    return true;
   });
 }
 function getVisibleGenres() {
@@ -59,15 +83,96 @@ function showPage(name) {
   document.getElementById('cnt').scrollTop = 0;
 }
 function logout() { localStorage.clear(); window.location.href='/login.html'; }
-function toggleAdult(el) {
-  el.classList.toggle('on');
-  localStorage.setItem('adult_content', el.classList.contains('on') ? 'true' : 'false');
+function refreshAdultFilteredViews() {
+  _featSlides = []; // Forzar rebuild del carrusel al cambiar el filtro +18
   renderHome(); renderSeries(); renderRankings(); renderCapitulos(1);
   renderSearch(document.getElementById('sinput').value);
+}
+function toggleAdult(el) {
+  el.classList.toggle('on');
+  const on = el.classList.contains('on');
+  localStorage.setItem('adult_content', on ? 'true' : 'false');
+  // Si se apaga "Contenido +18", "Solo +18" tampoco tiene sentido — se apaga junto.
+  if (!on && isOnlyAdultEnabled()) {
+    localStorage.setItem('only_adult_content', 'false');
+    document.getElementById('toggle-only-adult')?.classList.remove('on');
+  }
+  refreshAdultFilteredViews();
+}
+function toggleOnlyAdult(el) {
+  el.classList.toggle('on');
+  const on = el.classList.contains('on');
+  localStorage.setItem('only_adult_content', on ? 'true' : 'false');
+  // Para ver "Solo +18" hace falta tener "Contenido +18" habilitado también.
+  if (on && !isAdultEnabled()) {
+    localStorage.setItem('adult_content', 'true');
+    document.getElementById('toggle-adult')?.classList.add('on');
+  }
+  refreshAdultFilteredViews();
+}
+function toggleShowType(type, el) {
+  el.classList.toggle('on');
+  localStorage.setItem('show_' + type, el.classList.contains('on') ? 'true' : 'false');
+  refreshAdultFilteredViews();
+}
+
+// ── SINCRONIZAR PROGRESO EN MEMORIA (sin recargar la página) ─────────────────
+// Actualiza allMangas/currentManga in-place y vuelve a pintar Inicio/Series/
+// Rankings. Así, marcar un capítulo como leído (desde el lector o desde el
+// detalle) se refleja ahí mismo, sin que el usuario tenga que refrescar.
+function applyMangaProgressLocal(mangaName, readChapter) {
+  const m = allMangas.find(x => x.name === mangaName);
+  if (m) {
+    if (!m.progress) m.progress = {};
+    const rc = new Set(m.progress.readChapters || []);
+    rc.add(readChapter);
+    m.progress.readChapters = [...rc];
+    m.progress.lastChapter  = readChapter;
+  }
+  if (currentManga && currentManga.name === mangaName) {
+    currentManga.chapters = currentManga.chapters.map(ch =>
+      ch.number === readChapter ? { ...ch, read: true } : ch);
+    if (!currentManga.progress) currentManga.progress = {};
+    const rc2 = new Set(currentManga.progress.readChapters || []);
+    rc2.add(readChapter);
+    currentManga.progress.readChapters = [...rc2];
+    currentManga.progress.lastChapter  = readChapter;
+  }
+  renderHome(); renderSeries(); renderRankings();
+}
+
+// Igual, pero reemplazando toda la lista de leídos de una vez (marcar/
+// desmarcar todos los capítulos de un manga).
+function replaceMangaProgressLocal(mangaName, readChapters, lastChapter) {
+  const m = allMangas.find(x => x.name === mangaName);
+  if (m) {
+    if (!m.progress) m.progress = {};
+    m.progress.readChapters = [...readChapters];
+    m.progress.lastChapter  = lastChapter ?? m.progress.lastChapter;
+  }
+  renderHome(); renderSeries(); renderRankings();
+}
+
+// ── REFRESCO SILENCIOSO AL VISITAR INICIO/SERIES/RANKINGS ────────────────────
+// "Capítulos" siempre pidió datos frescos al servidor; ahora Inicio/Series/
+// Rankings hacen lo mismo. Gracias al caché+ETag de api.js esto es casi
+// gratis cuando no cambió nada (304), y trae datos nuevos al instante cuando
+// sí cambió (mangas agregados por el scraper, progreso actualizado, etc.) —
+// sin necesitar un refresco manual de la página.
+async function refreshMangasIfStale() {
+  try {
+    API.invalidate('mangas'); // fuerza a re-consultar al servidor (barato: usa ETag)
+    const fresh = await API.getMangas();
+    if (fresh && fresh.length > 0) {
+      allMangas = fresh;
+      renderHome(); renderSeries(); renderRankings();
+    }
+  } catch(e) { console.error('refreshMangasIfStale error:', e); }
 }
 
 // ── INICIO ────────────────────────────────────────────────────────────────────
 function renderHome() {
+  renderCarousel();
   const visible    = filterAdult(allMangas);
   const inProgress = visible.filter(m => {
     const rc = m.progress?.readChapters?.length || 0;
@@ -78,12 +183,12 @@ function renderHome() {
     ? '<p class="loading" style="grid-column:1/-1;">Aún no has leído ningún manga.</p>'
     : inProgress.map(m => {
         const pct = Math.round((m.progress.readChapters.length / m.chapterCount) * 100);
-        const src = m.cover ? imgSrc(m.cover) : '';
+        const src = m.cover ? thumbSrc(m.cover) : '';
         return`<div class="ri ri-with-bg" onclick="openDetail('${encodeURIComponent(m.name)}')">
           ${src ? `<img class="ri-bg" src="${src}" alt="" aria-hidden="true">` : ''}
           <div class="rcov" style="position:relative;z-index:1;">${m.cover ? coverImg(m.cover, m.name) : ''}</div>
           <div style="flex:1;min-width:0;overflow:hidden;position:relative;z-index:1;">
-            <div class="ri-title">${m.name}</div>
+            <div class="ri-title">${esc(m.name)}</div>
             <div class="ri-sub" style="font-size:12px;color:var(--mut);">Cap. ${chLabel(m.progress.lastChapter)} · ${pct}%</div>
             <div class="prbar"><div class="prfill" style="width:${pct}%;"></div></div>
           </div>
@@ -144,25 +249,27 @@ async function renderCapitulos(page=1) {
   clist.innerHTML = skCapList(5);
   document.getElementById('cap-pagination').innerHTML = '';
   try {
-    const adult = isAdultEnabled();
-    const res   = await API.fetchRaw(`/api/mangas/latest-paged?page=${page}&limit=20&adult=${adult}`);
+    const adult     = isAdultEnabled();
+    const onlyAdult = isOnlyAdultEnabled();
+    const types     = ['manga','manhwa','manhua'].filter(isTypeEnabled).join(',');
+    const res   = await API.fetchRaw(`/api/mangas/latest-paged?page=${page}&limit=20&adult=${adult}&onlyAdult=${onlyAdult}&types=${encodeURIComponent(types)}`);
     if (!res) { clist.innerHTML = '<p class="empty" style="grid-column:1/-1;">No se pudo conectar al servidor.</p>'; return; }
     const data = await res.json();
     const {items, total, totalPages} = data;
     if (!items || items.length === 0) { clist.innerHTML = '<p class="empty">No hay capítulos recientes.</p>'; renderCapPagination(0,0,0); return; }
     const itemsHTML = items.map(g => `
       <div class="lci">
-        ${g.cover?`<img class="lci-bg" src="${imgSrc(g.cover)}" alt="">` : ''}
+        ${g.cover?`<img class="lci-bg" src="${thumbSrc(g.cover)}" alt="">` : ''}
         <div class="lci-head" onclick="openDetail('${encodeURIComponent(g.manga)}')">
           <div class="lci-cov">${g.cover ? coverImg(g.cover, g.manga) : ''}</div>
-          <div class="lci-title">${g.manga}</div>
+          <div class="lci-title">${esc(g.manga)}</div>
           ${statusBadge(g.status)}
         </div>
         ${g.chapters.map(ch => `
         <div class="lci-ch" onclick="openReader('${encodeURIComponent(g.manga)}','${ch.chapter}')">
           <div class="dot ${ch.read?'r':'u'}" style="margin-right:10px;"></div>
-          <div style="flex:1;"><div style="font-size:13px;font-weight:600;color:var(--text);">${chLabel(ch.chapter)}</div></div>
-          <div style="font-size:12px;color:var(--mut);display:flex;align-items:center;gap:3px;"><i class="ti ti-calendar" style="font-size:12px;"></i>${ch.dateLabel}</div>
+          <div style="flex:1;"><div style="font-size:13px;font-weight:600;color:var(--text);">${esc(chLabel(ch.chapter))}</div></div>
+          <div style="font-size:12px;color:var(--mut);display:flex;align-items:center;gap:3px;"><i class="ti ti-calendar" style="font-size:12px;"></i>${esc(ch.dateLabel)}</div>
         </div>`).join('')}
       </div>`).join('');
     if (isPC()) { clist.style.display='grid'; clist.style.gridTemplateColumns='repeat(2,1fr)'; clist.style.gap='12px'; }
@@ -223,12 +330,25 @@ document.querySelectorAll('.ni[data-p]').forEach(b => {
       if (rMobile) rMobile.style.display = isPC() ? 'none' : '';
       if (rPC)     rPC.style.display     = isPC() ? 'grid' : 'none';
     }
+    if (page === 'inicio' || page === 'series' || page === 'rankings') refreshMangasIfStale();
   });
 });
 
 window.addEventListener('popstate', function(e) {
   if (_skipPop) { _skipPop=false; return; }
   const state = e.state || {};
+
+  // Si el lector estaba abierto y el nuevo estado no es 'reader', cerrarlo
+  // primero — cubre tanto "atrás" como "adelante" saliendo del lector.
+  const readerPg = document.getElementById('p-reader');
+  if (readerPg && readerPg.classList.contains('on') && state.page !== 'reader') {
+    closeReaderPage();
+  }
+
+  if (state.page==='reader') {
+    showReaderPage(state.manga, state.chapter);
+    return;
+  }
   if (state.panel==='filter') {
     document.getElementById('filter-overlay').style.display='none';
     document.getElementById('filter-panel').style.display='none';
@@ -240,15 +360,24 @@ window.addEventListener('popstate', function(e) {
     _userPushed=false; return;
   }
   if (state.page==='detail') {
-    // Viniendo del reader (goto) o navegando hacia adelante — mostrar detalle
-    if (currentManga) showPage('detail');
+    // Viniendo del lector o navegando hacia adelante — mostrar detalle,
+    // y refrescar la lista de capítulos por si se marcó alguno como leído
+    // mientras se estaba en el lector.
+    if (currentManga) { showPage('detail'); renderDetChapList(currentManga); }
     else showPage('inicio');
     return;
   }
   if (state.page) {
-    // Viniendo de un detail via history.back() → mostrar la página anterior
+    // Viniendo de un detail/reader via history.back() → mostrar la página anterior
     showPage(state.page);
     document.querySelectorAll('.ni[data-p]').forEach(x => x.classList.toggle('on', x.dataset.p===state.page));
+    // Restaurar la posición de scroll donde estaba el usuario antes de entrar al detalle
+    if (_scrollSave[state.page] != null) {
+      document.getElementById('cnt').scrollTop = _scrollSave[state.page];
+      delete _scrollSave[state.page];
+    }
+    if (state.page==='inicio' || state.page==='series' || state.page==='rankings') refreshMangasIfStale();
+    if (state.page==='capitulos') renderCapitulos(capPage);
   }
 });
 
@@ -282,7 +411,7 @@ loadTheme();
 function setAvatarUI(avatarUrl) {
   const initials = (API.getUsername()||'M').slice(0,2).toUpperCase();
   const navAv = document.getElementById('nav-avatar');
-  if (navAv) navAv.innerHTML = avatarUrl ? `<img src="${avatarUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">` : initials;
+  if (navAv) navAv.innerHTML = avatarUrl ? `<img src="${avatarUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">` : esc(initials);
   const panelAv = document.getElementById('panel-avatar'), initialsEl = document.getElementById('panel-avatar-initials'), overlay = document.getElementById('avatar-overlay');
   if (panelAv) {
     if (avatarUrl) {
@@ -317,7 +446,11 @@ function initUserUI() {
   setAvatarUI(localStorage.getItem('manga_avatar')||null);
   document.querySelectorAll('.admin-only').forEach(el=>el.style.display=API.isAdmin()?'':'none');
 }
-if (isAdultEnabled()) document.getElementById('toggle-adult')?.classList.add('on');
+if (isAdultEnabled())     document.getElementById('toggle-adult')?.classList.add('on');
+if (isOnlyAdultEnabled()) document.getElementById('toggle-only-adult')?.classList.add('on');
+['manga','manhwa','manhua'].forEach(t => {
+  document.getElementById('toggle-show-' + t)?.classList.toggle('on', isTypeEnabled(t));
+});
 
 // ── PC LAYOUT ─────────────────────────────────────────────────────────────────
 function applyPCLayout() {
@@ -415,8 +548,11 @@ async function init() {
       });
     }
     renderCapitulos(1);
-    const gotoManga=new URLSearchParams(window.location.search).get('goto');
-    if(gotoManga){window.history.replaceState({},'','/');await openDetail(encodeURIComponent(gotoManga));}
+    // Deep-link desde páginas externas al SPA (ej. stats.html → "ver detalles"
+    // de un manga). Solo abre el detalle, nunca el lector — el lector nunca
+    // navega afuera del SPA, así que no necesita esto.
+    const gotoManga = new URLSearchParams(window.location.search).get('goto');
+    if (gotoManga) { window.history.replaceState({}, '', '/'); await openDetail(encodeURIComponent(gotoManga)); }
   } catch(err) {
     console.error('Error iniciando app:', err);
     ['sgrid','rlist','rlist-pc','cont-reading','recent-grid'].forEach(id=>{
@@ -429,3 +565,141 @@ async function init() {
   }
 }
 window.addEventListener('load', () => setTimeout(init, 50));
+
+// ── FEATURED CAROUSEL ─────────────────────────────────────────────────────────
+let _featSlides = [];   // mangas seleccionados
+let _featIdx    = 0;    // slide activo
+let _featTimer  = null; // setTimeout de auto-avance
+const FEAT_COUNT = 8;
+
+// % de rating consistente (72-98) derivado del nombre — solo visual
+function _featRating(name) {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+  return 72 + (h % 27);
+}
+// Duración por slide: 5 / 6 / 7 / 8 s según nombre
+function _featDur(name) {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 17 + name.charCodeAt(i)) >>> 0;
+  return 5000 + (h % 4) * 1000;
+}
+
+function renderCarousel() {
+  const wrap = document.getElementById('feat-wrap');
+  if (!wrap) return;
+
+  // Solo mangas visibles para este usuario y que tengan portada
+  const eligible = filterAdult(allMangas).filter(m => m.cover);
+  if (eligible.length === 0) { wrap.style.display = 'none'; return; }
+
+  // Mantener la selección actual si todos los slides siguen siendo válidos
+  // (evita re-randomizar en el segundo render de init cuando llegan datos frescos)
+  const eligibleSet = new Set(eligible.map(m => m.name));
+  const allValid    = _featSlides.length > 0 && _featSlides.every(m => eligibleSet.has(m.name));
+  if (allValid) { wrap.style.display = ''; return; }
+
+  // Selección nueva: mezclar y tomar hasta FEAT_COUNT
+  _featSlides = [...eligible].sort(() => Math.random() - .5).slice(0, FEAT_COUNT);
+  _featIdx    = 0;
+
+  _stopCarousel();
+  _buildCarouselDOM();
+  _showFeatSlide(0);
+  _startCarousel();
+  wrap.style.display = '';
+}
+
+function _buildCarouselDOM() {
+  const slidesEl = document.getElementById('feat-slides');
+  const indsEl   = document.getElementById('feat-indicators');
+  if (!slidesEl || !indsEl) return;
+
+  slidesEl.innerHTML = _featSlides.map((m, i) => {
+    const genres = (m.metadata?.genres || []).slice(0, 5);
+    const syn    = (m.metadata?.synopsis || '').trim();
+    const cover  = imgSrc(m.cover);
+    const coverThumb = thumbSrc(m.cover);
+
+    return `<div class="feat-slide${i === 0 ? ' feat-active' : ''}" data-idx="${i}">
+      <div class="feat-hero">
+        ${cover ? `<img class="feat-bg-img" src="${cover}" alt="" draggable="false">` : ''}
+        <div class="feat-overlay"></div>
+        ${cover ? `<img class="feat-cover-hero" src="${cover}" alt="" draggable="false">` : ''}
+        <div class="feat-hero-text">
+          <div class="feat-title">${esc(m.name)}</div>
+          <button class="feat-btn" onclick="openDetail('${encodeURIComponent(m.name)}')">Ver detalles \u2192</button>
+        </div>
+      </div>
+      <div class="feat-info-bar">
+        ${coverThumb ? `<img class="feat-thumb-small" src="${coverThumb}" alt="" loading="lazy" draggable="false">` : ''}
+        <div class="feat-text-block">
+          ${syn ? `<div class="feat-syn">${esc(syn)}</div>` : ''}
+          ${genres.length ? `<div class="feat-genres">${genres.map(g => `<span class="feat-chip">${esc(g)}</span>`).join('')}</div>` : ''}
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+
+  indsEl.innerHTML = _featSlides.map((_, i) =>
+    `<div class="feat-ind${i === 0 ? ' feat-active' : ''}" onclick="carouselGoTo(${i})">
+      <div class="feat-ind-fill"></div>
+    </div>`
+  ).join('');
+}
+
+// Anima el fill del indicador activo con JS transition (más fiable que @keyframes + clase)
+function _animateIndicators(idx) {
+  const fills = document.querySelectorAll('.feat-ind-fill');
+  // Reset de todos sin transición
+  fills.forEach(f => { f.style.transition = 'none'; f.style.width = '0%'; });
+  // Forzar reflow para que el reset sea instantáneo antes de arrancar la animación
+  void document.getElementById('feat-indicators')?.offsetWidth;
+  // Arrancar el fill del activo
+  if (fills[idx]) {
+    const dur = _featDur(_featSlides[idx]?.name || '');
+    fills[idx].style.transition = `width ${dur}ms linear`;
+    fills[idx].style.width = '100%';
+  }
+  // Actualizar clase activa en los indicadores
+  document.querySelectorAll('.feat-ind').forEach((d, i) =>
+    d.classList.toggle('feat-active', i === idx));
+}
+
+function _showFeatSlide(idx) {
+  document.querySelectorAll('.feat-slide').forEach((s, i) =>
+    s.classList.toggle('feat-active', i === idx));
+  _featIdx = idx;
+  _animateIndicators(idx);
+}
+
+function _startCarousel() {
+  _stopCarousel();
+  const dur = _featDur(_featSlides[_featIdx]?.name || '');
+  _featTimer = setTimeout(carouselNext, dur);
+}
+function _stopCarousel() {
+  if (_featTimer) { clearTimeout(_featTimer); _featTimer = null; }
+}
+
+function carouselNext() {
+  if (!_featSlides.length) return;
+  _showFeatSlide((_featIdx + 1) % _featSlides.length);
+  _startCarousel();
+}
+function carouselPrev() {
+  if (!_featSlides.length) return;
+  _showFeatSlide((_featIdx - 1 + _featSlides.length) % _featSlides.length);
+  _startCarousel();
+}
+function carouselGoTo(idx) {
+  if (idx === _featIdx || !_featSlides.length) return;
+  _showFeatSlide(idx);
+  _startCarousel();
+}
+
+// Pausar cuando el tab pierde el foco para no avanzar slides en segundo plano
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) _stopCarousel();
+  else if (_featSlides.length && _featTimer === null) _startCarousel();
+});

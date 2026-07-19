@@ -16,6 +16,10 @@ const authRoutes     = require('./routes/auth');
 const mangaRoutes    = require('./routes/manga');
 const authMiddleware = require('./middleware/auth');
 const restrictionsMiddleware = require('./middleware/restrictions');
+const catalogIndex   = require('./data/catalogIndex');
+const imageCache     = require('./lib/imageCache');
+const { visibleTo }  = require('./lib/visibility');
+const thumbnails     = require('./lib/thumbnails');
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
@@ -46,9 +50,9 @@ app.use(express.static(path.join(__dirname, '../client'), {
     if (filePath.endsWith('.html')) {
       res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
     }
-    // JS/CSS: sin caché → browser siempre verifica, servidor responde 304 si no cambió
+    // JS/CSS: no-store → el browser nunca guarda en caché, siempre pide la versión nueva
     else if (/\.(js|css)$/.test(filePath)) {
-      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Cache-Control', 'no-store');
     }
     // Fuentes/iconos: caché 7 días
     else if (/\.(woff2?|ttf|eot|svg)$/.test(filePath)) {
@@ -82,17 +86,9 @@ app.use('/api', authRoutes);
 app.use('/api/mangas', authMiddleware, restrictionsMiddleware, mangaRoutes);
 
 // ── IMÁGENES PROTEGIDAS CON CACHÉ LARGO ──────────────────────────────────────
-const mangaRootsResolved = () => {
-  const roots = [path.resolve(process.env.MANGA_PATH || './main')];
-  // Soporte dinámico: MANGA_PATH_2, MANGA_PATH_3, MANGA_PATH_4 … hasta donde estén definidas
-  for (let i = 2; process.env[`MANGA_PATH_${i}`]; i++) {
-    roots.push(path.resolve(process.env[`MANGA_PATH_${i}`]));
-  }
-  return roots;
-};
-
 // Middleware especial para imágenes: acepta token en cookie además de header
 function imageAuth(req, res, next) {
+  const { resolveUser } = require('./middleware/auth');
   // Primero intenta header Authorization (lector, API)
   const authHeader = req.headers['authorization'];
   if (authHeader) return require('./middleware/auth')(req, res, next);
@@ -100,50 +96,81 @@ function imageAuth(req, res, next) {
   const cookieToken = req.cookies?.img_token;
   if (cookieToken) {
     try {
-      req.user = require('jsonwebtoken').verify(cookieToken, process.env.JWT_SECRET);
-      return next();
+      const user = resolveUser(cookieToken);
+      if (user) { req.user = user; return next(); }
     } catch {}
   }
   // Finalmente query param (compatibilidad con lector actual)
   const qt = req.query.token;
   if (qt) {
     try {
-      req.user = require('jsonwebtoken').verify(qt, process.env.JWT_SECRET);
-      return next();
+      const user = resolveUser(qt);
+      if (user) { req.user = user; return next(); }
     } catch {}
   }
   return res.status(401).send('No autorizado.');
 }
 
-app.get('/api/images/:manga/:chapter/:image', imageAuth, restrictionsMiddleware, (req, res) => {
+app.get('/api/images/:manga/:chapter/:image', imageAuth, restrictionsMiddleware, async (req, res) => {
   const manga   = decodeURIComponent(req.params.manga);
   const chapter = decodeURIComponent(req.params.chapter);
   const image   = decodeURIComponent(req.params.image);
 
-  // Mismo criterio que en manga.js: si está vetado o es +18 sin permiso,
-  // se trata como si la imagen no existiera (404), igual que el resto de
-  // los endpoints de contenido.
-  const { canViewAdult, blockedMangas } = req.userRestrictions || { canViewAdult: true, blockedMangas: [] };
-  if (blockedMangas.includes(manga)) return res.status(404).send('Imagen no encontrada.');
-  const metaRoot = mangaRoutes.findMangaRoot(manga);
-  const meta     = mangaRoutes.getMetadata(path.join(metaRoot, manga));
-  if (meta.adult && !canViewAdult) return res.status(404).send('Imagen no encontrada.');
+  // Mismo criterio que en manga.js — literalmente la misma función ahora
+  // (server/lib/visibility.js), ya no una reimplementación aparte.
+  const restrictions = req.userRestrictions || { canViewAdult: false, canViewNormal: false, blockedMangas: [] };
+  // Antes: findMangaRoot() recorría cada root con fs.existsSync y getMetadata()
+  // releía metadata.json — ambos en CADA pedido de imagen (hasta 30+ veces por
+  // capítulo, siempre el mismo resultado). Ahora sale del índice en memoria.
+  const entry = catalogIndex.getMangaEntry(manga);
+  if (!visibleTo({ name: manga, metadata: entry?.metadata || {} }, restrictions)) {
+    return res.status(404).send('Imagen no encontrada.');
+  }
 
-  for (const mangaRoot of mangaRootsResolved()) {
-    const imagePath = chapter === '__cover__'
-      ? path.join(mangaRoot, manga, 'cover.jpg')
-      : path.join(mangaRoot, manga, chapter, image);
-    const resolved = path.resolve(imagePath);
-    if (!resolved.startsWith(path.resolve(mangaRoot))) continue;
-    if (fs.existsSync(resolved)) {
-      // Imágenes de manga nunca cambian → caché 7 días
-      res.setHeader('Cache-Control', 'public, max-age=604800, immutable');
-      res.setHeader('Vary', 'Accept-Encoding');
-      return res.sendFile(resolved);
+  const mangaRoot = catalogIndex.findMangaRoot(manga);
+  const imagePath = chapter === '__cover__'
+    ? path.join(mangaRoot, manga, 'cover.jpg')
+    : path.join(mangaRoot, manga, chapter, image);
+  const resolved = path.resolve(imagePath);
+  if (!resolved.startsWith(path.resolve(mangaRoot))) return res.status(404).send('Imagen no encontrada.');
+
+  // Imágenes de manga nunca cambian → caché 7 días en el navegador
+  res.setHeader('Cache-Control', 'public, max-age=604800, immutable');
+  res.setHeader('Vary', 'Accept-Encoding');
+
+  // Miniatura: SOLO para portadas (chapter === '__cover__'), nunca para
+  // páginas de capítulo — ahí sigue rigiendo la política de cero pérdida de
+  // calidad sin excepciones. Si sharp no está disponible o falla, se cae de
+  // forma transparente a servir la portada completa más abajo.
+  if (chapter === '__cover__' && req.query.thumb === '1') {
+    const thumb = await thumbnails.getThumbnail(resolved);
+    if (thumb) {
+      res.setHeader('Content-Type', 'image/webp');
+      return res.send(thumb);
     }
   }
-  res.status(404).send('Imagen no encontrada.');
+
+  // Si ya está precalentada en RAM (ver /:manga/:chapter/images), se sirve
+  // directo de memoria sin tocar el disco externo.
+  const cached = imageCache.get(resolved);
+  if (cached) {
+    res.setHeader('Content-Type', mimeForImage(resolved));
+    return res.send(cached);
+  }
+  try {
+    const buf = await fs.promises.readFile(resolved);
+    if (imageCache.isStable(resolved)) imageCache.set(resolved, buf);
+    res.setHeader('Content-Type', mimeForImage(resolved));
+    res.send(buf);
+  } catch {
+    res.status(404).send('Imagen no encontrada.');
+  }
 });
+
+function mimeForImage(p) {
+  const ext = path.extname(p).toLowerCase();
+  return { '.jpg':'image/jpeg', '.jpeg':'image/jpeg', '.png':'image/png', '.webp':'image/webp', '.gif':'image/gif' }[ext] || 'application/octet-stream';
+}
 
 // ── SPA FALLBACK ──────────────────────────────────────────────────────────────
 app.get('*', (req, res) => {

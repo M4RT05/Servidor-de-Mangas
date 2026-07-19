@@ -31,10 +31,13 @@ async function openDetail(encodedName) {
   const name = decodeURIComponent(encodedName);
   const navActive = document.querySelector('.ni.on[data-p]');
   fromPage = navActive ? navActive.dataset.p : 'inicio';
+  _scrollSave[fromPage] = document.getElementById('cnt').scrollTop;
   history.pushState({page:'detail', manga:name}, '');
   clearDetail();
   showPage('detail');
 
+  // Siempre invalidar antes de fetchear para garantizar datos frescos al re-entrar
+  API.invalidateManga(name);
   const data = await API.getManga(name);
   if (!data) {
     showToastApp('Ese manga no existe o no tienes acceso.', 'err');
@@ -109,10 +112,10 @@ async function openDetail(encodedName) {
 
 function badgeRow(meta) {
   return [
-    meta.type    ? `<span class="${typeClass(meta.type)}">${meta.type}</span>`  : '',
-    meta.status  ? statusBadge(meta.status)                                      : '',
-    meta.adult   ? '<span class="b b18">+18</span>'                             : '',
-    meta.ranking ? `<span class="b by">Rank #${meta.ranking}</span>`            : ''
+    meta.type    ? `<span class="${typeClass(meta.type)}">${esc(meta.type)}</span>` : '',
+    meta.status  ? statusBadge(meta.status)                                          : '',
+    meta.adult   ? '<span class="b b18">+18</span>'                                 : '',
+    meta.ranking ? `<span class="b by">Rank #${esc(meta.ranking)}</span>`           : ''
   ].filter(Boolean).join('');
 }
 function sortGenres(genres) {
@@ -130,7 +133,7 @@ function sortGenres(genres) {
   });
 }
 function genreChips(meta, cls) {
-  return sortGenres(meta.genres || []).map(g => `<span class="${cls}">${g}</span>`).join('');
+  return sortGenres(meta.genres || []).map(g => `<span class="${cls}">${esc(g)}</span>`).join('');
 }
 
 function renderDetChapList(manga) {
@@ -141,8 +144,8 @@ function renderDetChapList(manga) {
       ${coverSrc?`<img class="ch-row-bg" src="${coverSrc}" alt="">`:''}
       <div class="dot ${ch.read?'r':'u'}" onclick="toggleReadChapter('${ch.number}',event)" title="${ch.read?'Marcar no leído':'Marcar leído'}" style="cursor:pointer;"></div>
       <div class="ch-info">
-        <div class="ch-num">${chLabel(ch.number)}</div>
-        <div class="ch-tr">${ch.imageCount} páginas${ch.dateLabel?' · '+ch.dateLabel:''}</div>
+        <div class="ch-num">${esc(chLabel(ch.number))}</div>
+        <div class="ch-tr">${ch.imageCount} páginas${ch.dateLabel?' · '+esc(ch.dateLabel):''}</div>
       </div>
       <div class="ch-date"><i class="ti ti-chevron-right" style="font-size:16px;color:var(--mut);"></i></div>
     </div>`;
@@ -167,9 +170,14 @@ async function toggleReadChapter(chapterNum, e) {
       await fetch('/api/mangas/progress', { method:'POST', headers:{'Content-Type':'application/json','Authorization':'Bearer '+API.getToken()}, body: JSON.stringify({ manga: mangaName, chapter: chapterNum, page: 0 }) });
       prog.readChapters = [...readChaps, chapterNum];
     }
+    // Actualizar currentManga.chapters para que renderDetChapList use ch.read correcto
+    currentManga.chapters = currentManga.chapters.map(ch =>
+      ch.number === chapterNum ? { ...ch, read: !isRead } : ch
+    );
     currentManga.progress = prog;
     API.invalidateManga(mangaName);
     renderDetChapList(currentManga);
+    replaceMangaProgressLocal(mangaName, prog.readChapters, prog.lastChapter);
   } catch(err) { console.error('Error toggling read:', err); }
 }
 
@@ -199,7 +207,7 @@ if (pcChapInput) {
         <div class="ch-row" onclick="openReader('${encodeURIComponent(currentManga.name)}','${ch.number}')">
           ${coverSrc?`<img class="ch-row-bg" src="${coverSrc}" alt="">`:''}
           <div class="dot ${ch.read?'r':'u'}" onclick="toggleReadChapter('${ch.number}',event)" style="cursor:pointer;"></div>
-          <div class="ch-info"><div class="ch-num">${chLabel(ch.number)}</div><div class="ch-tr">${ch.imageCount} páginas${ch.dateLabel?' · '+ch.dateLabel:''}</div></div>
+          <div class="ch-info"><div class="ch-num">${esc(chLabel(ch.number))}</div><div class="ch-tr">${ch.imageCount} páginas${ch.dateLabel?' · '+esc(ch.dateLabel):''}</div></div>
           <div class="ch-date"><i class="ti ti-chevron-right" style="font-size:16px;color:var(--mut);"></i></div>
         </div>`).join('');
     }
@@ -211,7 +219,6 @@ function closeDetail() {
   // popstate se encargará de llamar showPage(fromPage)
   history.back();
 }
-function openReader(encodedManga, chapter) { window.location.href = `/reader.html?manga=${encodedManga}&chapter=${encodeURIComponent(chapter)}`; }
 
 function openChapConfig()  { document.getElementById('chap-cfg-overlay').style.display='block'; document.getElementById('chap-cfg-panel').style.display='block'; }
 function closeChapConfig() { document.getElementById('chap-cfg-overlay').style.display='none'; document.getElementById('chap-cfg-panel').style.display='none'; }
@@ -226,6 +233,7 @@ async function markAllChaptersRead() {
     currentManga.progress.readChapters = allNums;
     API.invalidateManga(currentManga.name);
     renderDetChapList(currentManga);
+    replaceMangaProgressLocal(currentManga.name, allNums, allNums[allNums.length - 1]);
   } catch(e) { console.error('Error marcando como leídos:', e); }
   closeChapConfig();
 }
@@ -238,6 +246,7 @@ async function unmarkAllChaptersRead() {
     currentManga.progress.readChapters = [];
     API.invalidateManga(currentManga.name);
     renderDetChapList(currentManga);
+    replaceMangaProgressLocal(currentManga.name, [], null);
   } catch(e) { console.error('Error desmarcando capítulos:', e); }
   closeChapConfig();
 }

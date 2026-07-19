@@ -54,8 +54,27 @@ setInterval(() => {
 }, 10 * 60 * 1000);
 
 // ── HELPERS ───────────────────────────────────────────────────────────────────
-function hashPassword(password, salt) {
+// Hash de contraseñas con scrypt (nativo de Node, sin dependencia nueva).
+// A diferencia del HMAC-SHA256 que se usaba antes, scrypt está diseñado a
+// propósito para ser LENTO y pesado en memoria — eso es lo que lo hace
+// resistente a fuerza bruta si alguna vez se filtra users.json. HMAC-SHA256
+// es rapidísimo, que es exactamente lo que no querés para contraseñas.
+function hashPasswordScrypt(password, salt) {
+  return crypto.scryptSync(password, salt, 64).toString('hex');
+}
+// Hash viejo (HMAC-SHA256). Se mantiene SOLO para poder seguir verificando
+// contraseñas de usuarios que todavía no pasaron por el login desde este
+// cambio — ver verifyPassword() y la migración perezosa en /login más abajo.
+// No se usa para generar hashes nuevos nunca más.
+function hashPasswordLegacy(password, salt) {
   return crypto.createHmac('sha256', salt).update(password).digest('hex');
+}
+// Punto único de verificación de contraseña. user.hashAlgo indica qué
+// función se usó para generar el hash guardado — si no está presente,
+// es un usuario de antes de este cambio y se asume el esquema legacy.
+function verifyPassword(password, user) {
+  if (user.hashAlgo === 'scrypt') return hashPasswordScrypt(password, user.salt) === user.passwordHash;
+  return hashPasswordLegacy(password, user.salt) === user.passwordHash;
 }
 
 function getClientIP(req) {
@@ -72,7 +91,7 @@ function initAdminIfNeeded() {
     const password = process.env.ADMIN_PASSWORD || 'admin';
     users.push({
       id: '1', username, role: 'admin',
-      salt, passwordHash: hashPassword(password, salt),
+      salt, passwordHash: hashPasswordScrypt(password, salt), hashAlgo: 'scrypt',
       createdAt: new Date().toISOString()
     });
     saveUsers(users);
@@ -84,7 +103,11 @@ initAdminIfNeeded();
 // ── AVATAR (multer) ───────────────────────────────────────────────────────────
 const avatarStorage = multer.diskStorage({
   destination: (req, file, cb) => { fs.mkdirSync(AVATARS_DIR, { recursive: true }); cb(null, AVATARS_DIR); },
-  filename:    (req, file, cb) => { const ext = path.extname(file.originalname).toLowerCase() || '.jpg'; cb(null, req.user.username + ext); }
+  // Se usa el id del usuario, no el username: el id siempre lo genera el
+  // servidor (nunca viene de un input), así que no hay forma de que un
+  // username raro (con "/", "..", etc.) termine escribiendo el archivo
+  // fuera de AVATARS_DIR.
+  filename:    (req, file, cb) => { const ext = path.extname(file.originalname).toLowerCase() || '.jpg'; cb(null, req.user.userId + ext); }
 });
 const avatarUpload = multer({
   storage: avatarStorage,
@@ -106,12 +129,25 @@ router.post('/login', (req, res) => {
 
   const users = loadUsers();
   const user  = users.find(u => u.username.toLowerCase() === username.toLowerCase());
-  if (!user || hashPassword(password, user.salt) !== user.passwordHash) {
+  if (!user || !verifyPassword(password, user)) {
     recordFailedAttempt(ip);
     return res.status(401).json({ error: 'Usuario o contraseña incorrectos.' });
   }
 
   clearAttempts(ip);
+
+  // Migración perezosa: si esta cuenta todavía tiene el hash viejo
+  // (HMAC-SHA256), este es el único momento en que tenemos la contraseña
+  // en texto plano disponible — se re-hashea con scrypt y se guarda, sin
+  // que el usuario tenga que hacer nada ni cambiar su contraseña.
+  if (user.hashAlgo !== 'scrypt') {
+    const newSalt = crypto.randomBytes(16).toString('hex');
+    user.salt         = newSalt;
+    user.passwordHash = hashPasswordScrypt(password, newSalt);
+    user.hashAlgo      = 'scrypt';
+    saveUsers(users);
+  }
+
   const token = jwt.sign(
     { userId: user.id, username: user.username, role: user.role },
     process.env.JWT_SECRET,
@@ -153,28 +189,33 @@ router.get('/users', authMiddleware, (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Sin permiso.' });
   res.json(loadUsers().map(u => ({
     id: u.id, username: u.username, role: u.role, createdAt: u.createdAt,
-    canViewAdult:  u.canViewAdult !== false,
+    canViewAdult:  u.canViewAdult  !== false,
+    canViewNormal: u.canViewNormal !== false,
     blockedMangas: Array.isArray(u.blockedMangas) ? u.blockedMangas : []
   })));
 });
 
 router.post('/users', authMiddleware, (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Sin permiso.' });
-  const { username, password, role, canViewAdult, blockedMangas } = req.body;
+  const { username, password, role, canViewAdult, canViewNormal, blockedMangas } = req.body;
   if (!username || !password) return res.status(400).json({ error: 'Faltan datos.' });
+  if (!/^[\p{L}\p{N}_.-]{1,32}$/u.test(username)) {
+    return res.status(400).json({ error: 'El usuario solo puede tener letras, números, "_", "." o "-" (máx. 32 caracteres).' });
+  }
   const users = loadUsers();
   if (users.find(u => u.username.toLowerCase() === username.toLowerCase()))
     return res.status(409).json({ error: 'El usuario ya existe.' });
   const salt    = crypto.randomBytes(16).toString('hex');
   const newUser = {
     id: Date.now().toString(), username, role: role || 'reader', salt,
-    passwordHash: hashPassword(password, salt), createdAt: new Date().toISOString(),
-    canViewAdult:  canViewAdult !== false,
+    passwordHash: hashPasswordScrypt(password, salt), hashAlgo: 'scrypt', createdAt: new Date().toISOString(),
+    canViewAdult:  canViewAdult  !== false,
+    canViewNormal: canViewNormal !== false,
     blockedMangas: Array.isArray(blockedMangas) ? blockedMangas.filter(m => typeof m === 'string') : []
   };
   users.push(newUser);
   saveUsers(users);
-  res.json({ ok: true, id: newUser.id, username, role: newUser.role, canViewAdult: newUser.canViewAdult, blockedMangas: newUser.blockedMangas });
+  res.json({ ok: true, id: newUser.id, username, role: newUser.role, canViewAdult: newUser.canViewAdult, canViewNormal: newUser.canViewNormal, blockedMangas: newUser.blockedMangas });
 });
 
 router.put('/users/:id', authMiddleware, (req, res) => {
@@ -182,10 +223,11 @@ router.put('/users/:id', authMiddleware, (req, res) => {
   const users = loadUsers();
   const idx   = users.findIndex(u => u.id === req.params.id);
   if (idx < 0) return res.status(404).json({ error: 'Usuario no encontrado.' });
-  const { password, role, canViewAdult, blockedMangas } = req.body;
-  if (password) { const salt = crypto.randomBytes(16).toString('hex'); users[idx].salt = salt; users[idx].passwordHash = hashPassword(password, salt); }
+  const { password, role, canViewAdult, canViewNormal, blockedMangas } = req.body;
+  if (password) { const salt = crypto.randomBytes(16).toString('hex'); users[idx].salt = salt; users[idx].passwordHash = hashPasswordScrypt(password, salt); users[idx].hashAlgo = 'scrypt'; }
   if (role) users[idx].role = role;
-  if (canViewAdult !== undefined) users[idx].canViewAdult = canViewAdult !== false;
+  if (canViewAdult  !== undefined) users[idx].canViewAdult  = canViewAdult  !== false;
+  if (canViewNormal !== undefined) users[idx].canViewNormal = canViewNormal !== false;
   if (blockedMangas !== undefined) users[idx].blockedMangas = Array.isArray(blockedMangas) ? blockedMangas.filter(m => typeof m === 'string') : [];
   saveUsers(users);
   res.json({ ok: true });
