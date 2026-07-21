@@ -127,7 +127,7 @@ function openFilter() {
   document.getElementById('filter-types').innerHTML = ['Manga','Manhwa','Manhua'].map(t =>
     `<button class="filter-chip${pendingFilters.types.includes(t)?' on':''}" onclick="toggleFilterChip(this,'types','${t}')">${t}</button>`).join('');
   document.getElementById('filter-genres').innerHTML = [...genreSet].sort().map(g =>
-    `<button class="filter-chip${pendingFilters.genres.includes(g)?' on':''}" onclick="toggleFilterChip(this,'genres','${g}')">${g}</button>`).join('');
+    `<button class="filter-chip${pendingFilters.genres.some(pg=>norm(pg)===norm(g))?' on':''}" onclick="toggleFilterChip(this,'genres','${g}')">${g}</button>`).join('');
   document.getElementById('filter-status').innerHTML = ['Activo','Hiatus','Finalizado'].map(s =>
     `<button class="filter-chip${pendingFilters.status.includes(s)?' on':''}" onclick="toggleFilterChip(this,'status','${s}')">${s}</button>`).join('');
   document.getElementById('filter-overlay').style.display = 'block';
@@ -155,11 +155,11 @@ function setSortMode(mode) { localStorage.setItem('series_sort', mode); applySer
 
 // ── BÚSQUEDA ──────────────────────────────────────────────────────────────────
 function renderSearch(q) {
-  const query = (q||'').toLowerCase().trim();
+  const query = norm(q);
   document.getElementById('sclear').style.display = query ? 'block' : 'none';
   const base = filterAdult(allMangas);
   if (!query) { document.getElementById('sresults').innerHTML = '<p style="color:var(--mut);font-size:13px;text-align:center;padding:20px 0;">Escribe para buscar...</p>'; return; }
-  const results = base.filter(m => m.name.toLowerCase().includes(query));
+  const results = base.filter(m => norm(m.name).includes(query));
   document.getElementById('sresults').innerHTML = results.length
     ? results.map(m => { const meta = m.metadata||{}; return`<div class="sri" onclick="openDetail('${encodeURIComponent(m.name)}')">
         <div class="sri-cov">${m.cover ? coverImg(m.cover, m.name) : ''}</div>

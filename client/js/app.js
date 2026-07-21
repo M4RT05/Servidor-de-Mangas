@@ -57,9 +57,15 @@ function filterAdult(list) {
   });
 }
 function getVisibleGenres() {
-  const genreSet = new Set();
-  filterAdult(allMangas).forEach(m => (m.metadata?.genres || []).forEach(g => genreSet.add(g)));
-  return genreSet;
+  // Agrupa por versión sin acentos (norm) para que "Retorno" y "Retórno" cuenten
+  // como el mismo género y no aparezcan como dos chips separados en el filtro.
+  const canon = new Map(); // norm(g) -> etiqueta a mostrar
+  filterAdult(allMangas).forEach(m => (m.metadata?.genres || []).forEach(g => {
+    const key = norm(g);
+    const current = canon.get(key);
+    if (!current || g < current) canon.set(key, g);
+  }));
+  return new Set(canon.values());
 }
 function chLabel(str) {
   const m = String(str).match(/(\d+(?:\.\d+)?)/);
@@ -208,7 +214,7 @@ function applySeriesFilter() {
   const f  = activeFilters;
   if (f.types.length)  list = list.filter(m => f.types.includes(m.metadata?.type));
   if (f.search) { const q = norm(f.search); list = list.filter(m => norm(m.name).includes(q)||(m.metadata?.genres||[]).some(g => norm(g).includes(q))); }
-  if (f.genres.length) list = list.filter(m => (m.metadata?.genres||[]).some(g => f.genres.includes(g)));
+  if (f.genres.length) { const fg = f.genres.map(norm); list = list.filter(m => (m.metadata?.genres||[]).some(g => fg.includes(norm(g)))); }
   if (f.status.length) list = list.filter(m => f.status.includes(m.metadata?.status));
   const sortMode = localStorage.getItem('series_sort') || 'az';
   if      (sortMode==='az')    list.sort((a,b) => norm(a.name).localeCompare(norm(b.name)));

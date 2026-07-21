@@ -103,8 +103,8 @@ async function openDetail(encodedName) {
   const chapInput = g('chap-sinput');
   if(chapInput) {
     chapInput.oninput = e => {
-      const q = e.target.value.toLowerCase().trim();
-      const filtered = q ? data.chapters.filter(ch => chLabel(ch.number).toLowerCase().includes(q)||ch.number.toLowerCase().includes(q)) : data.chapters;
+      const q = norm(e.target.value);
+      const filtered = q ? data.chapters.filter(ch => norm(chLabel(ch.number)).includes(q)||norm(ch.number).includes(q)) : data.chapters;
       renderDetChapList({...data, chapters: filtered});
     };
   }
@@ -198,8 +198,8 @@ const pcChapInput = document.getElementById('chap-sinput-pc');
 if (pcChapInput) {
   pcChapInput.addEventListener('input', e => {
     if (!currentManga) return;
-    const q = e.target.value.toLowerCase().trim();
-    const filtered = q ? currentManga.chapters.filter(ch => chLabel(ch.number).toLowerCase().includes(q)||ch.number.toLowerCase().includes(q)) : currentManga.chapters;
+    const q = norm(e.target.value);
+    const filtered = q ? currentManga.chapters.filter(ch => norm(chLabel(ch.number)).includes(q)||norm(ch.number).includes(q)) : currentManga.chapters;
     if (g('det-chaplist-pc')) {
       const chapters = chapSortAsc ? [...filtered] : [...filtered].reverse();
       const coverSrc = currentManga.cover ? imgSrc(currentManga.cover) : null;
