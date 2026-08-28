@@ -127,7 +127,11 @@ function openFilter() {
   document.getElementById('filter-types').innerHTML = ['Manga','Manhwa','Manhua'].map(t =>
     `<button class="filter-chip${pendingFilters.types.includes(t)?' on':''}" data-filter-chip data-cat="types" data-val="${esc(t)}">${t}</button>`).join('');
   document.getElementById('filter-genres').innerHTML = [...genreSet].sort().map(g =>
+<<<<<<< HEAD
     `<button class="filter-chip${pendingFilters.genres.some(pg=>norm(pg)===norm(g))?' on':''}" data-filter-chip data-cat="genres" data-val="${esc(g)}">${esc(g)}</button>`).join('');
+=======
+    `<button class="filter-chip${pendingFilters.genres.some(pg=>norm(pg)===norm(g))?' on':''}" onclick="toggleFilterChip(this,'genres','${g}')">${g}</button>`).join('');
+>>>>>>> 634f5f8faabd643527d0ee2b5271428a433e2676
   document.getElementById('filter-status').innerHTML = ['Activo','Hiatus','Finalizado'].map(s =>
     `<button class="filter-chip${pendingFilters.status.includes(s)?' on':''}" data-filter-chip data-cat="status" data-val="${esc(s)}">${s}</button>`).join('');
   document.getElementById('filter-overlay').style.display = 'block';
