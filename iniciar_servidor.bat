@@ -16,8 +16,14 @@ if not exist "node_modules\" (
   npm install
 )
 
-:: ── LIMPIAR PROCESOS NODE ANTERIORES ─────────────────────────────────────────
-taskkill /f /im node.exe >nul 2>&1
+:: ── LIMPIAR INSTANCIAS ANTERIORES DE ESTE SERVIDOR ───────────────────────────
+:: Antes esto era "taskkill /f /im node.exe", que mataba CUALQUIER proceso
+:: Node de la maquina (otros proyectos, VS Code, etc.), no solo este servidor.
+:: Ahora filtra por linea de comando: solo mata procesos node.exe que esten
+:: corriendo "server/index.js" de ESTE proyecto.
+for /f "usebackq tokens=*" %%P in (`powershell -NoProfile -Command "Get-CimInstance Win32_Process | Where-Object { $_.Name -eq 'node.exe' -and $_.CommandLine -match 'server[\\/]index\.js' } | Select-Object -ExpandProperty ProcessId"`) do (
+  taskkill /f /pid %%P >nul 2>&1
+)
 timeout /t 1 /nobreak >nul
 
 :: ── OBTENER PUERTO DEL .ENV ──────────────────────────────────────────────────

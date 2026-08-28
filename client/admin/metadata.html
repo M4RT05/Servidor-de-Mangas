@@ -5,8 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Metadata — MangaServer Admin</title>
   <link href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.34.0/dist/tabler-icons.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="/css/themes.css">
   <style>
-    :root{--bg:#0d1117;--surf:#161b27;--card:#1c2333;--acc:#F5B800;--acc-text:#0d1117;--text:#e6edf3;--mut:#7d8590;--brd:#30363d;--grn:#3fb950;--red:#e74c3c;}
+    :root{--bg:var(--bg);--surf:var(--surf);--card:var(--card);--acc:var(--acc);--acc-text:var(--bg);--text:var(--text);--mut:var(--mut);--brd:var(--brd);--grn:var(--grn);--red:var(--red);}
     *{margin:0;padding:0;box-sizing:border-box;}
     body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;min-height:100vh;}
     .nav{background:var(--surf);border-bottom:1px solid var(--brd);padding:0 20px;height:56px;display:flex;align-items:center;gap:14px;position:sticky;top:0;z-index:10;}
@@ -105,7 +106,14 @@
   <div class="edit-wrap" id="edit-wrap"></div>
 </div>
 
+<script src="/js/api.js"></script>
 <script>
+// Aplicar el tema elegido en el resto de la app — antes este panel se
+// quedaba siempre con los colores por defecto (Origins) sin importar qué
+// tema tuviera elegido el usuario en Panel de usuario > Temas visuales.
+const _theme = localStorage.getItem('manga_theme') || '';
+if (_theme) document.body.classList.add(_theme);
+
 const TOKEN = localStorage.getItem('manga_token');
 if (!TOKEN) location.href = '/login.html';
 
@@ -146,9 +154,9 @@ async function loadMangas() {
 function renderList(list) {
   document.getElementById('manga-list').innerHTML = list.length
     ? list.map(m => `
-      <div class="manga-row" onclick="openEditorByName('${encodeURIComponent(m.name)}')">
+      <div class="manga-row" data-open-editor="${esc(m.name)}">
         ${m.cover
-          ? `<img class="manga-thumb" src="${m.cover}?token=${TOKEN}" onerror="this.style.display='none'">`
+          ? `<img class="manga-thumb" src="${m.cover}" onerror="this.style.display='none'">`
           : `<div class="manga-thumb-ph">M</div>`}
         <div class="manga-row-info">
           <div class="manga-row-name">${esc(m.name)}</div>
@@ -167,7 +175,7 @@ function renderList(list) {
 }
 
 function filterList(q) {
-  renderList(q ? allMangas.filter(m => m.name.toLowerCase().includes(q.toLowerCase())) : allMangas);
+  renderList(q ? allMangas.filter(m => norm(m.name).includes(norm(q))) : allMangas);
 }
 
 function openEditorByName(encoded) {
@@ -175,6 +183,13 @@ function openEditorByName(encoded) {
   const m    = allMangas.find(m => m.name === name);
   if (m) openEditor(m);
 }
+
+// Delegado: reemplaza el onclick="openEditorByName('...')" armado por
+// concatenación (mismo motivo que en client/js/ui.js).
+document.addEventListener('click', e => {
+  const row = e.target.closest('[data-open-editor]');
+  if (row) openEditorByName(encodeURIComponent(row.dataset.openEditor));
+});
 
 async function openEditor(manga) {
   currentManga = manga;
@@ -210,7 +225,7 @@ function renderEditor(manga, meta) {
   document.getElementById('edit-wrap').innerHTML = `
     <div class="edit-hero">
       ${manga.cover
-        ? `<img class="edit-cover" src="${manga.cover}?token=${TOKEN}" alt="">`
+        ? `<img class="edit-cover" src="${manga.cover}" alt="">`
         : `<div class="edit-cover-ph">M</div>`}
       <div>
         <div class="edit-manga-name">${esc(manga.name)}</div>
@@ -331,7 +346,12 @@ async function saveMetadata() {
   setTimeout(() => { btn.innerHTML = '<i class="ti ti-device-floppy"></i> Guardar cambios'; }, 2500);
 }
 
-loadMangas();
+// Verificar que es admin, e iniciar
+(async () => {
+  await API.ready; // esperar a que api.js termine de verificar el token (sin importar cuánto tarde)
+  if (API.getRole() !== 'admin') { alert('Sin permiso.'); window.location.href = '/'; return; }
+  loadMangas();
+})();
 </script>
 </body>
 </html>

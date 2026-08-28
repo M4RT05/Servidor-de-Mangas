@@ -26,7 +26,6 @@ function naturalCompare(a, b) {
   }
   return 0;
 }
-function extractNum(str) { const m = String(str).match(/(\d+(?:\.\d+)?)/); return m ? parseFloat(m[1]) : 0; }
 
 const IMAGE_EXT_RE = /\.(jpg|jpeg|png|webp|gif)$/i;
 
@@ -87,7 +86,7 @@ function formatDate(date) {
 }
 
 module.exports = {
-  writeJsonAtomic, naturalCompare, extractNum,
+  writeJsonAtomic, naturalCompare,
   listDirNames, listImageNames, getFolderDate, getDirMtimeMs,
   getMetadataSync, formatDate, IMAGE_EXT_RE
 };

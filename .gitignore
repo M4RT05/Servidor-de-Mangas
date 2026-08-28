@@ -27,6 +27,9 @@ scraper/ikigai_estado.json
 scraper/reporte.html
 # lock de PID: se crea al ejecutar el scraper y se borra al terminar
 scraper/scraper.lock
+# estado runtime en vivo (PID, heartbeat, progreso del ciclo actual) — lo
+# reescribe el scraper en cada corrida, no aporta nada versionado
+scraper/estado_vivo.json
 # backups de seguimiento que el scraper puede crear (ej. seguimiento.json.bak)
 scraper/seguimiento.json.bak
 # dump de HTML crudo que Selenium guarda para depurar bloqueos/CAPTCHAs

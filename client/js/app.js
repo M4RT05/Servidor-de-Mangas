@@ -1,8 +1,7 @@
 // ── app.js — estado global, renders principales, nav, temas, init ────────────
 // Módulos: api.js → ui.js → detail.js → app.js
-
-// ── NORMALIZACIÓN ─────────────────────────────────────────────────────────────
-function norm(str) { return String(str).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim(); }
+// norm() (normalización de acentos/mayúsculas) vive en api.js, no acá — ver
+// el comentario ahí para el porqué.
 
 // ── ESTADO GLOBAL ─────────────────────────────────────────────────────────────
 let allMangas     = [];
@@ -57,9 +56,15 @@ function filterAdult(list) {
   });
 }
 function getVisibleGenres() {
-  const genreSet = new Set();
-  filterAdult(allMangas).forEach(m => (m.metadata?.genres || []).forEach(g => genreSet.add(g)));
-  return genreSet;
+  // Agrupa por versión sin acentos (norm) para que "Retorno" y "Retórno" cuenten
+  // como el mismo género y no aparezcan como dos chips separados en el filtro.
+  const canon = new Map(); // norm(g) -> etiqueta a mostrar
+  filterAdult(allMangas).forEach(m => (m.metadata?.genres || []).forEach(g => {
+    const key = norm(g);
+    const current = canon.get(key);
+    if (!current || g < current) canon.set(key, g);
+  }));
+  return new Set(canon.values());
 }
 function chLabel(str) {
   const m = String(str).match(/(\d+(?:\.\d+)?)/);
@@ -171,20 +176,23 @@ async function refreshMangasIfStale() {
 }
 
 // ── INICIO ────────────────────────────────────────────────────────────────────
+let contReadingExpanded = false; // "Seguir Leyendo": false = muestra 8, true = muestra todos
+
 function renderHome() {
   renderCarousel();
-  const visible    = filterAdult(allMangas);
-  const inProgress = visible.filter(m => {
+  const visible       = filterAdult(allMangas);
+  const inProgressAll = visible.filter(m => {
     const rc = m.progress?.readChapters?.length || 0;
     return rc > 0 && rc < m.chapterCount;
-  }).slice(0, 8);
+  });
+  const inProgress = contReadingExpanded ? inProgressAll : inProgressAll.slice(0, 8);
 
   document.getElementById('cont-reading').innerHTML = inProgress.length === 0
     ? '<p class="loading" style="grid-column:1/-1;">Aún no has leído ningún manga.</p>'
     : inProgress.map(m => {
         const pct = Math.round((m.progress.readChapters.length / m.chapterCount) * 100);
         const src = m.cover ? thumbSrc(m.cover) : '';
-        return`<div class="ri ri-with-bg" onclick="openDetail('${encodeURIComponent(m.name)}')">
+        return`<div class="ri ri-with-bg" data-open-manga="${esc(m.name)}">
           ${src ? `<img class="ri-bg" src="${src}" alt="" aria-hidden="true">` : ''}
           <div class="rcov" style="position:relative;z-index:1;">${m.cover ? coverImg(m.cover, m.name) : ''}</div>
           <div style="flex:1;min-width:0;overflow:hidden;position:relative;z-index:1;">
@@ -195,10 +203,23 @@ function renderHome() {
         </div>`;
       }).join('');
 
+  // Flecha de expandir/contraer — solo se muestra si hay más de 8 en progreso.
+  const btnToggle = document.getElementById('btn-toggle-reading');
+  if (btnToggle) {
+    btnToggle.style.display = inProgressAll.length > 8 ? 'inline-flex' : 'none';
+    btnToggle.classList.toggle('open', contReadingExpanded);
+    btnToggle.title = contReadingExpanded ? 'Ver menos' : 'Ver todos';
+  }
+
   const recent = [...visible].filter(m => m.addedDate).sort((a,b) => new Date(b.addedDate)-new Date(a.addedDate)).slice(0,10);
   document.getElementById('recent-grid').innerHTML = recent.length
     ? recent.map(m => rankCard(m, 0, false)).join('')
     : '<p class="empty">No hay mangas recientes.</p>';
+}
+
+function toggleContReading() {
+  contReadingExpanded = !contReadingExpanded;
+  renderHome();
 }
 
 // ── SERIES ────────────────────────────────────────────────────────────────────
@@ -208,7 +229,7 @@ function applySeriesFilter() {
   const f  = activeFilters;
   if (f.types.length)  list = list.filter(m => f.types.includes(m.metadata?.type));
   if (f.search) { const q = norm(f.search); list = list.filter(m => norm(m.name).includes(q)||(m.metadata?.genres||[]).some(g => norm(g).includes(q))); }
-  if (f.genres.length) list = list.filter(m => (m.metadata?.genres||[]).some(g => f.genres.includes(g)));
+  if (f.genres.length) { const fg = f.genres.map(norm); list = list.filter(m => (m.metadata?.genres||[]).some(g => fg.includes(norm(g)))); }
   if (f.status.length) list = list.filter(m => f.status.includes(m.metadata?.status));
   const sortMode = localStorage.getItem('series_sort') || 'az';
   if      (sortMode==='az')    list.sort((a,b) => norm(a.name).localeCompare(norm(b.name)));
@@ -260,13 +281,13 @@ async function renderCapitulos(page=1) {
     const itemsHTML = items.map(g => `
       <div class="lci">
         ${g.cover?`<img class="lci-bg" src="${thumbSrc(g.cover)}" alt="">` : ''}
-        <div class="lci-head" onclick="openDetail('${encodeURIComponent(g.manga)}')">
+        <div class="lci-head" data-open-manga="${esc(g.manga)}">
           <div class="lci-cov">${g.cover ? coverImg(g.cover, g.manga) : ''}</div>
           <div class="lci-title">${esc(g.manga)}</div>
           ${statusBadge(g.status)}
         </div>
         ${g.chapters.map(ch => `
-        <div class="lci-ch" onclick="openReader('${encodeURIComponent(g.manga)}','${ch.chapter}')">
+        <div class="lci-ch" data-open-chapter data-manga="${esc(g.manga)}" data-chapter="${esc(ch.chapter)}" data-slug="${esc(ch.chapterSlug||'')}">
           <div class="dot ${ch.read?'r':'u'}" style="margin-right:10px;"></div>
           <div style="flex:1;"><div style="font-size:13px;font-weight:600;color:var(--text);">${esc(chLabel(ch.chapter))}</div></div>
           <div style="font-size:12px;color:var(--mut);display:flex;align-items:center;gap:3px;"><i class="ti ti-calendar" style="font-size:12px;"></i>${esc(ch.dateLabel)}</div>
@@ -300,28 +321,92 @@ function renderCapPagination(current, total, totalItems) {
     : [1,2,3,4,5,6,7,8,9,10,'...',total-1,total];
   const btns = nums.map(p => p==='...'
     ? `<span class="cap-pg-dots">…</span>`
-    : `<button class="cap-pg-btn${p===current?' on':''}" onclick="renderCapitulos(${p})">${p}</button>`).join('');
+    : `<button class="cap-pg-btn${p===current?' on':''}" onclick="goToCapPage(${p})">${p}</button>`).join('');
   container.innerHTML = `
     <div class="cap-pg-info">Mostrando <b>${from}</b> a <b>${to}</b> de <b>${totalItems}</b> Series</div>
     <div class="cap-pg-row">
-      <button class="cap-pg-arrow" onclick="renderCapitulos(${current-1})" ${current===1?'disabled':''}><i class="ti ti-chevron-left"></i></button>
+      <button class="cap-pg-arrow" onclick="goToCapPage(${current-1})" ${current===1?'disabled':''}><i class="ti ti-chevron-left"></i></button>
       ${btns}
-      <button class="cap-pg-arrow" onclick="renderCapitulos(${current+1})" ${current===total?'disabled':''}><i class="ti ti-chevron-right"></i></button>
+      <button class="cap-pg-arrow" onclick="goToCapPage(${current+1})" ${current===total?'disabled':''}><i class="ti ti-chevron-right"></i></button>
     </div>`;
+}
+
+// Wrapper para clicks reales de paginación: sincroniza la URL (?page=N) y
+// después llama a renderCapitulos. Aparte de renderCapitulos a propósito —
+// renderCapitulos también se llama internamente (init(), popstate) para
+// pre-cargar datos sin que el usuario esté necesariamente en esa pestaña, y
+// esos casos NO deben pisar la URL actual.
+function goToCapPage(page) {
+  history.replaceState({page:'capitulos', capPage:page}, '', Router.buildPath('capitulos', {page}));
+  renderCapitulos(page);
 }
 
 // ── BÚSQUEDA (listener) ───────────────────────────────────────────────────────
 document.getElementById('sinput').addEventListener('input', e => renderSearch(e.target.value));
 
 // ── NAVEGACIÓN ────────────────────────────────────────────────────────────────
-history.replaceState({page:'inicio'}, '');
+// Interpretar la URL con la que se cargó la página (F5, link directo, o "/"
+// normal) — antes esto siempre arrancaba en 'inicio' sin mirar la URL. El
+// resultado se aplica en init() (más abajo), una vez que allMangas ya está
+// cargado — hace falta para poder resolver slug -> manga/capítulo real.
+const _initialRoute = Router.parseRoute(location.pathname, location.search);
+history.replaceState({ page: _initialRoute.page }, '', location.pathname + location.search);
+
+// Mostrar la página correcta YA, de forma sincrónica — sin esto, se ve
+// "inicio" (el estado por defecto del HTML) durante todo lo que tarda
+// init() en arrancar (espera el evento 'load' + 50ms + fetches de red)
+// y recién ahí cambia a la página real. Achica esa ventana a prácticamente
+// cero: esto corre apenas se parsea el script, antes de que haya siquiera
+// arrancado un fetch. Para detalle/lector no hay datos todavía (eso lo
+// resuelve el listener de DOMContentLoaded más abajo), pero al menos se ve
+// el esqueleto de "Cargando..." de esa página en vez de "inicio".
+(function showInitialPageSync() {
+  const r = _initialRoute;
+  const navPage = ['inicio','series','rankings','capitulos','busqueda'].includes(r.page) ? r.page : null;
+  if (navPage) {
+    document.querySelectorAll('.ni[data-p]').forEach(x => x.classList.toggle('on', x.dataset.p === navPage));
+  }
+  if (r.page === 'reader') {
+    // OJO: #p-reader no tiene clase ".pg" — se abre/cierra solo con
+    // classList ("on"), nunca con inline style (ver showReaderPage() /
+    // closeReaderPage() en reader.js). showPage() genérico le pondría un
+    // style.display="block" inline, que le gana en especificidad a la
+    // clase CSS — closeReaderPage() saca la clase después pero el inline
+    // style se lo pisa y queda pegado en pantalla para siempre, sin
+    // importar cuántas veces cambie la URL con "atrás". Por eso acá se
+    // replica a mano SOLO lo que showReaderPage() hace para mostrarlo.
+    document.querySelectorAll('.pg').forEach(p => { p.style.display = 'none'; p.classList.remove('on'); });
+    document.getElementById('p-reader')?.classList.add('on');
+  } else {
+    showPage(r.page === 'detail' ? 'detail' : r.page);
+  }
+  // El <head> arranca con el body oculto (visibility:hidden) para que nunca
+  // se llegue a pintar "inicio" mientras cargan los 6 <script> por red —
+  // recién ahora, con la página real ya decidida, lo mostramos.
+  document.body.style.visibility = 'visible';
+})();
+
+// Apenas terminan de parsearse TODOS los scripts (mucho antes que 'load',
+// que encima espera imágenes/CSS) — si la ruta inicial es detalle o lector,
+// arrancar el fetch de sus datos ya mismo, en paralelo a lo que haga init().
+// openDetail/openReader ya toleran que allMangas todavía esté vacío (caen
+// al slug/nombre tal cual y se autocorrigen con replaceState apenas responde
+// el fetch), así que no hace falta esperar a que init() cargue el catálogo.
+document.addEventListener('DOMContentLoaded', () => {
+  const r = _initialRoute;
+  if (r.page === 'detail' && r.mangaSlug) {
+    openDetail(encodeURIComponent(r.mangaSlug), true);
+  } else if (r.page === 'reader' && r.mangaSlug && r.chapterSlug) {
+    openReader(encodeURIComponent(r.mangaSlug), r.chapterSlug, r.chapterSlug, true);
+  }
+});
 
 document.querySelectorAll('.ni[data-p]').forEach(b => {
   b.addEventListener('click', () => {
     document.querySelectorAll('.ni').forEach(x => x.classList.remove('on'));
     b.classList.add('on');
     const page = b.dataset.p;
-    history.pushState({page}, '');
+    history.pushState({page}, '', Router.buildPath(page));
     showPage(page);
     if (page === 'capitulos') renderCapitulos(1);
     if (page === 'rankings') {
@@ -363,8 +448,17 @@ window.addEventListener('popstate', function(e) {
     // Viniendo del lector o navegando hacia adelante — mostrar detalle,
     // y refrescar la lista de capítulos por si se marcó alguno como leído
     // mientras se estaba en el lector.
-    if (currentManga) { showPage('detail'); renderDetChapList(currentManga); }
-    else showPage('inicio');
+    if (currentManga && currentManga.name === state.manga) {
+      showPage('detail'); renderDetChapList(currentManga);
+    } else if (state.manga) {
+      // No tenemos los datos en memoria — típico de F5 estando en el
+      // lector: se entra directo al capítulo, nunca se pasa por el
+      // detalle, así que currentManga queda null. skipHistory=true porque
+      // la URL ya es la correcta (la puso el navegador solo, al volver).
+      openDetail(encodeURIComponent(state.manga), false, true);
+    } else {
+      showPage('inicio');
+    }
     return;
   }
   if (state.page) {
@@ -469,18 +563,12 @@ applyPCLayout();
 window.addEventListener('resize', applyPCLayout);
 
 // ── EXPORT / IMPORT PROGRESO ─────────────────────────────────────────────────
+// El fetch/blob/parseo vive en API.exportProgress()/API.importProgress()
+// (client/js/api.js), compartido con stats.html — acá solo queda el toast y
+// qué refrescar después, que sí es propio de esta página.
 async function exportProgress() {
   try {
-    const r    = await fetch('/api/mangas/progress/export', { headers: { Authorization: 'Bearer ' + API.getToken() } });
-    const blob = await r.blob();
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement('a');
-    a.href = url;
-    a.download = `progreso-manga-${new Date().toISOString().slice(0,10)}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+    await API.exportProgress();
     showToastApp('✅ Progreso exportado');
   } catch(e) { showToastApp('❌ Error al exportar', 'err'); }
 }
@@ -488,15 +576,7 @@ async function exportProgress() {
 async function importProgressFromPanel(input) {
   const file = input.files[0]; if (!file) return;
   try {
-    const text = await file.text();
-    const json = JSON.parse(text);
-    const progress = json.progress || json;
-    const r = await fetch('/api/mangas/progress/import', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + API.getToken() },
-      body: JSON.stringify({ progress, merge: false })
-    });
-    const data = await r.json();
+    const data = await API.importProgress(file, false);
     if (data.ok) {
       showToastApp(`✅ Importados ${data.imported} mangas`);
       API.invalidateAll();
@@ -547,12 +627,20 @@ async function init() {
         if(el) el.innerHTML='<p class="empty">No se encontraron mangas. Configura MANGA_PATH en el .env</p>';
       });
     }
-    renderCapitulos(1);
+    renderCapitulos(_initialRoute.page === 'capitulos' ? (_initialRoute.capPage || 1) : 1);
     // Deep-link desde páginas externas al SPA (ej. stats.html → "ver detalles"
     // de un manga). Solo abre el detalle, nunca el lector — el lector nunca
     // navega afuera del SPA, así que no necesita esto.
     const gotoManga = new URLSearchParams(window.location.search).get('goto');
-    if (gotoManga) { window.history.replaceState({}, '', '/'); await openDetail(encodeURIComponent(gotoManga)); }
+    if (gotoManga) {
+      window.history.replaceState({}, '', '/');
+      await openDetail(encodeURIComponent(gotoManga));
+    } else {
+      // Aplicar lo que falta de la URL con la que se cargó la página (F5,
+      // link directo, o una de las páginas del nav) — la página y el fetch
+      // de detalle/lector ya se resolvieron antes.
+      applyInitialRoute();
+    }
   } catch(err) {
     console.error('Error iniciando app:', err);
     ['sgrid','rlist','rlist-pc','cont-reading','recent-grid'].forEach(id=>{
@@ -565,6 +653,19 @@ async function init() {
   }
 }
 window.addEventListener('load', () => setTimeout(init, 50));
+
+// Termina de aplicar la ruta inicial una vez que init() ya cargó allMangas.
+// El "mostrar la página correcta" y el fetch de detalle/lector ya se
+// hicieron antes (ver showInitialPageSync y el listener de DOMContentLoaded,
+// arriba) — acá solo queda lo que sí depende de allMangas: restaurar el
+// texto de búsqueda si se entró por /buscar?q=...
+function applyInitialRoute() {
+  const r = _initialRoute;
+  if (r.page === 'busqueda' && r.q) {
+    const sinput = document.getElementById('sinput');
+    if (sinput) { sinput.value = r.q; renderSearch(r.q); }
+  }
+}
 
 // ── FEATURED CAROUSEL ─────────────────────────────────────────────────────────
 let _featSlides = [];   // mangas seleccionados
@@ -628,7 +729,7 @@ function _buildCarouselDOM() {
         ${cover ? `<img class="feat-cover-hero" src="${cover}" alt="" draggable="false">` : ''}
         <div class="feat-hero-text">
           <div class="feat-title">${esc(m.name)}</div>
-          <button class="feat-btn" onclick="openDetail('${encodeURIComponent(m.name)}')">Ver detalles \u2192</button>
+          <button class="feat-btn" data-open-manga="${esc(m.name)}">Ver detalles \u2192</button>
         </div>
       </div>
       <div class="feat-info-bar">

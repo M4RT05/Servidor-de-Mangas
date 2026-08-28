@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover">
+  <title>Control del Scraper — MangaServer</title>
+  <link href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.34.0/dist/tabler-icons.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="/css/themes.css">
+  <style>
+    /* ════════════════════════════════════════════════════════════════
+       TAMAÑOS DE TEXTO — todo en un solo lugar.
+       Para agrandar/achicar letra en toda la pantalla, cambiá los
+       valores acá abajo (son px). No hace falta tocar nada más del CSS.
+       ════════════════════════════════════════════════════════════════ */
+    :root{
+      --fs-base:    14px;   /* texto general: botones, hints, filas de fuentes */
+      --fs-h2:      15px;   /* títulos de cada tarjeta ("Estado", "Iniciar escaneo"...) */
+      --fs-status:  15px;   /* línea grande de estado ("Corriendo — pase único") */
+      --fs-sub:     12px;   /* texto chico: sub-estado, datos de inicio/detención, foot */
+      --fs-console: 10px;   /* texto de la consola en vivo — este es el valor de CELULAR (mobile-first) */
+    }
+
+    *{margin:0;padding:0;box-sizing:border-box;}
+    html,body{height:100%;}
+    body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:var(--fs-base);display:flex;flex-direction:column;overflow:hidden;}
+
+    .topbar{background:var(--surf);border-bottom:1px solid var(--brd);padding:14px 20px;display:flex;align-items:center;gap:12px;flex-shrink:0;}
+    .topbar a{color:var(--mut);text-decoration:none;font-size:14px;display:flex;align-items:center;gap:5px;}
+    .topbar a:hover{color:var(--text);}
+    .topbar h1{font-size:16px;font-weight:700;flex:1;}
+
+    .card{background:var(--surf);border:1px solid var(--brd);border-radius:16px;padding:20px;margin-bottom:16px;}
+    h2{font-size:var(--fs-h2);font-weight:700;color:var(--text);margin-bottom:14px;}
+    .btn{padding:10px 18px;border-radius:10px;border:none;cursor:pointer;font-size:13px;font-weight:700;transition:opacity .15s;}
+    .btn:hover{opacity:.85;}
+    .btn:disabled{opacity:.4;cursor:not-allowed;}
+    .btn-pri{background:var(--acc);color:var(--bg);}
+    .btn-del{background:rgba(var(--red-rgb),.15);color:var(--red);border:1px solid rgba(var(--red-rgb),.3);}
+    .btn-sec{background:var(--surf);color:var(--text);border:1px solid var(--brd);}
+    .btn-lg{padding:14px 20px;font-size:14px;flex:1;display:flex;align-items:center;justify-content:center;gap:8px;}
+    .msg{font-size:13px;padding:10px 14px;border-radius:10px;margin-bottom:12px;display:none;}
+    .msg.ok{background:rgba(var(--grn-rgb),.12);color:var(--grn);border:1px solid rgba(var(--grn-rgb),.25);}
+    .msg.err{background:rgba(var(--red-rgb),.12);color:var(--red);border:1px solid rgba(var(--red-rgb),.3);}
+
+    /* ── Estado ── */
+    .status-row{display:flex;align-items:center;gap:10px;margin-bottom:4px;}
+    .status-dot{width:10px;height:10px;border-radius:50%;background:var(--mut);flex-shrink:0;}
+    .status-dot.idle{background:var(--mut);}
+    .status-dot.running{background:var(--grn);box-shadow:0 0 0 3px rgba(var(--grn-rgb),.2);animation:pulse 1.6s infinite;}
+    .status-dot.stopping{background:var(--acc);box-shadow:0 0 0 3px rgba(var(--acc-rgb),.2);animation:pulse 1.6s infinite;}
+    .status-dot.error{background:var(--red);}
+    @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.4;}}
+    .status-label{font-size:var(--fs-status);font-weight:700;}
+    .status-sub{font-size:var(--fs-sub);color:var(--mut);margin-top:2px;margin-left:20px;}
+
+    /* ── Datos de inicio y detención (wireframe celular: caja propia debajo de Estado) ── */
+    .info-sub{margin-top:12px;padding-top:12px;border-top:1px solid var(--brd);font-size:var(--fs-sub);color:var(--mut);line-height:1.7;}
+    .info-sub:empty{display:none;}
+
+    /* ── Progreso ── */
+    .progress-wrap{margin-top:14px;}
+    .progress-bar{height:8px;background:var(--card);border-radius:4px;overflow:hidden;}
+    .progress-fill{height:100%;background:var(--acc);border-radius:4px;width:0%;transition:width .4s ease;}
+    .progress-text{font-size:var(--fs-sub);color:var(--mut);margin-top:6px;display:flex;justify-content:space-between;}
+
+    /* ── Selector de modo (segmented) ── */
+    .mode-select{display:flex;background:var(--card);border:1px solid var(--brd);border-radius:10px;padding:3px;margin-bottom:14px;}
+    .mode-opt{flex:1;text-align:center;padding:9px 8px;font-size:13px;font-weight:600;color:var(--mut);border-radius:8px;cursor:pointer;transition:background .15s,color .15s;}
+    .mode-opt.on{background:var(--acc);color:var(--bg);}
+    .mode-hint{font-size:var(--fs-sub);color:var(--mut);margin-bottom:14px;line-height:1.5;}
+
+    .btn-row{display:flex;gap:10px;}
+
+    /* ── Administrador de fuentes ── */
+    .fuente-row{display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--brd);}
+    .fuente-row:last-child{border-bottom:none;}
+    .fuente-label{display:flex;align-items:center;gap:9px;font-size:var(--fs-base);}
+    .fuente-label .icono{font-size:15px;width:20px;text-align:center;flex-shrink:0;}
+    .switch{position:relative;width:38px;height:22px;flex-shrink:0;}
+    .switch input{opacity:0;width:0;height:0;position:absolute;}
+    .switch .slider{position:absolute;inset:0;background:var(--brd);border-radius:999px;transition:.15s;cursor:pointer;}
+    .switch .slider::before{content:'';position:absolute;width:16px;height:16px;left:3px;top:3px;background:var(--text);border-radius:50%;transition:.15s;}
+    .switch input:checked + .slider{background:var(--grn);}
+    .switch input:checked + .slider::before{transform:translateX(16px);}
+    .switch input:disabled + .slider{opacity:.4;cursor:not-allowed;}
+    .fuentes-hint{font-size:var(--fs-sub);color:var(--acc);background:rgba(var(--acc-rgb),.1);border:1px solid rgba(var(--acc-rgb),.25);border-radius:10px;padding:9px 11px;margin-top:12px;line-height:1.5;display:none;}
+    .fuentes-hint.show{display:block;}
+    .fuentes-loading{font-size:var(--fs-sub);color:var(--mut);font-style:italic;}
+
+    /* ── Orden de descarga ── */
+    .orden-explicacion{font-size:var(--fs-sub);color:var(--mut);line-height:1.5;margin:2px 0 12px;}
+    .orden-badge{font-size:11px;font-weight:600;color:var(--acc);background:rgba(var(--acc-rgb),.12);border:1px solid rgba(var(--acc-rgb),.3);border-radius:999px;padding:2px 9px;margin-left:6px;vertical-align:middle;}
+    .orden-row{display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--brd);}
+    .orden-row:last-child{border-bottom:none;}
+    .orden-pos{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;font-size:11px;font-weight:600;color:var(--mut);background:var(--surf);border-radius:6px;margin-right:9px;flex-shrink:0;}
+    .orden-arrows{display:flex;gap:4px;flex-shrink:0;}
+    .orden-arrow{width:30px;height:30px;display:flex;align-items:center;justify-content:center;border:1px solid var(--brd);background:var(--surf);border-radius:8px;color:var(--text);cursor:pointer;font-size:15px;}
+    .orden-arrow:disabled{opacity:.3;cursor:not-allowed;}
+    .orden-arrow:not(:disabled):active{background:var(--card);}
+
+    /* ── Consola en vivo ── */
+    .console-card{display:flex;flex-direction:column;flex:1;min-height:0;margin-bottom:0;}
+    /* La consola queda SIEMPRE oscura, a propósito — no sigue el tema
+       elegido. Es el mismo criterio que una terminal o los logs de una
+       consola de CI: se lee mejor con fondo oscuro y texto claro
+       independientemente del tema del resto del sitio, y forzarla a blanco
+       en el tema White/Lunar Tide se sentiría raro y perdería la "sensación
+       de terminal". El circulito del switch (#fff, más abajo) tampoco seguía
+       el tema por una razón distinta: es un patrón universal de UI (thumb
+       blanco sobre track de color) que funciona bien en los 4 temas tal
+       como está. */
+    .console{flex:1;min-height:180px;background:#010409;border:1px solid var(--brd);border-radius:12px;padding:12px 14px;overflow-y:auto;-webkit-overflow-scrolling:touch;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.2) transparent;font-family:'SF Mono',Consolas,Menlo,monospace;font-size:var(--fs-console);line-height:1.6;color:#9aa4b2;white-space:pre-wrap;word-break:break-word;}
+    .console::-webkit-scrollbar{width:4px;}
+    .console::-webkit-scrollbar-track{background:transparent;}
+    .console::-webkit-scrollbar-thumb{background:rgba(255,255,255,.25);border-radius:4px;}
+    .console-line{opacity:0;animation:fadein .2s forwards;}
+    @keyframes fadein{to{opacity:1;}}
+    .console-empty{color:#4a5262;font-style:italic;}
+    .console-foot{display:flex;justify-content:space-between;align-items:center;margin-top:10px;flex-shrink:0;}
+    .console-foot a{font-size:var(--fs-sub);color:var(--blue);text-decoration:none;display:flex;align-items:center;gap:4px;}
+    .console-foot a:hover{text-decoration:underline;}
+
+    .stop-warn{margin-top:10px;font-size:var(--fs-sub);color:var(--acc);background:rgba(var(--acc-rgb),.1);border:1px solid rgba(var(--acc-rgb),.25);border-radius:10px;padding:10px 12px;display:none;}
+
+    /* ════════════════════════════════════════════════════════════════
+       LAYOUT
+       Celular (por defecto): 2 páginas horizontales con swipe/scroll-snap
+         — página 1: Estado + Iniciar escaneo + Administrador de fuentes
+         — página 2: Consola en vivo, ocupando toda la pantalla disponible
+       PC (>=900px, ver media query más abajo): sidebar fija a la
+         izquierda + consola grande a la derecha, lado a lado — mismo
+         wireframe "Interfaz de pc".
+       ════════════════════════════════════════════════════════════════ */
+    .layout{flex:1;min-height:0;position:relative;}
+
+    .swipe-wrap{
+      display:flex;
+      height:100%;
+      overflow-x:auto;
+      overflow-y:hidden;
+      scroll-snap-type:x mandatory;
+      -webkit-overflow-scrolling:touch;
+    }
+    .swipe-page{
+      min-width:100%;
+      height:100%;
+      scroll-snap-align:start;
+      overflow-y:auto;
+      padding:16px 16px calc(16px + env(safe-area-inset-bottom,16px));
+    }
+    /* La página de consola en celular usa menos margen que el resto —
+       "un pequeño espacio" a los costados en vez del padding parejo de
+       16px que sí tienen las cards de controles. En PC esto se pisa por
+       completo en la media query de más abajo (padding:0). */
+    .swipe-page.console-page{display:flex;flex-direction:column;padding:10px 6px calc(10px + env(safe-area-inset-bottom,10px));}
+    .console-card{padding:14px 10px;}
+
+    .swipe-dots{position:absolute;bottom:calc(10px + env(safe-area-inset-bottom,0px));left:50%;transform:translateX(-50%);display:flex;gap:7px;z-index:5;}
+    .swipe-dot{width:7px;height:7px;border-radius:50%;background:var(--brd);cursor:pointer;transition:background .15s;}
+    .swipe-dot.on{background:var(--acc);}
+
+    @media (min-width:900px){
+      /* Tamaño de texto de la consola solo para PC — pisa el valor de
+         celular de la línea 19 nada más a partir de los 900px de ancho.
+         Cambiá este número para ajustar el tamaño de letra únicamente
+         en PC, sin afectar celular. */
+      :root{ --fs-console: 14px; }
+
+      .swipe-wrap{
+        overflow:visible;
+        display:grid;
+        grid-template-columns:340px 1fr;
+        gap:16px;
+        padding:16px;
+        height:100%;
+      }
+      .swipe-page{scroll-snap-align:none;min-width:0;padding:0;overflow-y:auto;}
+      .swipe-page.console-page{padding:0;}
+      .console-card{padding:20px;}
+      .swipe-dots{display:none;}
+    }
+  </style>
+</head>
+<body>
+<div class="topbar">
+  <a href="/"><i class="ti ti-arrow-left"></i> Volver</a>
+  <h1>Control del Scraper</h1>
+</div>
+
+<div class="layout">
+  <div class="swipe-wrap" id="swipe-wrap">
+
+    <!-- Página 1 (celular) / Sidebar (PC): Estado, Iniciar escaneo, Administrador de fuentes -->
+    <div class="swipe-page" id="page-controles">
+      <div class="msg" id="msg"></div>
+
+      <div class="card">
+        <h2>Estado</h2>
+        <div class="status-row">
+          <div class="status-dot idle" id="status-dot"></div>
+          <div class="status-label" id="status-label">Cargando...</div>
+        </div>
+        <div class="status-sub" id="status-sub"></div>
+        <div class="progress-wrap" id="progress-wrap" style="display:none;">
+          <div class="progress-bar"><div class="progress-fill" id="progress-fill"></div></div>
+          <div class="progress-text">
+            <span id="progress-text-left">—</span>
+            <span id="progress-text-right"></span>
+          </div>
+        </div>
+        <div class="stop-warn" id="stop-warn">
+          Está tardando en detenerse (puede estar en medio de una descarga). Si no responde en breve, podés forzar la detención — con eso hay riesgo de dejar el navegador del scraper abierto de más, habría que cerrarlo a mano después.
+          <div style="margin-top:8px;"><button class="btn btn-del btn-sm" id="btn-force" style="padding:6px 13px;font-size:12px;">Forzar detención</button></div>
+        </div>
+        <!-- Datos de inicio y detención -->
+        <div class="info-sub" id="info-sub"></div>
+      </div>
+
+      <div class="card">
+        <h2>Iniciar escaneo</h2>
+        <div class="mode-select">
+          <div class="mode-opt on" id="mode-once" data-mode="once">Un pase</div>
+          <div class="mode-opt" id="mode-continuous" data-mode="continuous">Modo continuo</div>
+        </div>
+        <div class="mode-hint" id="mode-hint">Corre el catálogo activo una sola vez y se detiene solo al terminar.</div>
+        <div class="btn-row">
+          <button class="btn btn-pri btn-lg" id="btn-start"><i class="ti ti-player-play"></i> Iniciar</button>
+          <button class="btn btn-del btn-lg" id="btn-stop" disabled><i class="ti ti-player-stop"></i> Detener</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Administrador de fuentes</h2>
+        <div id="fuentes-list"><div class="fuentes-loading">Cargando...</div></div>
+        <div class="fuentes-hint" id="fuentes-hint">No se puede cambiar mientras el scraper está corriendo — el cambio queda guardado y aplica recién en el próximo escaneo.</div>
+      </div>
+
+      <div class="card">
+        <h2>Orden de descarga <span class="orden-badge" id="orden-badge" style="display:none;">personalizado</span></h2>
+        <p class="orden-explicacion">Define en qué orden se escanean los sitios en cada ciclo, y cuál gana por defecto cuando el mismo manga se sigue desde 2 o más fuentes a la vez — salvo que se fuerce una prioridad puntual para ese manga desde el Editor de seguimiento, que siempre tiene la última palabra. El de más arriba es el de mayor prioridad.</p>
+        <div id="orden-list"><div class="fuentes-loading">Cargando...</div></div>
+        <div class="btn-row" style="margin-top:12px;">
+          <button class="btn btn-sec btn-sm" id="btn-orden-reset" style="display:none;">Restaurar orden de fábrica</button>
+          <button class="btn btn-pri btn-sm" id="btn-orden-guardar" disabled>Guardar orden</button>
+        </div>
+        <div class="fuentes-hint" id="orden-hint">No se puede cambiar mientras el scraper está corriendo — el cambio queda guardado y aplica recién en el próximo escaneo.</div>
+      </div>
+    </div>
+
+    <!-- Página 2 (celular) / Panel derecho (PC): Consola en vivo -->
+    <div class="swipe-page console-page" id="page-consola">
+      <div class="card console-card">
+        <h2>Consola en vivo</h2>
+        <div class="console" id="console"><span class="console-empty">Sin actividad todavía. Iniciá un escaneo para ver el detalle acá.</span></div>
+        <div class="console-foot">
+          <span id="conn-indicator" style="font-size:var(--fs-sub);color:var(--mut);"></span>
+          <a href="/api/admin/scraper/reporte" target="_blank"><i class="ti ti-history"></i> Ver historial completo</a>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="swipe-dots" id="swipe-dots">
+    <div class="swipe-dot on" data-page="0"></div>
+    <div class="swipe-dot" data-page="1"></div>
+  </div>
+</div>
+
+<script src="/js/api.js"></script>
+<script>
+// Aplicar el tema elegido en el resto de la app — antes este panel se
+// quedaba siempre con los colores por defecto (Origins) sin importar qué
+// tema tuviera elegido el usuario en Panel de usuario > Temas visuales.
+const _theme = localStorage.getItem('manga_theme') || '';
+if (_theme) document.body.classList.add(_theme);
+
+// ── Estado local de la UI ────────────────────────────────────────────────────
+let selectedMode  = 'once';   // 'once' | 'continuous'
+let currentState  = 'idle';   // 'idle' | 'running_once' | 'running_continuous' | 'waiting_next_cycle' | 'stopping' | 'error'
+let eventSource   = null;
+let stopWarnTimer = null;
+let fuentesBloqueadas = false;  // true mientras el scraper está corriendo
+
+function showMsg(text, type) {
+  const el = document.getElementById('msg');
+  el.textContent = text;
+  el.className = 'msg ' + type;
+  el.style.display = 'block';
+  setTimeout(() => el.style.display = 'none', 3500);
+}
+
+// ── Selector de modo ──────────────────────────────────────────────────────
+const MODE_HINTS = {
+  once: 'Corre el catálogo activo una sola vez y se detiene solo al terminar.',
+  continuous: 'Corre el catálogo activo y se repite cada 1 hora hasta que apretés Detener.'
+};
+document.querySelectorAll('.mode-opt').forEach(el => {
+  el.addEventListener('click', () => {
+    if (currentState !== 'idle' && currentState !== 'error') return; // no cambiar modo con algo corriendo
+    selectedMode = el.dataset.mode;
+    document.querySelectorAll('.mode-opt').forEach(o => o.classList.toggle('on', o === el));
+    document.getElementById('mode-hint').textContent = MODE_HINTS[selectedMode];
+  });
+});
+
+// ── Datos de inicio y detención ───────────────────────────────────────────
+function renderInfoSub(state) {
+  const el = document.getElementById('info-sub');
+  const lineas = [];
+
+  if (state.since) {
+    lineas.push(`Inicio: ${new Date(state.since).toLocaleString('es')}`);
+  }
+  if (state.nextCycleAt) {
+    lineas.push(`Próximo ciclo: ${new Date(state.nextCycleAt).toLocaleString('es')}`);
+  }
+  if (currentState === 'idle') {
+    if (state.caidaDetectada) {
+      lineas.push('Última corrida: se cortó sola (caída detectada)');
+    } else if (state.lastStoppedManually === true) {
+      lineas.push('Última corrida: detenida manualmente');
+    } else if (state.lastStoppedManually === false) {
+      lineas.push('Última corrida: terminó sola');
+    }
+  }
+
+  el.innerHTML = lineas.map(l => `<div>${l}</div>`).join('');
+}
+
+// ── Render de estado ──────────────────────────────────────────────────────
+function renderState(state) {
+  currentState = state.status || 'idle';
+  const dot   = document.getElementById('status-dot');
+  const label = document.getElementById('status-label');
+  const sub   = document.getElementById('status-sub');
+  const btnStart = document.getElementById('btn-start');
+  const btnStop  = document.getElementById('btn-stop');
+  const progWrap = document.getElementById('progress-wrap');
+
+  dot.className = 'status-dot';
+  document.getElementById('stop-warn').style.display = 'none';
+  clearTimeout(stopWarnTimer);
+
+  const LABELS = {
+    idle:                { text: 'Detenido', dotClass: 'idle' },
+    running_once:        { text: 'Corriendo — pase único', dotClass: 'running' },
+    running_continuous:  { text: 'Corriendo — modo continuo', dotClass: 'running' },
+    waiting_next_cycle:  { text: 'Modo continuo activo — esperando próximo ciclo', dotClass: 'running' },
+    stopping:            { text: 'Deteniendo...', dotClass: 'stopping' },
+    error:               { text: 'Error al consultar estado', dotClass: 'error' },
+  };
+  const l = LABELS[currentState] || LABELS.idle;
+  dot.classList.add(l.dotClass);
+  label.textContent = l.text;
+
+  sub.textContent = state.caidaDetectada
+    ? 'La corrida anterior no se cerró prolijo (¿corte de luz o cierre forzado?) — se puede iniciar de nuevo sin problema.'
+    : state.startedByExternal
+    ? 'Iniciado manualmente (no desde esta app) — igual se puede detener desde acá.'
+    : '';
+
+  renderInfoSub(state);
+
+  const running = currentState === 'running_once' || currentState === 'running_continuous' || currentState === 'waiting_next_cycle';
+  btnStart.disabled = running || currentState === 'stopping';
+  btnStop.disabled  = !running;
+
+  if (running && state.progress) {
+    progWrap.style.display = 'block';
+    const p = state.progress;
+    const pct = p.totalMangas ? Math.round((p.mangaActual / p.totalMangas) * 100) : 0;
+    document.getElementById('progress-fill').style.width = pct + '%';
+    document.getElementById('progress-text-left').textContent =
+      `Manga ${p.mangaActual || 0}/${p.totalMangas || '?'}${p.nombreManga ? ' — ' + p.nombreManga : ''}`;
+    document.getElementById('progress-text-right').textContent =
+      p.capituloTotal ? `Cap. ${p.capituloActual || 0}/${p.capituloTotal}` : '';
+  } else {
+    progWrap.style.display = 'none';
+  }
+
+  if (currentState === 'stopping') {
+    stopWarnTimer = setTimeout(() => { document.getElementById('stop-warn').style.display = 'block'; }, 15000);
+  }
+
+  // El administrador de fuentes se bloquea con cualquier cosa que no sea
+  // "detenido" — mismo criterio que exige el backend en POST /fuentes.
+  const bloquearAhora = currentState !== 'idle' && currentState !== 'error';
+  if (bloquearAhora !== fuentesBloqueadas) {
+    fuentesBloqueadas = bloquearAhora;
+    document.querySelectorAll('#fuentes-list input[type=checkbox]').forEach(cb => cb.disabled = fuentesBloqueadas);
+    document.getElementById('fuentes-hint').classList.toggle('show', fuentesBloqueadas);
+  }
+
+  // Mismo criterio para el orden de descarga — ver POST /orden-fuentes.
+  if (bloquearAhora !== ordenBloqueado) {
+    ordenBloqueado = bloquearAhora;
+    if (ordenActual.length) renderOrden(); // reconstruye las filas con las flechas ya (des)habilitadas
+    document.getElementById('btn-orden-reset').disabled = ordenBloqueado;
+    actualizarBotonGuardarOrden();
+    document.getElementById('orden-hint').classList.toggle('show', ordenBloqueado);
+  }
+}
+
+// ── Consola ───────────────────────────────────────────────────────────────
+function appendLog(line) {
+  const el = document.getElementById('console');
+  if (el.querySelector('.console-empty')) el.innerHTML = '';
+  const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+  const div = document.createElement('div');
+  div.className = 'console-line';
+  div.textContent = line;
+  el.appendChild(div);
+  // Tope de líneas en memoria — un escaneo de 3h puede generar mucho texto,
+  // sin esto el DOM crece sin límite mientras la pestaña queda abierta.
+  while (el.children.length > 500) el.removeChild(el.firstChild);
+  if (atBottom) el.scrollTop = el.scrollHeight;
+}
+
+// ── Conexión en vivo (SSE) ────────────────────────────────────────────────
+function connectStream() {
+  if (eventSource) eventSource.close();
+  eventSource = new EventSource('/api/admin/scraper/stream');
+  const indicator = document.getElementById('conn-indicator');
+
+  eventSource.addEventListener('open', () => { indicator.textContent = ''; });
+  eventSource.addEventListener('log', e => { try { appendLog(JSON.parse(e.data)); } catch {} });
+  eventSource.addEventListener('state', e => { try { renderState(JSON.parse(e.data)); } catch {} });
+  eventSource.addEventListener('error', () => {
+    indicator.textContent = 'Reconectando...';
+    refreshStatus();
+  });
+}
+
+async function refreshStatus() {
+  const state = await API.getScraperStatus();
+  if (state) renderState(state);
+  else renderState({ status: 'error' });
+}
+
+// ── Administrador de fuentes ──────────────────────────────────────────────
+const NOMBRE_FUENTE = {
+  olympus: 'Olympus', nexus: 'Nexus', temple: 'Temple', dragon: 'Dragon',
+  ikigai: 'Ikigai', taurus: 'Taurus', leercapitulo: 'LeerCapitulo',
+  manhwaweb: 'ManhwasWEB', tmo: 'ZonaTMO',
+};
+
+async function cargarFuentes() {
+  const cont = document.getElementById('fuentes-list');
+  const res = await API.getFuentesActivas();
+  if (!res?.fuentes) {
+    cont.innerHTML = '<div class="fuentes-loading">No se pudo cargar — revisá la conexión.</div>';
+    return;
+  }
+  cont.innerHTML = '';
+  for (const f of res.fuentes) {
+    const row = document.createElement('div');
+    row.className = 'fuente-row';
+    row.innerHTML = `
+      <div class="fuente-label"><span class="icono">${f.icono}</span><span>${NOMBRE_FUENTE[f.fuente] || f.fuente}</span></div>
+      <label class="switch">
+        <input type="checkbox" data-fuente="${f.fuente}" ${f.activa ? 'checked' : ''} ${fuentesBloqueadas ? 'disabled' : ''}>
+        <span class="slider"></span>
+      </label>`;
+    cont.appendChild(row);
+  }
+  cont.querySelectorAll('input[type=checkbox]').forEach(cb => {
+    cb.addEventListener('change', async () => {
+      const fuente  = cb.dataset.fuente;
+      const activa  = cb.checked;
+      cb.disabled = true;
+      const res = await API.setFuentesActivas({ [fuente]: activa });
+      if (res?.ok) {
+        showMsg(`${NOMBRE_FUENTE[fuente] || fuente} ${activa ? 'activada' : 'desactivada'} — aplica desde el próximo escaneo.`, 'ok');
+      } else {
+        showMsg(res?.error || 'No se pudo guardar el cambio.', 'err');
+        cb.checked = !activa; // revertir visualmente si falló
+      }
+      cb.disabled = fuentesBloqueadas;
+    });
+  });
+}
+
+// ── Orden de descarga ────────────────────────────────────────────────────
+let ordenActual    = [];   // fuentes en el orden que se está mostrando/editando ahora
+let ordenGuardado  = [];   // último orden confirmado por el servidor (para saber si hay cambios sin guardar)
+let ordenIconoDe    = {};  // fuente -> icono, para no perderlo al reordenar
+let ordenBloqueado  = false;  // mismo criterio que fuentesBloqueadas: true mientras el scraper corre
+
+async function cargarOrdenFuentes() {
+  const cont = document.getElementById('orden-list');
+  const res = await API.getOrdenFuentes();
+  if (!res?.orden) {
+    cont.innerHTML = '<div class="fuentes-loading">No se pudo cargar — revisá la conexión.</div>';
+    return;
+  }
+  ordenActual   = res.orden.map(f => f.fuente);
+  ordenGuardado = [...ordenActual];
+  ordenIconoDe  = {};
+  for (const f of res.orden) ordenIconoDe[f.fuente] = f.icono;
+  document.getElementById('orden-badge').style.display = res.personalizado ? 'inline-block' : 'none';
+  document.getElementById('btn-orden-reset').style.display = res.personalizado ? '' : 'none';
+  renderOrden();
+}
+
+function renderOrden() {
+  const cont = document.getElementById('orden-list');
+  cont.innerHTML = '';
+  ordenActual.forEach((fuente, i) => {
+    const row = document.createElement('div');
+    row.className = 'orden-row';
+    row.innerHTML = `
+      <div class="fuente-label">
+        <span class="orden-pos">${i + 1}</span>
+        <span class="icono">${ordenIconoDe[fuente] || '📖'}</span>
+        <span>${NOMBRE_FUENTE[fuente] || fuente}</span>
+      </div>
+      <div class="orden-arrows">
+        <button class="orden-arrow" data-dir="up" data-fuente="${fuente}" ${i === 0 || ordenBloqueado ? 'disabled' : ''} aria-label="Subir prioridad"><i class="ti ti-chevron-up"></i></button>
+        <button class="orden-arrow" data-dir="down" data-fuente="${fuente}" ${i === ordenActual.length - 1 || ordenBloqueado ? 'disabled' : ''} aria-label="Bajar prioridad"><i class="ti ti-chevron-down"></i></button>
+      </div>`;
+    cont.appendChild(row);
+  });
+
+  cont.querySelectorAll('.orden-arrow').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const fuente = btn.dataset.fuente;
+      const dir    = btn.dataset.dir;
+      const i = ordenActual.indexOf(fuente);
+      const j = dir === 'up' ? i - 1 : i + 1;
+      if (j < 0 || j >= ordenActual.length) return;
+      [ordenActual[i], ordenActual[j]] = [ordenActual[j], ordenActual[i]];
+      renderOrden();
+      actualizarBotonGuardarOrden();
+    });
+  });
+}
+
+function actualizarBotonGuardarOrden() {
+  const hayCambios = ordenActual.some((f, i) => f !== ordenGuardado[i]);
+  document.getElementById('btn-orden-guardar').disabled = !hayCambios || ordenBloqueado;
+}
+
+document.getElementById('btn-orden-guardar').addEventListener('click', async () => {
+  document.getElementById('btn-orden-guardar').disabled = true;
+  const res = await API.setOrdenFuentes(ordenActual);
+  if (res?.ok) {
+    showMsg('Orden de descarga guardado — aplica desde el próximo escaneo.', 'ok');
+    ordenGuardado = [...ordenActual];
+    document.getElementById('orden-badge').style.display = res.personalizado ? 'inline-block' : 'none';
+    document.getElementById('btn-orden-reset').style.display = res.personalizado ? '' : 'none';
+  } else {
+    showMsg(res?.error || 'No se pudo guardar el orden.', 'err');
+  }
+  actualizarBotonGuardarOrden();
+});
+
+document.getElementById('btn-orden-reset').addEventListener('click', async () => {
+  if (!confirm('¿Restaurar el orden de fábrica? Se pierde el orden personalizado que tenías guardado.')) return;
+  document.getElementById('btn-orden-reset').disabled = true;
+  const res = await API.resetOrdenFuentes();
+  if (res?.ok) {
+    showMsg('Orden restaurado al de fábrica — aplica desde el próximo escaneo.', 'ok');
+    ordenActual   = res.orden.map(f => f.fuente);
+    ordenGuardado = [...ordenActual];
+    ordenIconoDe  = {};
+    for (const f of res.orden) ordenIconoDe[f.fuente] = f.icono;
+    document.getElementById('orden-badge').style.display = 'none';
+    document.getElementById('btn-orden-reset').style.display = 'none';
+    renderOrden();
+    actualizarBotonGuardarOrden();
+  } else {
+    showMsg(res?.error || 'No se pudo restaurar el orden.', 'err');
+  }
+  document.getElementById('btn-orden-reset').disabled = false;
+});
+document.getElementById('btn-start').addEventListener('click', async () => {
+  document.getElementById('btn-start').disabled = true;
+  const res = await API.startScraper(selectedMode);
+  if (res?.ok) { showMsg('Escaneo iniciado.', 'ok'); refreshStatus(); }
+  else { showMsg(res?.error || 'No se pudo iniciar (¿ya está corriendo?).', 'err'); refreshStatus(); }
+});
+
+document.getElementById('btn-stop').addEventListener('click', async () => {
+  document.getElementById('btn-stop').disabled = true;
+  const res = await API.stopScraper(false);
+  if (res?.ok) showMsg('Deteniendo... puede tardar un momento en cerrar limpio.', 'ok');
+  else showMsg(res?.error || 'No se pudo enviar la señal de detener.', 'err');
+  refreshStatus();
+});
+
+document.getElementById('btn-force').addEventListener('click', async () => {
+  if (!confirm('¿Forzar la detención? Puede dejar el navegador del scraper abierto de más — habría que cerrarlo a mano si eso pasa.')) return;
+  const res = await API.stopScraper(true);
+  if (res?.ok) showMsg('Detención forzada enviada.', 'ok');
+  else showMsg(res?.error || 'No se pudo forzar la detención.', 'err');
+  refreshStatus();
+});
+
+// ── Navegación swipe (celular) ────────────────────────────────────────────
+const swipeWrap = document.getElementById('swipe-wrap');
+const dots = document.querySelectorAll('.swipe-dot');
+const paginas = document.querySelectorAll('.swipe-page');
+dots.forEach(d => d.addEventListener('click', () => {
+  const idx = Number(d.dataset.page);
+  paginas[idx].scrollIntoView({ behavior: 'smooth', inline: 'start', block: 'nearest' });
+}));
+swipeWrap.addEventListener('scroll', () => {
+  const idx = Math.round(swipeWrap.scrollLeft / swipeWrap.clientWidth);
+  dots.forEach((d, i) => d.classList.toggle('on', i === idx));
+}, { passive: true });
+
+// ── Verificar que es admin, y arrancar ────────────────────────────────────
+(async () => {
+  await API.ready; // esperar a que api.js termine de verificar el token (sin importar cuánto tarde)
+  if (API.getRole() !== 'admin') { alert('Sin permiso.'); window.location.href = '/'; return; }
+  await refreshStatus();
+  await cargarFuentes();
+  await cargarOrdenFuentes();
+  connectStream();
+})();
+</script>
+</body>
+</html>

@@ -27,12 +27,28 @@ function clearDetail() {
   }
 }
 
-async function openDetail(encodedName) {
+async function openDetail(encodedName, isColdStart = false, skipHistory = false) {
   const name = decodeURIComponent(encodedName);
   const navActive = document.querySelector('.ni.on[data-p]');
   fromPage = navActive ? navActive.dataset.p : 'inicio';
   _scrollSave[fromPage] = document.getElementById('cnt').scrollTop;
-  history.pushState({page:'detail', manga:name}, '');
+
+  // encodedName puede ser el nombre real de carpeta (todos los call sites
+  // de siempre) o un slug (cold load desde /series/:slug) — el server
+  // resuelve cualquiera de los dos. Para la URL, si ya tenemos el manga en
+  // allMangas usamos su slug canónico; si no (aún no cargó el listado),
+  // usamos el param tal cual y se corrige con replaceState más abajo.
+  const known = allMangas.find(m => m.name === name || m.slug === name);
+  const slugForUrl = known ? known.slug : name;
+  // skipHistory=true: se usa cuando YA se llegó acá por un history.back()/
+  // forward() nativo del navegador (ver el popstate de app.js) — la URL ya
+  // es la correcta porque el navegador la puso solo, así que no hay que
+  // pushear ni reemplazar nada; solo traer los datos que faltan.
+  if (!skipHistory) {
+    const url = Router.buildPath('detail', { mangaSlug: slugForUrl });
+    if (isColdStart) history.replaceState({page:'detail', manga:name}, '', url);
+    else             history.pushState({page:'detail', manga:name}, '', url);
+  }
   clearDetail();
   showPage('detail');
 
@@ -41,11 +57,16 @@ async function openDetail(encodedName) {
   const data = await API.getManga(name);
   if (!data) {
     showToastApp('Ese manga no existe o no tienes acceso.', 'err');
-    history.replaceState({page: fromPage}, '');
+    if (!skipHistory) history.replaceState({page: fromPage}, '', Router.buildPath(fromPage));
     showPage(fromPage);
     return;
   }
   currentManga = data;
+  // Corregir la URL si al principio no teníamos el slug canónico (pasó un
+  // slug/nombre que no estaba en allMangas todavía) — sin apilar otra entrada.
+  if (!skipHistory && data.slug && data.slug !== slugForUrl) {
+    history.replaceState({page:'detail', manga:data.name}, '', Router.buildPath('detail', { mangaSlug: data.slug }));
+  }
 
   const pcLayout   = g('det-pc-layout');
   const mobileHero = g('det-mobile-hero');
@@ -75,7 +96,8 @@ async function openDetail(encodedName) {
     if(g('det-pc-genres')) g('det-pc-genres').innerHTML   = genreChips(meta, 'det-pc-genre-chip');
     if(g('det-pc-syn'))    g('det-pc-syn').innerHTML      = synopsisHTML(meta.synopsis, data.name+'_pc');
     const first = data.chapters[0]?.number;
-    if(g('det-pc-read-btn')) g('det-pc-read-btn').onclick = () => first && openReader(encodeURIComponent(data.name), first);
+    const firstSlug = data.chapters[0]?.slug;
+    if(g('det-pc-read-btn')) g('det-pc-read-btn').onclick = () => first && openReader(encodeURIComponent(data.name), first, firstSlug);
     if(g('chap-count-num-pc')) g('chap-count-num-pc').textContent = data.chapterCount;
   } else {
     const heroBg      = g('det-hero-bg');
@@ -95,7 +117,7 @@ async function openDetail(encodedName) {
     if(g('det-syn'))        g('det-syn').innerHTML          = synopsisHTML(meta.synopsis, data.name);
     if(g('chap-count-num')) g('chap-count-num').textContent = data.chapterCount;
     const first = data.chapters[0]?.number;
-    if(g('det-read-btn')) g('det-read-btn').onclick = () => first && openReader(encodeURIComponent(data.name), first);
+    if(g('det-read-btn')) g('det-read-btn').onclick = () => first && openReader(encodeURIComponent(data.name), first, data.chapters[0]?.slug);
   }
 
   renderDetChapList(data);
@@ -103,8 +125,8 @@ async function openDetail(encodedName) {
   const chapInput = g('chap-sinput');
   if(chapInput) {
     chapInput.oninput = e => {
-      const q = e.target.value.toLowerCase().trim();
-      const filtered = q ? data.chapters.filter(ch => chLabel(ch.number).toLowerCase().includes(q)||ch.number.toLowerCase().includes(q)) : data.chapters;
+      const q = norm(e.target.value);
+      const filtered = q ? data.chapters.filter(ch => norm(chLabel(ch.number)).includes(q)||norm(ch.number).includes(q)) : data.chapters;
       renderDetChapList({...data, chapters: filtered});
     };
   }
@@ -140,9 +162,9 @@ function renderDetChapList(manga) {
   const chapters = chapSortAsc ? [...manga.chapters] : [...manga.chapters].reverse();
   const coverSrc = manga.cover ? imgSrc(manga.cover) : null;
   const chRowHTML = ch => `
-    <div class="ch-row" onclick="openReader('${encodeURIComponent(manga.name)}','${ch.number}')">
+    <div class="ch-row" data-open-chapter data-manga="${esc(manga.name)}" data-chapter="${esc(ch.number)}" data-slug="${esc(ch.slug||'')}">
       ${coverSrc?`<img class="ch-row-bg" src="${coverSrc}" alt="">`:''}
-      <div class="dot ${ch.read?'r':'u'}" onclick="toggleReadChapter('${ch.number}',event)" title="${ch.read?'Marcar no leído':'Marcar leído'}" style="cursor:pointer;"></div>
+      <div class="dot ${ch.read?'r':'u'}" data-toggle-read="${esc(ch.number)}" title="${ch.read?'Marcar no leído':'Marcar leído'}" style="cursor:pointer;"></div>
       <div class="ch-info">
         <div class="ch-num">${esc(chLabel(ch.number))}</div>
         <div class="ch-tr">${ch.imageCount} páginas${ch.dateLabel?' · '+esc(ch.dateLabel):''}</div>
@@ -198,15 +220,15 @@ const pcChapInput = document.getElementById('chap-sinput-pc');
 if (pcChapInput) {
   pcChapInput.addEventListener('input', e => {
     if (!currentManga) return;
-    const q = e.target.value.toLowerCase().trim();
-    const filtered = q ? currentManga.chapters.filter(ch => chLabel(ch.number).toLowerCase().includes(q)||ch.number.toLowerCase().includes(q)) : currentManga.chapters;
+    const q = norm(e.target.value);
+    const filtered = q ? currentManga.chapters.filter(ch => norm(chLabel(ch.number)).includes(q)||norm(ch.number).includes(q)) : currentManga.chapters;
     if (g('det-chaplist-pc')) {
       const chapters = chapSortAsc ? [...filtered] : [...filtered].reverse();
       const coverSrc = currentManga.cover ? imgSrc(currentManga.cover) : null;
       g('det-chaplist-pc').innerHTML = chapters.map(ch => `
-        <div class="ch-row" onclick="openReader('${encodeURIComponent(currentManga.name)}','${ch.number}')">
+        <div class="ch-row" data-open-chapter data-manga="${esc(currentManga.name)}" data-chapter="${esc(ch.number)}" data-slug="${esc(ch.slug||'')}">
           ${coverSrc?`<img class="ch-row-bg" src="${coverSrc}" alt="">`:''}
-          <div class="dot ${ch.read?'r':'u'}" onclick="toggleReadChapter('${ch.number}',event)" style="cursor:pointer;"></div>
+          <div class="dot ${ch.read?'r':'u'}" data-toggle-read="${esc(ch.number)}" style="cursor:pointer;"></div>
           <div class="ch-info"><div class="ch-num">${esc(chLabel(ch.number))}</div><div class="ch-tr">${ch.imageCount} páginas${ch.dateLabel?' · '+esc(ch.dateLabel):''}</div></div>
           <div class="ch-date"><i class="ti ti-chevron-right" style="font-size:16px;color:var(--mut);"></i></div>
         </div>`).join('');

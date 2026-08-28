@@ -16,6 +16,8 @@ Servidor personal para leer tu biblioteca de manga, manhwa y manhua desde cualqu
    - [Rankings](#rankings)
    - [Últimos Capítulos](#últimos-capítulos)
    - [Búsqueda](#búsqueda)
+   - [Detalle del manga](#detalle-del-manga)
+   - [Lector de capítulos](#lector-de-capítulos)
    - [Panel de usuario](#panel-de-usuario)
 6. [Usuarios y permisos](#usuarios-y-permisos)
 7. [Scraper automático](#scraper-automático)
@@ -23,6 +25,7 @@ Servidor personal para leer tu biblioteca de manga, manhwa y manhua desde cualqu
 9. [Acceso remoto con Tailscale](#acceso-remoto-con-tailscale)
 10. [Solución de problemas](#solución-de-problemas)
 11. [Estructura del proyecto](#estructura-del-proyecto)
+12. [Notas de seguridad](#notas-de-seguridad)
 
 ---
 
@@ -33,19 +36,21 @@ Antes de instalar, asegúrate de tener lo siguiente en la PC que va a funcionar 
 - **Node.js v18 o superior** — [descargar en nodejs.org](https://nodejs.org/)
 - **Windows 10 / 11**
 - Una carpeta con tus mangas organizados (ver [estructura de carpetas](#estructura-de-carpetas-de-mangas))
-- Para acceso desde otros dispositivos: todos deben estar en la **misma red WiFi**
+- Para acceso desde otros dispositivos: todos deben estar en la **misma red WiFi** (o usar [Tailscale](#acceso-remoto-con-tailscale) para acceder desde afuera)
 
 ---
 
 ## Instalación
 
 1. Descarga o clona el repositorio en tu PC
-2. Copia el archivo `.env.example` y renómbralo a `.env`
+2. Copia el archivo **`.env.example`** y renómbralo a **`.env`**
 3. Completa los valores del `.env` (ver [Configuración](#configuración))
 4. Doble clic en **`iniciar_servidor.bat`** — ejecutar como **Administrador** la primera vez para que configure el firewall automáticamente
 5. Abre el navegador en `http://localhost:3000`
 
 > **Primera vez:** El `.bat` instala las dependencias automáticamente con `npm install`. Puede tardar un minuto.
+
+> **Nota:** cada vez que arrancás el servidor con el `.bat`, este limpia cualquier instancia anterior del propio servidor que haya quedado corriendo de una sesión previa (por ejemplo, si cerraste la ventana sin cortar el proceso). Esa limpieza es selectiva — solo apaga procesos de Node que sean *este* servidor, no toca otros programas Node.js que tengas abiertos en la misma PC.
 
 ---
 
@@ -68,14 +73,17 @@ PORT=3000
 # Ruta a tu carpeta de mangas principal
 MANGA_PATH=D:\Mis Mangas
 
-# Segunda carpeta de mangas (opcional — podés agregar MANGA_PATH_3, MANGA_PATH_4, etc.)
+# Carpetas adicionales de mangas (opcional — podés agregar MANGA_PATH_3, MANGA_PATH_4, etc.)
+# El servidor las fusiona y las sirve todas juntas como una sola biblioteca.
 # MANGA_PATH_2=E:\Mis Mangas 2
 
 # Ruta donde el scraper descarga los capítulos (opcional — si no se define, usa MANGA_PATH)
 # MANGA_PATH_SCRAPER=D:\Mis Mangas
 ```
 
-> **Importante:** El archivo `.env` contiene tu contraseña. Nunca lo subas a GitHub. Ya está incluido en `.gitignore`.
+> **Importante:** El archivo `.env` contiene tu contraseña y la clave de sesión. Nunca lo subas a GitHub. Ya está incluido en `.gitignore`.
+
+> **Si tenés varias carpetas de mangas (`MANGA_PATH`, `MANGA_PATH_2`, etc.):** asegurate de que `MANGA_PATH_SCRAPER` apunte a la **misma** raíz donde ya vive cada manga existente antes de correr el scraper sobre él. El scraper descarga siempre a una única carpeta de destino — si un manga que seguís tiene sus capítulos ya guardados en una raíz distinta a `MANGA_PATH_SCRAPER`, el scraper puede terminar creando una carpeta duplicada con el mismo nombre en la carpeta equivocada, y esos capítulos nuevos podrían no aparecer en la biblioteca.
 
 ---
 
@@ -100,7 +108,7 @@ El servidor espera que cada manga esté en su propia carpeta, con los capítulos
 
 **`cover.jpg`** — Portada del manga. Si no existe, el servidor usa la primera imagen del primer capítulo automáticamente.
 
-**`metadata.json`** — Información del manga. Si no existe, aparece con valores por defecto. Ejemplo:
+**`metadata.json`** — Información del manga. Si no existe, aparece con valores por defecto. Ejemplo (ver también `metadata.json.example` en la raíz del proyecto):
 
 ```json
 {
@@ -122,6 +130,8 @@ El servidor espera que cada manga esté en su propia carpeta, con los capítulos
 | `ranking` | Número entero (1 = primero) o `null` |
 | `adult` | `true` o `false` |
 
+Este archivo se puede editar a mano o, más cómodo, desde el **Editor de metadata** del panel de administración (ver [Panel de usuario](#panel-de-usuario)) sin tocar archivos manualmente.
+
 ---
 
 ## Cómo usar el servidor
@@ -130,9 +140,11 @@ El servidor espera que cada manga esté en su propia carpeta, con los capítulos
 
 <img src="docs/screenshots/inicio.jpg" width="320" alt="Pantalla de inicio">
 
-La pantalla principal muestra dos secciones:
+La pantalla principal tiene tres secciones, en este orden:
 
-**Seguir Leyendo** — Mangas que empezaste pero no terminaste, con barra de progreso y el último capítulo leído. Toca una tarjeta para ir directamente al detalle del manga.
+**Carrusel destacado** — Rota automáticamente entre 8 mangas al azar de tu biblioteca (solo los que tienen portada), mostrando sinopsis y géneros. Se puede navegar con las flechas, los puntos indicadores, o tocando "Ver detalles" para ir directo a esa serie. Se pausa solo si la pestaña pierde el foco, para no seguir avanzando en segundo plano.
+
+**Seguir Leyendo** — Mangas que empezaste pero no terminaste, con barra de progreso y el último capítulo leído. Muestra hasta 8 por defecto; si tenés más en progreso, aparece una flecha para desplegar la lista completa. Toca una tarjeta para ir directamente al detalle del manga.
 
 **Añadidos Recientemente** — Los 10 mangas más nuevos de tu biblioteca, ordenados por fecha de creación de la carpeta.
 
@@ -188,7 +200,7 @@ Toca el nombre del manga para ir a su detalle. Toca un capítulo para leerlo dir
 
 <img src="docs/screenshots/busqueda.jpg" width="320" alt="Pantalla de búsqueda">
 
-Busca mangas por nombre en tiempo real mientras escribés. Muestra portada, nombre, tipo, estado y géneros de cada resultado.
+Busca mangas por nombre en tiempo real mientras escribís. Muestra portada, nombre, tipo, estado y géneros de cada resultado.
 
 La búsqueda normaliza acentos y mayúsculas — buscar `"accion"` encuentra mangas con el género `"Acción"`.
 
@@ -207,6 +219,25 @@ Al tocar cualquier manga desde Inicio, Series, Rankings o Búsqueda se abre la v
 - **Lista de capítulos** con páginas, fecha y punto de color (amarillo = no leído, gris = leído)
 - **Botones** para buscar capítulo por número, invertir el orden y marcar/desmarcar todos como leídos
 - **Primer Capítulo** para empezar a leer directamente
+
+---
+
+### Lector de capítulos
+
+El lector vive integrado dentro de la misma aplicación (ya no es una página aparte que recarga el navegador en cada capítulo) — cambiar de capítulo es instantáneo, y el botón "atrás" del navegador o del celular funciona de forma natural para volver al detalle del manga.
+
+**Navegación de capítulos** — Flechas de anterior/siguiente tanto arriba como abajo de la pantalla, y un botón central que abre un selector para saltar directo a cualquier capítulo de la serie.
+
+**Opciones de lectura** (botón de engranaje, arriba o abajo):
+
+- **Modo de lectura** — *Scroll* (todas las páginas en una tira continua) o *Páginas* (una imagen a la vez, con toques a los costados para avanzar/retroceder).
+- **Desplazamiento automático** — Solo disponible en modo Scroll. Avanza la página sola a una velocidad ajustable (10 a 500 px/s).
+- **Modo noche** — Reduce el brillo y la luz azul de las imágenes mientras leés.
+- **Mostrar en pantalla** — Activa o desactiva un panel flotante con accesos rápidos a modo noche y desplazamiento automático, sin tener que abrir el panel de opciones cada vez.
+
+Todas estas preferencias se guardan en el dispositivo y se mantienen entre sesiones. Dentro del lector también podés hacer zoom con los dedos para ver el detalle del arte — algo que el resto de la app bloquea a propósito para que no interfiera con la navegación táctil.
+
+El progreso de lectura se guarda automáticamente a medida que avanzás, capítulo por capítulo.
 
 ---
 
@@ -233,6 +264,8 @@ Accesible tocando el avatar en la esquina superior derecha. Desde aquí podés:
 **Cuenta:**
 - **Gestionar usuarios** *(solo admin)* — Crear, editar y eliminar usuarios, y configurar sus restricciones de contenido (ver [Usuarios y permisos](#usuarios-y-permisos))
 - **Editor de metadata** *(solo admin)* — Editar tipo, estado, ranking, géneros, sinopsis y flag +18 de cada manga directamente desde el navegador, sin tocar archivos manualmente
+- **Panel del scraper** *(solo admin)* — Arrancar y detener el scraper de descargas, ver su consola en vivo mientras corre, y activar/desactivar fuentes individuales, todo desde el navegador (celular incluido), sin necesidad de la terminal de la PC
+- **Editor de seguimiento** *(solo admin)* — Agregar, editar y quitar los mangas que el scraper sigue, con detección automática de duplicados (incluyendo variantes con/sin tildes) al cargar uno nuevo
 - **Cerrar sesión**
 
 ---
@@ -249,6 +282,8 @@ El servidor soporta múltiples usuarios con dos roles: **admin** y **lector**.
 | Guardar progreso de lectura | ✅ | ✅ |
 | Gestionar usuarios | ✅ | ❌ |
 | Editar metadata de mangas | ✅ | ❌ |
+| Controlar el scraper (arrancar/detener/fuentes) | ✅ | ❌ |
+| Editar la lista de seguimiento del scraper | ✅ | ❌ |
 | Configurar restricciones de otros usuarios | ✅ | ❌ |
 
 El **admin principal** se define en el `.env` con `ADMIN_USERNAME` y `ADMIN_PASSWORD`. Los usuarios adicionales se crean desde el panel de administración en `Gestionar usuarios`.
@@ -273,24 +308,27 @@ Cada usuario tiene su propio historial de lectura independiente. El progreso de 
 
 El repositorio incluye un scraper en Python (`scraper/scraper.py`) que descarga capítulos automáticamente desde múltiples sitios de scanlation y los deja directamente en la carpeta que sirve el servidor.
 
-**Sitios soportados:** Olympus Scanlation, Nexus Scanlation, Temple Scan, Dragon Translation, ManhwasWEB e Ikigai Mangas.
+**Sitios soportados:** Olympus, Nexus Scanlation, Temple Scan, Dragon Translation, Ikigai Mangas, Taurus, LeerCapitulo, ManhwasWEB y ZonaTMO.
 
 **Características principales:**
 - Corre en loop (escanea, espera, repite) o una sola vez con `--una-vez`
-- Sistema multi-fuente: el mismo manga puede trackearse desde 2 sitios a la vez, con prioridad configurable — si el sitio principal falla un capítulo, el de respaldo lo cubre
+- Sistema multi-fuente: el mismo manga puede trackearse desde varios sitios a la vez, con prioridad configurable — si el sitio principal falla un capítulo, el de respaldo lo cubre
 - Descarga en staging atómico: nunca deja capítulos a medio bajar en la carpeta real
 - Reintentos automáticos de capítulos fallidos
 - Detección de huecos comparando contra el catálogo real del sitio
 - Lee `MANGA_PATH_SCRAPER` del `.env` del servidor (fallback a `MANGA_PATH`)
 
-**Inicio rápido:**
-```bash
-cd scraper
-python scraper.py           # loop continuo
-python scraper.py --una-vez # un solo escaneo
-```
+**Dos formas de correrlo:**
 
-Los mangas a seguir se configuran en `scraper/seguimiento.json` (copiar desde `scraper/seguimiento.example.json`). Para la documentación completa del scraper, los campos de configuración, el sistema multi-fuente y el detalle de cada sitio, ver [`scraper/README.md`](scraper/README.md).
+1. **Desde el navegador (recomendado para el día a día)** — Como admin, entrá a `Panel del scraper` desde tu perfil. Ahí podés arrancarlo en modo loop o un solo ciclo, verlo trabajar en vivo con una consola en tiempo real, y prenderle o apagarle fuentes individuales sin tocar ningún archivo. Funciona igual desde el celular que desde la PC.
+2. **Desde la terminal** —
+   ```bash
+   cd scraper
+   python scraper.py           # loop continuo
+   python scraper.py --una-vez # un solo escaneo
+   ```
+
+Los mangas a seguir se configuran en `scraper/seguimiento.json` (copiar desde `scraper/seguimiento.example.json`, o agregarlos directamente desde el `Editor de seguimiento` del panel de administración). Para la documentación completa del scraper, los campos de configuración, el sistema multi-fuente y el detalle de cada sitio, ver [`scraper/README.md`](scraper/README.md).
 
 ---
 
@@ -402,6 +440,24 @@ Test-NetConnection -ComputerName 192.168.1.x -Port 3000
 
 Si `TcpTestSucceeded` es `True`, el servidor es accesible. Si el celular aún no conecta, el router puede tener **Client Isolation** activado — desactivalo en la configuración del router.
 
+**6 — Eliminar la regla genérica "Node.js JavaScript Runtime" del Firewall**
+
+Cuando corriste `node.exe` por primera vez (con este proyecto o con cualquier otro), es común que Windows haya creado —sola, o a través del cuadro de diálogo "Windows Defender Firewall bloqueó algunas características de Node.js Javascript Runtime"— una regla **genérica** con ese nombre, que aplica a *todos* los procesos de Node.js de la PC, no solo a este servidor. Esa regla puede haber quedado mal configurada (por ejemplo, permitiendo solo la red privada, o habiendo sido bloqueada sin querer al cerrar el aviso), y como Windows Firewall no avisa cuál regla terminó ganando cuando hay varias que aplican al mismo proceso, puede tapar en silencio a la regla específica que `iniciar_servidor.bat` crea automáticamente (`MangaServer Puerto 3000`) — el síntoma típico es que `localhost` en la propia PC funciona siempre, pero desde el celular u otro dispositivo a veces conecta y a veces no, sin que cambies nada.
+
+La solución es borrar esa regla genérica y dejar que mande únicamente la regla específica del puerto, que es más confiable porque solo se activa para ese puerto en particular. Abrí PowerShell como **Administrador** y ejecutá:
+
+```powershell
+# Elimina la regla genérica de Node.js
+Remove-NetFirewallRule -DisplayName "Node.js JavaScript Runtime"
+
+# Confirma que ya no existe (si no imprime nada, se borró correctamente)
+Get-NetFirewallRule -DisplayName "Node.js JavaScript Runtime" -ErrorAction SilentlyContinue
+```
+
+`-ErrorAction SilentlyContinue` en el segundo comando es solo para que no tire un error rojo en pantalla si la regla ya no existe — no hace falta preocuparse si no devuelve nada, es el resultado esperado.
+
+Después de borrarla, no necesitás crear nada a mano: la próxima vez que arranques el servidor con `iniciar_servidor.bat`, este ya verifica si la regla `MangaServer Puerto %PORT%` existe y la vuelve a crear si hace falta (ver el paso 3 más arriba). Si Windows te muestra de nuevo el aviso de "Windows Defender Firewall bloqueó..." la próxima vez que arranques el servidor, tocá **Permitir el acceso** y marcá **Redes privadas** — eso vuelve a crear la regla genérica, así que si el problema reaparece, repetí este paso.
+
 ---
 
 ### Los mangas no aparecen
@@ -409,6 +465,7 @@ Si `TcpTestSucceeded` es `True`, el servidor es accesible. Si el celular aún no
 - Verificá que las carpetas de mangas sean directorios (no archivos ZIP sin descomprimir)
 - Verificá que dentro de cada manga haya al menos una subcarpeta de capítulo con imágenes
 - Los formatos de imagen válidos son: `.jpg`, `.jpeg`, `.png`, `.webp`, `.gif`
+- Si tenés varias carpetas de mangas (`MANGA_PATH_2`, `MANGA_PATH_3`, etc.) y el manga faltante lo bajó el scraper hace poco, revisá que no haya quedado duplicado en la carpeta equivocada (ver la nota en [Configuración](#configuración))
 - Reiniciá el servidor después de agregar mangas nuevos
 
 ---
@@ -417,6 +474,12 @@ Si `TcpTestSucceeded` es `True`, el servidor es accesible. Si el celular aún no
 
 - Cerrá sesión y volvé a entrar para renovar el token
 - Evitá caracteres especiales como `#`, `?` o `%` en los nombres de carpetas
+
+---
+
+### No puedo entrar a un panel de administración
+
+Los paneles de `Gestionar usuarios`, `Editor de metadata`, `Panel del scraper` y `Editor de seguimiento` son exclusivos para cuentas con rol **admin**. Si entrás con una cuenta de lector, el servidor rechaza cualquier acción sobre esos paneles aunque tengas sesión iniciada.
 
 ---
 
@@ -430,40 +493,54 @@ El progreso se guarda en `server/progress.json`. Verificá que la carpeta `serve
 
 ```
 Servidor-de-Mangas/
-├── client/                    ← Frontend
-│   ├── index.html             ← Aplicación principal
-│   ├── reader.html            ← Lector de capítulos
-│   ├── login.html             ← Pantalla de login
-│   ├── stats.html             ← Estadísticas de lectura
-│   ├── css/app.css            ← Estilos (mobile-first, 4 temas)
+├── client/                        ← Frontend (SPA sin build step)
+│   ├── index.html                 ← Aplicación principal (incluye el lector integrado)
+│   ├── login.html                 ← Pantalla de login
+│   ├── stats.html                 ← Estadísticas de lectura
+│   ├── reader.html                ← Redirección de compatibilidad a "/" (el lector real vive en index.html)
+│   ├── css/app.css                ← Estilos (mobile-first, 4 temas)
 │   ├── js/
-│   │   ├── api.js             ← Cliente HTTP con caché
-│   │   ├── app.js             ← Estado global, renders, navegación
-│   │   ├── ui.js              ← Componentes visuales y cards
-│   │   └── detail.js          ← Vista de detalle de manga
+│   │   ├── api.js                 ← Cliente HTTP con caché, tokens y API.ready
+│   │   ├── router.js              ← Ruteo de la SPA (URLs con slug, historial del navegador)
+│   │   ├── app.js                 ← Estado global, home, carrusel, series, rankings, capítulos
+│   │   ├── ui.js                  ← Componentes visuales y cards reutilizables
+│   │   ├── detail.js              ← Vista de detalle de manga
+│   │   └── reader.js              ← Lector de capítulos (scroll/páginas, auto-scroll, modo noche)
 │   └── admin/
-│       ├── users.html         ← Gestión de usuarios y permisos
-│       └── metadata.html      ← Editor de metadata
-├── scraper/                   ← Scraper automático (Python)
-│   ├── scraper.py             ← Script principal (~4200 líneas)
-│   ├── seguimiento.example.json ← Plantilla de mangas a seguir
-│   └── README.md              ← Documentación completa del scraper
-├── server/                    ← Backend (Node.js + Express)
-│   ├── index.js               ← Entrada del servidor
+│       ├── users.html             ← Gestión de usuarios y permisos
+│       ├── metadata.html          ← Editor de metadata
+│       ├── scraper.html           ← Panel de control del scraper (consola en vivo, fuentes)
+│       └── seguimiento.html       ← Editor de la lista de seguimiento del scraper
+├── scraper/                       ← Scraper automático (Python)
+│   ├── scraper.py                 ← Script principal (~6.100 líneas, 9 fuentes)
+│   ├── seguimiento.example.json   ← Plantilla de mangas a seguir
+│   ├── dominios_fuente.json       ← Dominios válidos por fuente (usado para validar en el editor web)
+│   └── README.md                  ← Documentación completa del scraper
+├── server/                        ← Backend (Node.js + Express)
+│   ├── index.js                   ← Entrada del servidor, estáticos, imágenes protegidas
 │   ├── middleware/
-│   │   ├── auth.js            ← Verificación JWT
-│   │   └── restrictions.js    ← Aplicación de restricciones por usuario
+│   │   ├── auth.js                ← Verificación JWT (header Authorization)
+│   │   ├── cookieOrHeaderAuth.js  ← Igual que auth.js, pero también acepta cookie httpOnly (para <img>)
+│   │   └── restrictions.js        ← Aplicación de restricciones de contenido por usuario
 │   ├── routes/
-│   │   ├── auth.js            ← Login, usuarios, avatares
-│   │   └── manga.js           ← Biblioteca, capítulos, progreso
-│   └── data/
-│       ├── usersStore.js      ← Lectura/escritura de usuarios
-│       └── users.json         ← Usuarios registrados (no subir a Git)
-├── docs/screenshots/          ← Capturas de pantalla
-├── .env                       ← Configuración local (NO subir a Git)
-├── .env.example               ← Plantilla de configuración
-├── metadata.example.json      ← Ejemplo de metadata.json
-├── iniciar_servidor.bat       ← Lanzador Windows
+│   │   ├── auth.js                ← Login, usuarios, avatares
+│   │   ├── manga.js                ← Biblioteca, capítulos, progreso, metadata
+│   │   └── scraperControl.js      ← Arrancar/detener el scraper, consola en vivo (SSE), fuentes, seguimiento
+│   ├── data/
+│   │   ├── usersStore.js          ← Lectura/escritura de usuarios
+│   │   ├── catalogIndex.js        ← Índice de la biblioteca en memoria (evita releer el disco en cada request)
+│   │   └── users.json             ← Usuarios registrados (no subir a Git)
+│   └── lib/
+│       ├── slug.js                ← Generación de slugs para URLs amigables
+│       ├── fsHelpers.js           ← Utilidades de sistema de archivos (escritura atómica, orden natural)
+│       ├── imageCache.js          ← Caché LRU en memoria para imágenes servidas
+│       ├── thumbnails.js          ← Generación de miniaturas WebP
+│       └── visibility.js          ← Regla única de "¿este usuario puede ver este manga?"
+├── docs/screenshots/               ← Capturas de pantalla
+├── .env                            ← Configuración local (NO subir a Git)
+├── .env.example                    ← Plantilla de configuración
+├── metadata.json.example           ← Ejemplo de metadata.json
+├── iniciar_servidor.bat            ← Lanzador Windows
 └── package.json
 ```
 
@@ -471,12 +548,13 @@ Servidor-de-Mangas/
 
 ## Notas de seguridad
 
-- Diseñado para **red local privada**, no para exposición directa a internet
+- Diseñado para **red local privada** (directamente o vía Tailscale), no para exposición directa a internet
 - El archivo `.env` está en `.gitignore` — nunca lo subás al repositorio
 - Los tokens JWT expiran en 30 días
 - Protección contra fuerza bruta en el login: bloquea una IP por 5 minutos tras 10 intentos fallidos
-- Las imágenes requieren sesión activa para ser accesibles
-- Las restricciones de contenido se aplican del lado del servidor en todos los endpoints
+- Las imágenes requieren sesión activa para ser accesibles: al iniciar sesión el navegador recibe una cookie httpOnly que las autentica automáticamente; el token en la URL de cada imagen queda solo como respaldo, por si el navegador bloquea esa cookie
+- Las restricciones de contenido (+18 y mangas vetados) se aplican del lado del servidor en todos los endpoints, no solo como filtro visual
+- Los paneles de administración (usuarios, metadata, scraper, seguimiento) verifican el rol de admin tanto en el navegador como, de forma independiente y obligatoria, en el servidor
 
 ---
 

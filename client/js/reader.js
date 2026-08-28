@@ -38,9 +38,24 @@ function floatPanelEl()   { return document.getElementById('float-panel'); }
 function loaderEl()       { return document.getElementById('loader'); }
 
 // ── ABRIR / CERRAR LA PÁGINA DEL LECTOR ───────────────────────────────────────
-function openReader(encodedManga, chapter) {
+function openReader(encodedManga, chapter, chapterSlug, isColdStart = false) {
   const manga = decodeURIComponent(encodedManga);
-  history.pushState({ page: 'reader', manga, chapter }, '');
+  // Resolver el slug de manga desde lo que ya tenemos en memoria (allMangas
+  // es el catálogo completo, currentManga el que se está viendo) — si
+  // ninguno lo tiene todavía (cold load raro), se usa el propio "manga" tal
+  // cual y se corrige con replaceState apenas responda loadChapter().
+  const mangaSlug = allMangas.find(m => m.name === manga)?.slug
+                 || (currentManga?.name === manga ? currentManga.slug : null)
+                 || manga;
+  // Mismo criterio para el capítulo: el slug pasado explícitamente (todos
+  // los call sites de siempre ya lo mandan), o buscarlo en currentManga si
+  // coincide con el manga que se está abriendo, o el número tal cual.
+  const chSlug = chapterSlug
+              || (currentManga?.name === manga ? currentManga.chapters?.find(c => c.number === chapter)?.slug : null)
+              || chapter;
+  const url = Router.buildPath('reader', { mangaSlug, chapterSlug: chSlug });
+  if (isColdStart) history.replaceState({ page: 'reader', manga, chapter }, '', url);
+  else             history.pushState({ page: 'reader', manga, chapter }, '', url);
   showReaderPage(manga, chapter);
 }
 
@@ -103,6 +118,13 @@ async function loadChapter() {
       return;
     }
     chapData = await r.json();
+    // El server siempre devuelve el nombre real y el número real de
+    // capítulo (resolvió lo que le hayamos mandado, sea nombre/número real
+    // o slug). Nos alineamos a eso ahora — así, sin importar con qué se
+    // haya llamado a openReader (slug de un cold load, número real de
+    // siempre, etc.), el progreso se guarda siempre con la clave correcta.
+    READER_MANGA   = chapData.manga;
+    READER_CHAPTER = chapData.chapter;
     renderChapter();
   } catch(e) {
     loader.innerHTML = `<div style="text-align:center;padding:0 24px;">
@@ -118,14 +140,25 @@ function renderChapter() {
   isLast = !chapData.nextChapter;
   _preloaded.clear();
 
+  // Si la URL con la que se entró no tenía todavía el slug canónico (cold
+  // load por slug de fallback, o cualquier discrepancia) la corregimos
+  // ahora que ya sabemos los valores reales — sin apilar otra entrada de
+  // historial (replaceState).
+  if (chapData.slug && chapData.chapterSlug) {
+    const canonicalUrl = Router.buildPath('reader', { mangaSlug: chapData.slug, chapterSlug: chapData.chapterSlug });
+    if (location.pathname !== canonicalUrl) {
+      history.replaceState({ page: 'reader', manga: READER_MANGA, chapter: READER_CHAPTER }, '', canonicalUrl);
+    }
+  }
+
   document.getElementById('t-title').textContent = READER_MANGA;
   document.getElementById('t-chapnum-label').textContent = chapLabel(READER_CHAPTER);
 
   if (chapData.allChapters && chapData.allChapters.length > 0) {
     const reversed = [...chapData.allChapters].reverse();
     document.getElementById('chap-drawer-list').innerHTML = reversed.map(ch => `
-      <div class="drawer-item${ch===READER_CHAPTER?' current':''}" onclick="goToChapFromDrawer('${ch}')">
-        <span>${esc(chapLabel(ch))}</span>
+      <div class="drawer-item${ch.number===READER_CHAPTER?' current':''}" data-goto-drawer data-chapter="${esc(ch.number)}" data-slug="${esc(ch.slug||'')}">
+        <span>${esc(chapLabel(ch.number))}</span>
         <i class="ti ti-check drawer-item-icon"></i>
       </div>`).join('');
   } else {
@@ -165,14 +198,17 @@ function renderScroll() {
   pageReaderEl().classList.remove('on');
   pageReaderEl().style.display = 'none';
 
-  const token = API.getToken();
+  // El JWT ya no viaja en la URL de cada página — la cookie httpOnly
+  // 'img_token' (seteada al iniciar sesión, ver login.html) ya autentica
+  // estos pedidos. Antes se armaba acá con API.getToken() y quedaba
+  // pegado en el historial del navegador de forma redundante.
   // Las primeras páginas se cargan sin "lazy" (van a estar visibles apenas
   // se abre el capítulo, no tiene sentido esperar); el resto sigue con lazy
   // nativo, que el navegador empieza a pedir un poco antes de que entren en
   // pantalla a medida que el usuario hace scroll.
   const EAGER_COUNT = 3;
   scrollReaderEl().innerHTML = chapData.images.map((src, i) =>
-    `<img src="${src}?token=${token}" alt="Pag ${i+1}"${i < EAGER_COUNT ? '' : ' loading="lazy"'}>`
+    `<img src="${src}" alt="Pag ${i+1}"${i < EAGER_COUNT ? '' : ' loading="lazy"'}>`
   ).join('');
 
   const el = readerEl();
@@ -226,7 +262,7 @@ function showPgImg(idx) {
   img.style.opacity = '0';
   img.onload  = () => { img.style.opacity = '1'; };
   img.onerror = () => { img.style.opacity = '1'; };
-  img.src = chapData.images[idx] + '?token=' + API.getToken();
+  img.src = chapData.images[idx];
   updatePageNum(idx + 1, chapData.images.length);
   preloadPages(idx + 1, 2);
 }
@@ -241,7 +277,7 @@ const _preloaded = new Set();
 function preloadPages(fromIdx, count) {
   if (!chapData) return;
   for (let i = fromIdx; i < Math.min(fromIdx + count, chapData.images.length); i++) {
-    const src = chapData.images[i] + '?token=' + API.getToken();
+    const src = chapData.images[i];
     if (_preloaded.has(src)) continue;
     _preloaded.add(src);
     const pre = new Image();
@@ -278,24 +314,28 @@ function setModeUI(m) {
 }
 
 // ── NAVEGACIÓN ENTRE CAPÍTULOS (sin recargar la página) ───────────────────────
-function prevChap() { if (!_loadingChapter && chapData?.prevChapter) goToChap(chapData.prevChapter); }
+function prevChap() { if (!_loadingChapter && chapData?.prevChapter) goToChap(chapData.prevChapter, chapData.prevChapterSlug); }
 function nextChap() {
   if (_loadingChapter) return;
   if (isLast) { goBack(); return; }
-  if (chapData?.nextChapter) goToChap(chapData.nextChapter);
+  if (chapData?.nextChapter) goToChap(chapData.nextChapter, chapData.nextChapterSlug);
 }
-function goToChap(ch) {
+function goToChap(ch, chSlug) {
   if (asActive) stopAS();
   READER_CHAPTER = ch;
+  // El slug de manga no cambia al cambiar de capítulo — lo sacamos de la
+  // data del capítulo que ya teníamos cargada.
+  const mangaSlug = chapData?.slug || allMangas.find(m => m.name === READER_MANGA)?.slug || READER_MANGA;
+  const chapterSlug = chSlug || ch;
   // replaceState (no pushState): cambiar de capítulo no debe apilar entradas
   // de historial. "Atrás" siempre sale del lector hacia el manga, sin
   // importar cuántos capítulos se hayan leído — es más predecible.
-  history.replaceState({ page: 'reader', manga: READER_MANGA, chapter: ch }, '');
+  history.replaceState({ page: 'reader', manga: READER_MANGA, chapter: ch }, '', Router.buildPath('reader', { mangaSlug, chapterSlug }));
   loadChapter();
 }
-function goToChapFromDrawer(ch) {
+function goToChapFromDrawer(ch, slug) {
   closeChapDrawer();
-  if (!_loadingChapter && ch && ch !== READER_CHAPTER) goToChap(ch);
+  if (!_loadingChapter && ch && ch !== READER_CHAPTER) goToChap(ch, slug);
 }
 
 // ── SALIR DEL LECTOR ────────────────────────────────────────────────────────────

@@ -2,6 +2,7 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
+  <link rel="icon" href="/favicon.ico" type="image/x-icon">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>MangaServer — Login</title>
   <style>
@@ -54,6 +55,14 @@
           localStorage.setItem('manga_token',data.token);
           localStorage.setItem('manga_username',data.username);
           localStorage.setItem('manga_role',data.role);
+          // Se espera a que la cookie httpOnly quede seteada ANTES de
+          // navegar — las imágenes ya no llevan el token en la URL como
+          // respaldo (ver client/js/api.js, imgSrc), así que sin esto las
+          // primeras portadas que pide la home podrían pedirse un instante
+          // antes de que la cookie exista todavía.
+          try {
+            await fetch('/api/set-img-cookie',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+data.token},body:JSON.stringify({token:data.token})});
+          } catch {}
           window.location.href='/';
         }else{
           err.textContent=data.error||'Usuario o contraseña incorrectos.';

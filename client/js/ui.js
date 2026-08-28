@@ -69,7 +69,7 @@ function seriesCard(m) {
           onerror="this.closest('.cover-wrap').classList.add('cover-loaded')">
       </div>`
     : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:40px;color:var(--mut);">M</div>`;
-  return `<div class="sc rank-card" onclick="openDetail('${encodeURIComponent(m.name)}')">
+  return `<div class="sc rank-card" data-open-manga="${esc(m.name)}">
     ${src ? `<img class="rank-card-bg" src="${src}" alt="" aria-hidden="true">` : ''}
     ${meta.adult ? '<div class="rank-card-badge" style="background:rgba(231,76,60,.9);color:#fff;">+18</div>' : ''}
     <div class="rank-card-cover-area">
@@ -99,7 +99,7 @@ function rankCard(m, i, showBadge=true) {
           onerror="this.closest('.cover-wrap').classList.add('cover-loaded')">
       </div>`
     : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:40px;color:var(--mut);">M</div>`;
-  return `<div class="rank-card" onclick="openDetail('${encodeURIComponent(m.name)}')">
+  return `<div class="rank-card" data-open-manga="${esc(m.name)}">
     ${src ? `<img class="rank-card-bg" src="${src}" alt="" aria-hidden="true">` : ''}
     ${showBadge ? `<div class="rank-card-badge${idx===0?' t1':''}">
       <i class="ti ti-trending-up" style="font-size:11px;"></i> Puesto ${idx+1}
@@ -125,11 +125,11 @@ function openFilter() {
   pendingFilters = JSON.parse(JSON.stringify(activeFilters));
   const genreSet = getVisibleGenres();
   document.getElementById('filter-types').innerHTML = ['Manga','Manhwa','Manhua'].map(t =>
-    `<button class="filter-chip${pendingFilters.types.includes(t)?' on':''}" onclick="toggleFilterChip(this,'types','${t}')">${t}</button>`).join('');
+    `<button class="filter-chip${pendingFilters.types.includes(t)?' on':''}" data-filter-chip data-cat="types" data-val="${esc(t)}">${t}</button>`).join('');
   document.getElementById('filter-genres').innerHTML = [...genreSet].sort().map(g =>
-    `<button class="filter-chip${pendingFilters.genres.includes(g)?' on':''}" onclick="toggleFilterChip(this,'genres','${g}')">${g}</button>`).join('');
+    `<button class="filter-chip${pendingFilters.genres.some(pg=>norm(pg)===norm(g))?' on':''}" data-filter-chip data-cat="genres" data-val="${esc(g)}">${esc(g)}</button>`).join('');
   document.getElementById('filter-status').innerHTML = ['Activo','Hiatus','Finalizado'].map(s =>
-    `<button class="filter-chip${pendingFilters.status.includes(s)?' on':''}" onclick="toggleFilterChip(this,'status','${s}')">${s}</button>`).join('');
+    `<button class="filter-chip${pendingFilters.status.includes(s)?' on':''}" data-filter-chip data-cat="status" data-val="${esc(s)}">${s}</button>`).join('');
   document.getElementById('filter-overlay').style.display = 'block';
   document.getElementById('filter-panel').style.display   = 'block';
   _filterPushed = true;
@@ -155,13 +155,13 @@ function setSortMode(mode) { localStorage.setItem('series_sort', mode); applySer
 
 // ── BÚSQUEDA ──────────────────────────────────────────────────────────────────
 function renderSearch(q) {
-  const query = (q||'').toLowerCase().trim();
+  const query = norm(q);
   document.getElementById('sclear').style.display = query ? 'block' : 'none';
   const base = filterAdult(allMangas);
   if (!query) { document.getElementById('sresults').innerHTML = '<p style="color:var(--mut);font-size:13px;text-align:center;padding:20px 0;">Escribe para buscar...</p>'; return; }
-  const results = base.filter(m => m.name.toLowerCase().includes(query));
+  const results = base.filter(m => norm(m.name).includes(query));
   document.getElementById('sresults').innerHTML = results.length
-    ? results.map(m => { const meta = m.metadata||{}; return`<div class="sri" onclick="openDetail('${encodeURIComponent(m.name)}')">
+    ? results.map(m => { const meta = m.metadata||{}; return`<div class="sri" data-open-manga="${esc(m.name)}">
         <div class="sri-cov">${m.cover ? coverImg(m.cover, m.name) : ''}</div>
         <div class="sri-info"><div class="sri-name">${esc(m.name)}</div><div class="sri-meta">
           ${meta.type?`<span class="${typeClass(meta.type)}">${esc(meta.type)}</span>`:''}
@@ -174,3 +174,36 @@ function renderSearch(q) {
     : `<p class="empty">Sin resultados para "${esc(q)}"</p>`;
 }
 function clearSearch() { document.getElementById('sinput').value=''; renderSearch(''); document.getElementById('sinput').focus(); }
+
+// ── DELEGACIÓN DE CLICKS (manga / capítulo) ──────────────────────────────────
+// Reemplaza los onclick="fn('...')" armados por concatenación de string que
+// había antes en cada card/fila generada dinámicamente (acá, en app.js,
+// detail.js y reader.js). Motivo: el nombre de manga y de capítulo salen en
+// última instancia de un nombre de carpeta puesto por el scraper — no es
+// texto que vos tipeás a mano — y ni encodeURIComponent() ni esc() evitan
+// que un apóstrofe rompa el string embebido en el onclick: el navegador
+// decodifica las entidades HTML del atributo ANTES de interpretarlo como JS,
+// así que un "'" escapado como &#39; se vuelve a convertir en "'" antes de
+// que se ejecute el handler. Un dataset nunca se interpreta como código, sea
+// lo que sea su contenido, así que cierra esa puerta del todo.
+// Un solo listener en document cubre todas las cards/filas de toda la SPA,
+// se re-generen las veces que se re-generen.
+document.addEventListener('click', e => {
+  const openManga = e.target.closest('[data-open-manga]');
+  if (openManga) { openDetail(encodeURIComponent(openManga.dataset.openManga)); return; }
+
+  const toggleRead = e.target.closest('[data-toggle-read]');
+  if (toggleRead) { toggleReadChapter(toggleRead.dataset.toggleRead, e); return; }
+
+  const openChapter = e.target.closest('[data-open-chapter]');
+  if (openChapter) {
+    openReader(encodeURIComponent(openChapter.dataset.manga), openChapter.dataset.chapter, openChapter.dataset.slug || '');
+    return;
+  }
+
+  const drawerItem = e.target.closest('[data-goto-drawer]');
+  if (drawerItem) { goToChapFromDrawer(drawerItem.dataset.chapter, drawerItem.dataset.slug || ''); return; }
+
+  const filterChip = e.target.closest('[data-filter-chip]');
+  if (filterChip) { toggleFilterChip(filterChip, filterChip.dataset.cat, filterChip.dataset.val); return; }
+});

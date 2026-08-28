@@ -5,58 +5,59 @@
   <meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover">
   <title>Gestionar Usuarios — MangaServer</title>
   <link href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.34.0/dist/tabler-icons.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="/css/themes.css">
   <style>
     *{margin:0;padding:0;box-sizing:border-box;}
-    body{background:#0d1117;color:#e6edf3;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;min-height:100vh;padding:0;}
-    .topbar{background:#161b27;border-bottom:1px solid #30363d;padding:14px 20px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:10;}
-    .topbar a{color:#7d8590;text-decoration:none;font-size:14px;display:flex;align-items:center;gap:5px;}
-    .topbar a:hover{color:#e6edf3;}
+    body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;min-height:100vh;padding:0;}
+    .topbar{background:var(--surf);border-bottom:1px solid var(--brd);padding:14px 20px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:10;}
+    .topbar a{color:var(--mut);text-decoration:none;font-size:14px;display:flex;align-items:center;gap:5px;}
+    .topbar a:hover{color:var(--text);}
     .topbar h1{font-size:16px;font-weight:700;flex:1;}
     .wrap{max-width:640px;margin:0 auto;padding:20px 16px calc(40px + env(safe-area-inset-bottom,20px));}
-    .card{background:#161b27;border:1px solid #30363d;border-radius:16px;padding:20px;margin-bottom:16px;}
-    h2{font-size:15px;font-weight:700;color:#e6edf3;margin-bottom:14px;}
-    label{display:block;font-size:12px;font-weight:600;color:#7d8590;margin-bottom:4px;margin-top:10px;}
-    input,select{width:100%;background:#1c2333;border:1px solid #30363d;border-radius:10px;padding:10px 13px;font-size:14px;color:#e6edf3;outline:none;transition:border-color .2s;}
-    input:focus,select:focus{border-color:#F5B800;}
-    input::placeholder{color:#7d8590;}
+    .card{background:var(--surf);border:1px solid var(--brd);border-radius:16px;padding:20px;margin-bottom:16px;}
+    h2{font-size:15px;font-weight:700;color:var(--text);margin-bottom:14px;}
+    label{display:block;font-size:12px;font-weight:600;color:var(--mut);margin-bottom:4px;margin-top:10px;}
+    input,select{width:100%;background:var(--card);border:1px solid var(--brd);border-radius:10px;padding:10px 13px;font-size:14px;color:var(--text);outline:none;transition:border-color .2s;}
+    input:focus,select:focus{border-color:var(--acc);}
+    input::placeholder{color:var(--mut);}
     .btn{padding:10px 18px;border-radius:10px;border:none;cursor:pointer;font-size:13px;font-weight:700;transition:opacity .15s;}
     .btn:hover{opacity:.85;}
-    .btn-pri{background:#F5B800;color:#0d1117;}
-    .btn-del{background:rgba(231,76,60,.15);color:#e74c3c;border:1px solid rgba(231,76,60,.3);}
-    .btn-edit{background:rgba(88,166,255,.12);color:#58a6ff;border:1px solid rgba(88,166,255,.25);}
+    .btn-pri{background:var(--acc);color:var(--bg);}
+    .btn-del{background:rgba(var(--red-rgb),.15);color:var(--red);border:1px solid rgba(var(--red-rgb),.3);}
+    .btn-edit{background:rgba(var(--blue-rgb),.12);color:var(--blue);border:1px solid rgba(var(--blue-rgb),.25);}
     .btn-sm{padding:6px 13px;font-size:12px;}
     .msg{font-size:13px;padding:10px 14px;border-radius:10px;margin-bottom:12px;display:none;}
-    .msg.ok{background:rgba(63,185,80,.12);color:#3fb950;border:1px solid rgba(63,185,80,.25);}
-    .msg.err{background:rgba(231,76,60,.12);color:#e74c3c;border:1px solid rgba(231,76,60,.3);}
-    .user-row{display:flex;align-items:center;gap:12px;padding:12px;background:#1c2333;border-radius:12px;margin-bottom:8px;}
-    .user-av{width:36px;height:36px;border-radius:50%;background:#2d2a18;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:#F5B800;flex-shrink:0;}
+    .msg.ok{background:rgba(var(--grn-rgb),.12);color:var(--grn);border:1px solid rgba(var(--grn-rgb),.25);}
+    .msg.err{background:rgba(var(--red-rgb),.12);color:var(--red);border:1px solid rgba(var(--red-rgb),.3);}
+    .user-row{display:flex;align-items:center;gap:12px;padding:12px;background:var(--card);border-radius:12px;margin-bottom:8px;}
+    .user-av{width:36px;height:36px;border-radius:50%;background:var(--badge-yellow);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700;color:var(--acc);flex-shrink:0;}
     .user-info{flex:1;min-width:0;}
-    .user-name{font-size:14px;font-weight:700;color:#e6edf3;}
-    .user-meta{font-size:12px;color:#7d8590;margin-top:2px;}
-    .badge-admin{background:rgba(245,184,0,.15);color:#F5B800;font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;}
-    .badge-reader{background:rgba(125,133,144,.15);color:#7d8590;font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;}
+    .user-name{font-size:14px;font-weight:700;color:var(--text);}
+    .user-meta{font-size:12px;color:var(--mut);margin-top:2px;}
+    .badge-admin{background:rgba(var(--acc-rgb),.15);color:var(--acc);font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;}
+    .badge-reader{background:rgba(125,133,144,.15);color:var(--mut);font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;}
     .actions{display:flex;gap:6px;flex-shrink:0;}
     .modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:200;align-items:center;justify-content:center;}
     .modal-bg.on{display:flex;}
-    .modal{background:#161b27;border:1px solid #30363d;border-radius:16px;padding:24px;width:100%;max-width:400px;margin:16px;}
+    .modal{background:var(--surf);border:1px solid var(--brd);border-radius:16px;padding:24px;width:100%;max-width:400px;margin:16px;}
     .modal h3{font-size:16px;font-weight:700;margin-bottom:16px;}
     .modal-actions{display:flex;gap:8px;margin-top:16px;}
-    .loading{color:#7d8590;text-align:center;padding:20px;font-size:14px;}
+    .loading{color:var(--mut);text-align:center;padding:20px;font-size:14px;}
     .restrict-wrap{margin-top:6px;}
-    .tgi{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;border-top:1px solid #30363d;}
+    .tgi{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;border-top:1px solid var(--brd);}
     .tgi:first-child{border-top:none;}
-    .tglb{font-size:13px;font-weight:600;color:#e6edf3;}
-    .tg{width:42px;height:24px;border-radius:12px;background:#30363d;cursor:pointer;position:relative;transition:background .2s;flex-shrink:0;}
-    .tg.on{background:#F5B800;}
+    .tglb{font-size:13px;font-weight:600;color:var(--text);}
+    .tg{width:42px;height:24px;border-radius:12px;background:var(--brd);cursor:pointer;position:relative;transition:background .2s;flex-shrink:0;}
+    .tg.on{background:var(--acc);}
     .tg::after{content:'';position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;transition:transform .2s;}
     .tg.on::after{transform:translateX(18px);}
     .veto-picker{margin-top:8px;display:none;}
     .veto-picker input{margin-top:0;margin-bottom:8px;}
-    .veto-list{max-height:180px;overflow-y:auto;border:1px solid #30363d;border-radius:10px;background:#1c2333;}
-    .veto-item{display:flex;align-items:center;gap:8px;padding:8px 12px;font-size:13px;color:#e6edf3;border-bottom:1px solid #232a3a;cursor:pointer;}
+    .veto-list{max-height:180px;overflow-y:auto;border:1px solid var(--brd);border-radius:10px;background:var(--card);}
+    .veto-item{display:flex;align-items:center;gap:8px;padding:8px 12px;font-size:13px;color:var(--text);border-bottom:1px solid var(--brd);cursor:pointer;}
     .veto-item:last-child{border-bottom:none;}
     .veto-item input{width:auto;margin:0;}
-    .veto-count{font-size:11px;color:#7d8590;margin-top:6px;}
+    .veto-count{font-size:11px;color:var(--mut);margin-top:6px;}
   </style>
 </head>
 <body>
@@ -143,7 +144,7 @@
     </div>
 
     <div class="modal-actions">
-      <button class="btn" style="flex:1;background:#1c2333;color:#7d8590;border:1px solid #30363d;" onclick="closeModal()">Cancelar</button>
+      <button class="btn" style="flex:1;background:var(--card);color:var(--mut);border:1px solid var(--brd);" onclick="closeModal()">Cancelar</button>
       <button class="btn btn-pri" style="flex:2;" onclick="saveEdit()">Guardar cambios</button>
     </div>
   </div>
@@ -151,6 +152,12 @@
 
 <script src="/js/api.js"></script>
 <script>
+// Aplicar el tema elegido en el resto de la app — antes este panel se
+// quedaba siempre con los colores por defecto (Origins) sin importar qué
+// tema tuviera elegido el usuario en Panel de usuario > Temas visuales.
+const _theme = localStorage.getItem('manga_theme') || '';
+if (_theme) document.body.classList.add(_theme);
+
 // Mismo criterio que en client/js/ui.js: todo texto que no sea HTML armado
 // por este código (username, nombre de manga) pasa por acá antes de ir a
 // innerHTML o a un atributo (incluyendo atributos onclick="...").
@@ -180,10 +187,10 @@ async function loadUsers() {
   users.forEach(u => usersById[u.id] = u);
   const me = API.getUsername();
   document.getElementById('user-list').innerHTML = users.map(u => `
-    <div class="user-row">
+    <div class="user-row" data-user-id="${esc(u.id)}" data-username="${esc(u.username)}">
       <div class="user-av">${esc(u.username.slice(0,2).toUpperCase())}</div>
       <div class="user-info">
-        <div class="user-name">${esc(u.username)} ${u.username === me ? '<span style="font-size:11px;color:#7d8590;">(tú)</span>' : ''}</div>
+        <div class="user-name">${esc(u.username)} ${u.username === me ? '<span style="font-size:11px;color:var(--mut);">(tú)</span>' : ''}</div>
         <div class="user-meta">${new Date(u.createdAt).toLocaleDateString('es')} &nbsp;<span class="${u.role==='admin'?'badge-admin':'badge-reader'}">${u.role==='admin'?'Admin':'Lector'}</span>
           ${u.role==='reader' && u.canViewAdult===false ? ' <span class="badge-reader">Sin +18</span>' : ''}
           ${u.role==='reader' && u.canViewNormal===false ? ' <span class="badge-reader">Solo +18</span>' : ''}
@@ -191,11 +198,26 @@ async function loadUsers() {
         </div>
       </div>
       <div class="actions">
-        <button class="btn btn-edit btn-sm" onclick="openEdit('${u.id}')"><i class="ti ti-pencil" style="font-size:13px;"></i></button>
-        ${u.username !== me ? `<button class="btn btn-del btn-sm" onclick="deleteUser('${u.id}','${esc(u.username)}')"><i class="ti ti-trash" style="font-size:13px;"></i></button>` : ''}
+        <button class="btn btn-edit btn-sm" data-action="edit-user"><i class="ti ti-pencil" style="font-size:13px;"></i></button>
+        ${u.username !== me ? `<button class="btn btn-del btn-sm" data-action="delete-user"><i class="ti ti-trash" style="font-size:13px;"></i></button>` : ''}
       </div>
-    </div>`).join('') || '<p style="color:#7d8590;font-size:13px;">No hay usuarios.</p>';
+    </div>`).join('') || '<p style="color:var(--mut);font-size:13px;">No hay usuarios.</p>';
 }
+
+// Delegado: reemplaza los onclick="openEdit('...')" / "deleteUser('...','...')"
+// armados por concatenación (mismo motivo que en client/js/ui.js). El id de
+// usuario y el username hoy no pueden traer comillas (regex del server), pero
+// no vale la pena depender de eso — dataset nunca se interpreta como código,
+// pase lo que pase en el contenido.
+document.addEventListener('click', e => {
+  const editBtn = e.target.closest('[data-action="edit-user"]');
+  if (editBtn) { openEdit(editBtn.closest('[data-user-id]').dataset.userId); return; }
+  const delBtn = e.target.closest('[data-action="delete-user"]');
+  if (delBtn) {
+    const row = delBtn.closest('[data-user-id]');
+    deleteUser(row.dataset.userId, row.dataset.username);
+  }
+});
 
 // ── Mostrar/ocultar las opciones de restricción según el rol elegido ────────
 // (un admin nunca está restringido, así que esas opciones no aplican)
@@ -228,13 +250,13 @@ async function toggleVetoPicker(prefix) {
 function renderVetoList(prefix, filterText = '') {
   const list = document.getElementById('veto-list-' + prefix);
   const sel  = vetoSelected[prefix];
-  const f    = filterText.trim().toLowerCase();
-  const items = (allMangas || []).filter(m => !f || m.name.toLowerCase().includes(f));
+  const f    = norm(filterText);
+  const items = (allMangas || []).filter(m => !f || norm(m.name).includes(f));
   list.innerHTML = items.map(m => `
     <label class="veto-item">
       <input type="checkbox" data-name="${esc(m.name)}" ${sel.has(m.name) ? 'checked' : ''} onchange="onVetoCheck('${prefix}', this)">
       <span>${esc(m.name)}</span>
-    </label>`).join('') || '<p style="color:#7d8590;font-size:12px;padding:10px;">Sin resultados.</p>';
+    </label>`).join('') || '<p style="color:var(--mut);font-size:12px;padding:10px;">Sin resultados.</p>';
 }
 
 function onVetoCheck(prefix, input) {
@@ -351,7 +373,7 @@ document.getElementById('modal-pw').addEventListener('click', e => { if(e.target
 
 // Verificar que es admin
 (async () => {
-  await new Promise(r => setTimeout(r, 400)); // esperar a que api.js verifique el token
+  await API.ready; // esperar a que api.js termine de verificar el token (sin importar cuánto tarde)
   if (API.getRole() !== 'admin') { alert('Sin permiso.'); window.location.href = '/'; }
   else loadUsers();
 })();

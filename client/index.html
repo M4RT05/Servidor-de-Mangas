@@ -2,10 +2,33 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
+  <link rel="icon" href="/favicon.ico" type="image/x-icon">
+  <!-- Con URLs limpias tipo /series/:slug o /capitulo/:slug/:slug, las rutas
+       relativas (css/app.css, js/api.js, etc.) se resuelven contra la URL
+       ACTUAL, no contra la raíz — en /capitulo/x/y, "js/api.js" apuntaría a
+       /capitulo/x/js/api.js (404). <base> fuerza que TODA resolución
+       relativa del documento (css, script, y cualquier fetch/URL relativo
+       que se agregue a futuro) sea siempre contra la raíz, sin importar la
+       profundidad de la URL actual. Tiene que ir ANTES que cualquier
+       link/script relativo para que aplique.
+  -->
+  <base href="/">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
   <title>MangaServer</title>
   <link href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.34.0/dist/tabler-icons.min.css" rel="stylesheet">
   <link rel="stylesheet" href="css/app.css">
+  <!-- Evita el flash de "inicio" mientras cargan los 6 <script> del final
+       del body: sin esto, el navegador ya pintó el HTML por defecto (que
+       muestra #p-inicio) ANTES de que termine de bajar y correr app.js, que
+       es quien recién ahí activa la página real. Se oculta todo hasta que
+       showInitialPageSync() (en app.js) confirma la página correcta y lo
+       revela — no hay hueco en el que se llegue a ver "inicio" de más.
+       Redes de seguridad por si algo sale mal: sin JS, o si el JS tarda
+       demasiado o se rompe, no queremos dejar la pantalla en blanco para
+       siempre. -->
+  <style>body{visibility:hidden}</style>
+  <noscript><style>body{visibility:visible!important}</style></noscript>
+  <script>setTimeout(function(){ document.body.style.visibility='visible'; }, 4000);</script>
 </head>
 <body>
 <div id="app">
@@ -37,7 +60,12 @@
         </div>
         <div class="feat-indicators" id="feat-indicators"></div>
       </div>
-      <div class="hst">Seguir Leyendo</div>
+      <div class="hst" style="display:flex;align-items:center;gap:6px;">
+        <span>Seguir Leyendo</span>
+        <button id="btn-toggle-reading" class="hst-toggle" onclick="toggleContReading()" style="display:none;" title="Ver todos">
+          <i class="ti ti-chevron-down"></i>
+        </button>
+      </div>
       <div id="cont-reading"><div class="sk-row-list" id="sk-reading" style="padding:0 0 4px;">
         <div class="sk-row"><div class="sk-thumb sk-shine"></div><div style="flex:1;display:flex;flex-direction:column;gap:7px;"><div class="sk-line sk-shine" style="width:75%;height:13px;border-radius:6px;"></div><div class="sk-line sk-shine" style="width:45%;height:10px;border-radius:5px;"></div></div></div>
       </div></div>
@@ -391,6 +419,9 @@
   <div class="pst">Cuenta</div>
   <div class="pmi admin-only" onclick="window.location.href='/admin/users.html'"><i class="ti ti-users"></i> Gestionar usuarios</div>
   <div class="pmi admin-only" onclick="window.location.href='/admin/metadata.html'"><i class="ti ti-database-edit"></i> Editor de metadata</div>
+  <div class="pst admin-only">Scraper</div>
+  <div class="pmi admin-only" onclick="window.location.href='/admin/scraper.html'"><i class="ti ti-player-play"></i> Control del scraper</div>
+  <div class="pmi admin-only" onclick="window.location.href='/admin/seguimiento.html'"><i class="ti ti-list-check"></i> Editor de seguimiento</div>
   <div class="pmi" onclick="logout()" style="color:#e74c3c;"><i class="ti ti-logout" style="color:#e74c3c;"></i> Cerrar sesión</div>
   <div class="coded-by">Coded by M4RT05</div>
 </div>
@@ -413,45 +444,10 @@
 </div>
 
 <script src="js/api.js"></script>
+<script src="js/router.js"></script>
 <script src="js/ui.js"></script>
 <script src="js/detail.js"></script>
 <script src="js/app.js"></script>
 <script src="js/reader.js"></script>
-<script>
-// ── PC LAYOUT SWITCHER ───────────────────────────────────────────────────────
-function applyPCLayout() {
-  const pc = window.innerWidth >= 768;
-  const spacer = document.getElementById('nav-spacer');
-  if (spacer) spacer.style.display = pc ? 'block' : 'none';
-  document.body.style.overflow  = pc ? 'auto'    : 'hidden';
-  document.body.style.height    = pc ? 'auto'    : '100%';
-  const app = document.getElementById('app');
-  if (app) {
-    app.style.height   = pc ? 'auto'    : '100vh';
-    app.style.overflow = pc ? 'visible' : 'hidden';
-  }
-  // Rankings: mostrar grid PC o lista mobile
-  const rMobile = document.getElementById('rlist');
-  const rPC     = document.getElementById('rlist-pc');
-  if (rMobile) rMobile.style.display = pc ? 'none' : '';
-  if (rPC)     rPC.style.display     = pc ? 'grid' : 'none';
-  // Capítulos: grilla 2 columnas en PC via CSS, nada que cambiar aquí
-}
-applyPCLayout();
-window.addEventListener('resize', applyPCLayout);
-
-// ── DETALLE: mostrar layout correcto ────────────────────────────────────────
-const _origOpenDetail = window.openDetail;
-window.openDetail = async function(enc) {
-  await _origOpenDetail(enc);
-  const pc     = window.innerWidth >= 768;
-  const hero   = document.getElementById('det-mobile-hero');
-  const mBody  = document.getElementById('det-mobile-body');
-  const pcLay  = document.getElementById('det-pc-layout');
-  if (hero)  hero.style.display  = pc ? 'none' : '';
-  if (mBody) mBody.style.display = pc ? 'none' : '';
-  if (pcLay) pcLay.style.display = pc ? 'block' : 'none';
-};
-</script>
 </body>
 </html>

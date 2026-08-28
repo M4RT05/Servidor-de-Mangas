@@ -33,6 +33,18 @@ app.use(compression({
   filter: (req, res) => {
     // No comprimir imágenes (ya están comprimidas)
     if (/\.(jpg|jpeg|png|webp|gif)$/i.test(req.path)) return false;
+    // Tampoco el stream SSE del scraper: la compresión junta bytes en un
+    // buffer antes de mandarlos (para lograr mejor ratio), pero un SSE
+    // depende de que cada res.write() llegue al navegador al toque — con
+    // esto activo, el navegador podía quedarse esperando indefinidamente a
+    // que se junte "suficiente" para comprimir, y la consola en vivo nunca
+    // mostraba nada aunque el servidor sí estuviera mandando los eventos.
+    // req.originalUrl (NO req.path) — el filtro de compression se evalúa
+    // recién al momento de escribir la respuesta, ya "adentro" del router
+    // anidado de /api/admin/scraper, así que ahí req.path ya viene
+    // recortado a solo "/stream". originalUrl conserva la ruta completa
+    // siempre, sin importar cuántos routers anidados haya de por medio.
+    if (req.originalUrl === '/api/admin/scraper/stream') return false;
     return compression.filter(req, res);
   }
 }));
@@ -50,9 +62,13 @@ app.use(express.static(path.join(__dirname, '../client'), {
     if (filePath.endsWith('.html')) {
       res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
     }
-    // JS/CSS: no-store → el browser nunca guarda en caché, siempre pide la versión nueva
+    // JS/CSS: no-cache → el browser SIEMPRE revalida con el servidor antes de
+    // usar la copia guardada (nunca la usa "a ciegas" sin preguntar), pero si
+    // el archivo no cambió desde la última vez, el servidor contesta 304 sin
+    // reenviar el contenido — más rápido que no-store, que forzaba re-bajar
+    // el archivo completo en cada carga aunque no hubiera cambiado nada.
     else if (/\.(js|css)$/.test(filePath)) {
-      res.setHeader('Cache-Control', 'no-store');
+      res.setHeader('Cache-Control', 'no-cache');
     }
     // Fuentes/iconos: caché 7 días
     else if (/\.(woff2?|ttf|eot|svg)$/.test(filePath)) {
@@ -85,32 +101,16 @@ app.post('/api/set-img-cookie', (req, res) => {
 app.use('/api', authRoutes);
 app.use('/api/mangas', authMiddleware, restrictionsMiddleware, mangaRoutes);
 
-// ── IMÁGENES PROTEGIDAS CON CACHÉ LARGO ──────────────────────────────────────
-// Middleware especial para imágenes: acepta token en cookie además de header
-function imageAuth(req, res, next) {
-  const { resolveUser } = require('./middleware/auth');
-  // Primero intenta header Authorization (lector, API)
-  const authHeader = req.headers['authorization'];
-  if (authHeader) return require('./middleware/auth')(req, res, next);
-  // Luego intenta cookie img_token (imágenes desde el browser)
-  const cookieToken = req.cookies?.img_token;
-  if (cookieToken) {
-    try {
-      const user = resolveUser(cookieToken);
-      if (user) { req.user = user; return next(); }
-    } catch {}
-  }
-  // Finalmente query param (compatibilidad con lector actual)
-  const qt = req.query.token;
-  if (qt) {
-    try {
-      const user = resolveUser(qt);
-      if (user) { req.user = user; return next(); }
-    } catch {}
-  }
-  return res.status(401).send('No autorizado.');
-}
+// cookieOrHeaderAuth (imageAuth) hace falta ACÁ, antes de las dos rutas de
+// abajo que la usan — no solo para imágenes: /stream del scraper también
+// la necesita, porque EventSource desde el navegador no puede mandar el
+// header Authorization, solo cookies.
+const imageAuth = require('./middleware/cookieOrHeaderAuth');
 
+const scraperControlRoutes = require('./routes/scraperControl');
+app.use('/api/admin/scraper', imageAuth, scraperControlRoutes);
+
+// ── IMÁGENES PROTEGIDAS CON CACHÉ LARGO ──────────────────────────────────────
 app.get('/api/images/:manga/:chapter/:image', imageAuth, restrictionsMiddleware, async (req, res) => {
   const manga   = decodeURIComponent(req.params.manga);
   const chapter = decodeURIComponent(req.params.chapter);

@@ -5,11 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>Estadísticas — MangaServer</title>
   <link href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.34.0/dist/tabler-icons.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="css/themes.css">
   <style>
-    :root{--bg:#0d1117;--surf:#161b27;--card:#1c2333;--acc:#F5B800;--acc-text:#0d1117;--text:#e6edf3;--mut:#7d8590;--brd:#30363d;--grn:#3fb950;--red:#e74c3c;--blue:#3b82f6;}
-    body.theme-dark      {--bg:#111318;--surf:#1a1d24;--card:#22262f;--acc:#E0E0E0;--acc-text:#111318;--text:#F0F0F0;--mut:#888;--brd:#2a2e38;}
-    body.theme-lunar-tide{--bg:#F0F4F8;--surf:#E2ECF4;--card:#D0DFF0;--acc:#1A237E;--acc-text:#F0F4F8;--text:#1A1A2E;--mut:#546E7A;--brd:#90A4AE;}
-    body.theme-white     {--bg:#FAFAFA;--surf:#F0F0F0;--card:#E6E6E6;--acc:#222;--acc-text:#FAFAFA;--text:#111;--mut:#666;--brd:#D4D4D4;}
+    /* Los 4 temas (Origins/Dark/Lunar Tide/White) vienen de css/themes.css
+       (compartido con app.css) — antes esta página tenía su propia copia
+       recortada de la paleta a mano, que podía desincronizarse si se
+       ajustaba un color solo en un lado. No se linkea app.css directo
+       porque trae reglas de layout pensadas solo para el shell de la SPA
+       (ej. body{overflow:hidden}, que le cortaría el scroll a esta página). */
     *{margin:0;padding:0;box-sizing:border-box;}
     body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;min-height:100vh;}
     .nav{background:var(--surf);border-bottom:1px solid var(--brd);padding:0 20px;height:56px;display:flex;align-items:center;gap:14px;position:sticky;top:0;z-index:10;}
@@ -68,6 +71,7 @@
 </div>
 <div class="toast" id="toast"></div>
 
+<script src="js/api.js"></script>
 <script>
 const TOKEN = localStorage.getItem('manga_token');
 if (!TOKEN) location.href = '/login.html';
@@ -80,7 +84,23 @@ function showToast(msg, type='ok') {
   setTimeout(() => { t.style.display = 'none'; }, 3000);
 }
 
+// Esta página no tenía función de escape: m.name se insertaba directo en
+// innerHTML (texto Y dentro de un onclick armado a mano) — un nombre de
+// manga con HTML/comillas se ejecutaba tal cual. esc() la cierra.
+function esc(str) {
+  return String(str ?? '').replace(/[&<>"']/g, c => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[c]));
+}
+
 function goManga(name) { location.href = '/?goto=' + encodeURIComponent(name); }
+
+// Delegado: reemplaza los onclick="goManga('...')" armados por concatenación
+// (mismo motivo que en ui.js — ver ese archivo para el detalle completo).
+document.addEventListener('click', e => {
+  const row = e.target.closest('[data-go-manga]');
+  if (row) goManga(row.dataset.goManga);
+});
 
 async function load() {
   const r    = await fetch('/api/mangas/stats/summary', { headers: { Authorization: 'Bearer ' + TOKEN } });
@@ -159,9 +179,9 @@ async function load() {
     <div class="section">
       <div class="section-title"><i class="ti ti-trophy"></i> Más leídos</div>
       ${data.topRead.map(m => `
-        <div class="manga-row" onclick="goManga('${m.name}')">
+        <div class="manga-row" data-go-manga="${esc(m.name)}">
           <div class="manga-row-ph">M</div>
-          <div class="manga-row-name">${m.name}</div>
+          <div class="manga-row-name">${esc(m.name)}</div>
           <div class="manga-row-bar">
             <div class="prog-bar"><div class="prog-fill" style="width:${m.total>0?Math.round(m.read/m.total*100):0}%;"></div></div>
           </div>
@@ -174,9 +194,9 @@ async function load() {
       <div class="section-title"><i class="ti ti-list"></i> Todos los mangas</div>
       <div id="manga-full-list">
         ${data.mangaList.filter(m=>m.read>0).map(m=>`
-          <div class="manga-row" onclick="goManga('${m.name}')">
+          <div class="manga-row" data-go-manga="${esc(m.name)}">
             <div class="manga-row-ph" style="font-size:13px;">${m.completed?'✅':'📖'}</div>
-            <div class="manga-row-name">${m.name}</div>
+            <div class="manga-row-name">${esc(m.name)}</div>
             <div class="manga-row-bar">
               <div class="prog-bar"><div class="prog-fill" style="width:${Math.round(m.read/m.total*100)}%;"></div></div>
             </div>
@@ -207,30 +227,20 @@ async function load() {
     </div>`;
 }
 
+// El fetch/blob/parseo vive en API.exportProgress()/API.importProgress()
+// (client/js/api.js), compartido con app.js — acá solo queda el toast y el
+// refresh de esta página (load()), que sí es propio de este archivo.
 async function exportProgress() {
-  const r    = await fetch('/api/mangas/progress/export', { headers: { Authorization: 'Bearer ' + TOKEN } });
-  const blob = await r.blob();
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement('a');
-  a.href = url;
-  a.download = `progreso-manga-${new Date().toISOString().slice(0,10)}.json`;
-  a.click();
-  URL.revokeObjectURL(url);
-  showToast('✅ Progreso exportado correctamente');
+  try {
+    await API.exportProgress();
+    showToast('✅ Progreso exportado correctamente');
+  } catch(e) { showToast('❌ Error al exportar', 'err'); }
 }
 
 async function importProgress(input, merge) {
   const file = input.files[0]; if (!file) return;
   try {
-    const text = await file.text();
-    const json = JSON.parse(text);
-    const progress = json.progress || json; // soportar formato nuevo y viejo
-    const r = await fetch('/api/mangas/progress/import', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + TOKEN },
-      body: JSON.stringify({ progress, merge })
-    });
-    const data = await r.json();
+    const data = await API.importProgress(file, merge);
     if (data.ok) {
       showToast(`✅ Importados ${data.imported} mangas correctamente`);
       setTimeout(load, 500);

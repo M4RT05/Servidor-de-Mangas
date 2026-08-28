@@ -1,8 +1,7 @@
 /* ── TEMAS ───────────────────────────────────────────────────────────── */
-:root{--bg:#0d1117;--bg-rgb:13,17,23;--surf:#161b27;--card:#1c2333;--acc:#F5B800;--acc-dark:#8a6800;--acc-hover:#e0a800;--acc-text:#0d1117;--text:#e6edf3;--mut:#7d8590;--grn:#3fb950;--brd:#30363d;--teal:#00c9a7;--badge-green:rgba(63,185,80,.15);--badge-blue:rgba(88,166,255,.15);--badge-red:rgba(231,76,60,.15);--badge-yellow:rgba(245,184,0,.15);--badge-teal:rgba(0,201,167,.15);--badge-purple:rgba(160,100,255,.15);--hover:#232d42;--nav-bg:#0d1117;--detail-bg:#0d1117;--bot-h:60px;--tb-bg:#1e2435;--tb-brd:#2a3045;--tb-set:#0d1117;}
-body.theme-dark{--bg:#111318;--bg-rgb:17,19,24;--surf:#1a1d24;--card:#22262f;--acc:#E0E0E0;--acc-dark:#606060;--acc-hover:#FFFFFF;--acc-text:#111318;--text:#F0F0F0;--mut:#888888;--grn:#22C55E;--brd:#2a2e38;--teal:#A0A0A0;--badge-green:rgba(34,197,94,.18);--badge-blue:rgba(200,200,200,.14);--badge-red:rgba(239,68,68,.18);--badge-yellow:rgba(220,220,100,.16);--badge-teal:rgba(160,160,160,.13);--badge-purple:rgba(180,160,220,.14);--hover:#2c3040;--nav-bg:#0d0f14;--detail-bg:#111318;--tb-bg:#1e2130;--tb-brd:#2e3348;--tb-set:#111318;}
-body.theme-lunar-tide{--bg:#F0F4F8;--bg-rgb:240,244,248;--surf:#E2ECF4;--card:#D0DFF0;--acc:#1A237E;--acc-dark:#0a0f40;--acc-hover:#283593;--acc-text:#F0F4F8;--text:#1A1A2E;--mut:#546E7A;--grn:#2E7D32;--brd:#90A4AE;--teal:#00695C;--badge-green:rgba(46,125,50,.16);--badge-blue:rgba(26,35,126,.14);--badge-red:rgba(198,40,40,.14);--badge-yellow:rgba(230,130,0,.15);--badge-teal:rgba(0,105,92,.14);--badge-purple:rgba(106,27,154,.14);--hover:#C5D4E8;--nav-bg:#CBD8E8;--detail-bg:#E4EDF6;--tb-bg:#C5D5E8;--tb-brd:#90A4AE;--tb-set:#F0F4F8;}
-body.theme-white{--bg:#FAFAFA;--bg-rgb:250,250,250;--surf:#F0F0F0;--card:#E6E6E6;--acc:#222222;--acc-dark:#555555;--acc-hover:#444444;--acc-text:#FAFAFA;--text:#111111;--mut:#666666;--grn:#2E7D32;--brd:#D4D4D4;--teal:#00695C;--badge-green:rgba(46,125,50,.14);--badge-blue:rgba(34,34,34,.10);--badge-red:rgba(180,30,30,.13);--badge-yellow:rgba(180,120,0,.13);--badge-teal:rgba(0,105,92,.12);--badge-purple:rgba(90,30,140,.12);--hover:#E0E0E0;--nav-bg:#E8E8E8;--detail-bg:#F5F5F5;--tb-bg:#E0E0E0;--tb-brd:#CCCCCC;--tb-set:#FAFAFA;}
+/* Paleta de los 4 temas: ver themes.css (compartido con stats.html y
+   cualquier otra página que necesite los mismos colores sin duplicarlos). */
+@import url('themes.css');
 
 /* ── RESET BASE ──────────────────────────────────────────────────────── */
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
@@ -154,6 +153,10 @@ body.theme-white      .det-hero-gradient{background:linear-gradient(to bottom,tr
 
 /* HOME */
 .hst{font-size:16px;font-weight:700;color:var(--text);margin-bottom:11px;}
+.hst-toggle{background:none;border:none;color:var(--mut);font-size:17px;line-height:1;cursor:pointer;padding:4px 6px;border-radius:6px;display:inline-flex;align-items:center;transition:color .15s,background .15s;}
+.hst-toggle:hover{color:var(--acc);background:rgba(245,184,0,.1);}
+.hst-toggle i{transition:transform .2s ease;}
+.hst-toggle.open i{transform:rotate(180deg);}
 .prbar{background:var(--brd);border-radius:4px;height:4px;margin-top:6px;overflow:hidden;}
 .prfill{background:var(--acc);height:4px;border-radius:4px;}
 
@@ -854,22 +857,22 @@ body.is-brave .det-body { padding-bottom: 100px !important; }
 @media(min-width:768px){
   .feat-carousel{
     /* 1 · Contenedor */
-    --feat-h:450px;              /* alto total del carrusel                  */
+    --feat-h:600px;              /* alto total del carrusel                  */
     --feat-hero-h:292px;         /* alto de la sección superior (hero)       */
 
     /* 2 · Portada principal — en escritorio va anclada al borde DERECHO,
        no centrada como en móvil. Por eso acá:
          --feat-cover-x → distancia desde el borde DERECHO (no horizontal-centro)
          --feat-cover-y → distancia desde el borde SUPERIOR (no offset desde el centro) */
-    --feat-cover-h:100%;          /* alto como % del hero — sube/baja con él  */
-    --feat-cover-x:0px;           /* distancia desde el borde derecho         */
-    --feat-cover-y:0px;           /* distancia desde el borde superior        */
+    --feat-cover-h:170%;          /* alto como % del hero — sube/baja con él  */
+    --feat-cover-x:700px;           /* distancia desde el borde derecho         */
+    --feat-cover-y:-20px;           /* distancia desde el borde superior        */
     --feat-cover-focus:center top; /* encuadre de la imagen (igual que hoy)  */
 
     /* 3 · Portada secundaria (fondo difuminado) */
-    --feat-blur:22px;             /* intensidad del desenfoque                */
+    --feat-blur:7px;             /* intensidad del desenfoque                */
     --feat-blur-bright:.28;       /* brillo (0=negro puro, 1=imagen original)  */
-    --feat-blur-bright-l:.80;     /* oscuridad del lado izquierdo del overlay  */
+    --feat-blur-bright-l:.28;     /* oscuridad del lado izquierdo del overlay  */
     --feat-blur-sat:.7;           /* saturación (0=gris, 1=colores completos)  */
     --feat-blur-scale:1;          /* escala del fondo (1=normal, 1.2=zoom in)  */
     --feat-blur-focus:center center; /* encuadre del fondo difuminado         */
@@ -881,19 +884,19 @@ body.is-brave .det-body { padding-bottom: 100px !important; }
     --feat-thumb-w:66px;         /* ancho — el alto se calcula automáticamente */
 
     /* 6 · Sinopsis */
-    --feat-syn-sz:13px;           /* tamaño de fuente                         */
+    --feat-syn-sz:16px;           /* tamaño de fuente                         */
     --feat-syn-lines:3;           /* número de líneas visibles                */
 
     /* 7 · Título y botón "Ver detalles" */
-    --feat-title-sz:26px;         /* tamaño del título                        */
-    --feat-title-lines:2;         /* líneas máximas del título (el resto → …) */
-    --feat-title-width:150px;     /* ancho en px — controla dónde salta de línea */
+    --feat-title-sz:30px;         /* tamaño del título                        */
+    --feat-title-lines:3;         /* líneas máximas del título (el resto → …) */
+    --feat-title-width:600px;     /* ancho en px — controla dónde salta de línea */
     --feat-btn-sz:13px;          /* tamaño del texto del botón               */
     --feat-btn-pad:9px 20px;     /* padding: vertical horizontal             */
 
     /* 8 · Flechas de navegación */
-    --feat-arr-size:36px;         /* ancho y alto del círculo de la flecha    */
-    --feat-arr-icon:22px;         /* tamaño del símbolo ‹ › dentro del círculo */
+    --feat-arr-size:46px;         /* ancho y alto del círculo de la flecha    */
+    --feat-arr-icon:32px;         /* tamaño del símbolo ‹ › dentro del círculo */
     --feat-arr-left:10px;         /* posición horizontal de la flecha izquierda */
     --feat-arr-right:10px;        /* posición horizontal de la flecha derecha */
     --feat-arr-top:30px;          /* desplazamiento vertical (negativo=arriba) */

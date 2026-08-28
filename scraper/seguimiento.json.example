@@ -1,0 +1,101 @@
+{
+  "fuentes_activas": {
+    "olympus": true,
+    "nexus": true,
+    "temple": true,
+    "dragon": true,
+    "ikigai": true,
+    "taurus": true,
+    "leercapitulo": true,
+    "manhwaweb": true,
+    "tmo": true
+  },
+  "mangas": [
+    {
+      "nombre_carpeta": "Ejemplo Manga Simple",
+      "fuente": "nexus",
+      "url_manga": "https://nexusscanlation.com/series/ejemplo-manga-simple",
+      "slug": "",
+      "ultimo_capitulo": 0,
+      "capitulos_con_error": null,
+      "activo": true
+    },
+    {
+      "nombre_carpeta": "Ejemplo Manga En Curso",
+      "fuente": "temple",
+      "url_manga": "https://aedexnox.akan01.com/serie/ejemplo-manga-en-curso/",
+      "slug": "ejemplo-manga-en-curso",
+      "ultimo_capitulo": 42.0,
+      "capitulos_con_error": [38.0],
+      "activo": true
+    },
+    {
+      "nombre_carpeta": "Ejemplo Manga Pausado",
+      "fuente": "dragon",
+      "url_manga": "https://dragontranslation.org/manga/ejemplo-manga-pausado/",
+      "slug": "ejemplo-manga-pausado",
+      "ultimo_capitulo": 15.0,
+      "capitulos_con_error": null,
+      "activo": false
+    },
+    {
+      "nombre_carpeta": "Ejemplo Manga En ManhwasWEB",
+      "fuente": "manhwaweb",
+      "url_manga": "https://manhwaweb.com/manhwa/ejemplo-manga-en-manhwasweb_1703742073447",
+      "slug": "ejemplo-manga-en-manhwasweb_1703742073447",
+      "ultimo_capitulo": 0,
+      "capitulos_con_error": null,
+      "activo": true,
+      "tipo_contenido": "manga"
+    },
+    {
+      "nombre_carpeta": "Ejemplo Manga En Tauro",
+      "fuente": "taurus",
+      "url_manga": "https://lectortaurus.com/manga/ejemplo-manga-en-tauro/",
+      "slug": "ejemplo-manga-en-tauro",
+      "ultimo_capitulo": 0,
+      "capitulos_con_error": null,
+      "activo": true
+    },
+    {
+      "nombre_carpeta": "Ejemplo Manga En LeerCapitulo",
+      "fuente": "leercapitulo",
+      "url_manga": "https://www.leercapitulo.co/manga/abc123/ejemplo-manga-en-leercapitulo/",
+      "slug": "abc123/ejemplo-manga-en-leercapitulo",
+      "ultimo_capitulo": 0,
+      "capitulos_con_error": null,
+      "activo": true,
+      "tipo_contenido": "manga"
+    },
+    {
+      "nombre_carpeta": "Ejemplo Manga Multi Fuente",
+      "fuente": "olympus",
+      "url_manga": "https://olympusxyz.com/series/comic-ejemplo-manga-multi-fuente",
+      "slug": "comic-ejemplo-manga-multi-fuente",
+      "ultimo_capitulo": 30.0,
+      "capitulos_con_error": null,
+      "activo": true,
+      "manga_id": "184321"
+    },
+    {
+      "nombre_carpeta": "Ejemplo Manga Multi Fuente",
+      "fuente": "ikigai",
+      "url_manga": "https://visualikigai.aplikando.com/series/ejemplo-manga-multi-fuente/",
+      "slug": "ejemplo-manga-multi-fuente",
+      "ultimo_capitulo": 28.0,
+      "capitulos_con_error": null,
+      "activo": true,
+      "prioridad_fuente": 2
+    },
+    {
+      "nombre_carpeta": "Ejemplo Manga Simple",
+      "fuente": "tmo",
+      "url_manga": "https://zonatmo.org/library/manhwa/4155/ejemplo-manga-simple",
+      "slug": "4155/ejemplo-manga-simple",
+      "ultimo_capitulo": 0,
+      "capitulos_con_error": null,
+      "activo": true,
+      "grupo_preferido": "TMO Bot"
+    }
+  ]
+}

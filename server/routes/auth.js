@@ -84,19 +84,61 @@ function getClientIP(req) {
 }
 
 function initAdminIfNeeded() {
-  const users    = loadUsers();
+  const users       = loadUsers();
+  const envUsername = process.env.ADMIN_USERNAME;
+  const envPassword = process.env.ADMIN_PASSWORD;
+
   if (users.length === 0) {
     const salt     = crypto.randomBytes(16).toString('hex');
-    const username = process.env.ADMIN_USERNAME || 'admin';
-    const password = process.env.ADMIN_PASSWORD || 'admin';
+    const username = envUsername || 'admin';
+    const password = envPassword || 'admin';
     users.push({
       id: '1', username, role: 'admin',
       salt, passwordHash: hashPasswordScrypt(password, salt), hashAlgo: 'scrypt',
       createdAt: new Date().toISOString()
     });
     saveUsers(users);
-    console.log(`  👤 Usuario admin creado: ${username} / ${password}`);
+    console.log(`  👤 Usuario admin creado: ${username}`);
+    if (!envPassword) {
+      console.log('  ⚠️  ADMIN_PASSWORD no está definida en .env — se usó la contraseña por defecto "admin". Cambiala cuanto antes desde el Panel Admin, o definí ADMIN_PASSWORD en .env y reiniciá el server.');
+    } else {
+      console.log('  🔑 Contraseña tomada de ADMIN_PASSWORD (.env).');
+    }
+    return;
   }
+
+  // Ya existe el admin principal (id:'1') — hasta acá, .env solo se leía
+  // en la creación inicial de arriba, así que cambiarlo después no tenía
+  // ningún efecto. Ahora, si .env trae usuario/contraseña Y son distintos
+  // a lo que ya está guardado, se aplican en cada arranque — así .env
+  // sirve como mecanismo real para resetear el admin (por ejemplo si te
+  // quedaste afuera) con solo editar el archivo y reiniciar el server.
+  // Todo esto corre UNA sola vez al arrancar, no en cada request.
+  const admin = users.find(u => u.id === '1');
+  if (!admin) return; // no debería pasar, pero por las dudas no explota si el id:'1' ya no existe
+
+  let cambios = false;
+
+  if (envUsername && envUsername.toLowerCase() !== admin.username.toLowerCase()) {
+    const colisiona = users.some(u => u.id !== admin.id && u.username.toLowerCase() === envUsername.toLowerCase());
+    if (colisiona) {
+      console.log(`  ⚠️  ADMIN_USERNAME='${envUsername}' (.env) ya lo usa otro usuario — se ignora, sigue siendo '${admin.username}'.`);
+    } else {
+      console.log(`  👤 Usuario admin renombrado por .env: '${admin.username}' → '${envUsername}'.`);
+      admin.username = envUsername;
+      cambios = true;
+    }
+  }
+
+  if (envPassword && !verifyPassword(envPassword, admin)) {
+    admin.salt         = crypto.randomBytes(16).toString('hex');
+    admin.passwordHash = hashPasswordScrypt(envPassword, admin.salt);
+    admin.hashAlgo      = 'scrypt';
+    cambios = true;
+    console.log('  🔑 Contraseña del admin actualizada desde ADMIN_PASSWORD (.env).');
+  }
+
+  if (cambios) saveUsers(users);
 }
 initAdminIfNeeded();
 
@@ -172,9 +214,13 @@ router.post('/avatar', authMiddleware, (req, res) => {
     const idx   = users.findIndex(u => u.id === req.user.userId);
     if (idx >= 0) {
       if (users[idx].avatar) {
-        const oldPath = path.join(__dirname, '..', users[idx].avatar.replace(/^\//, ''));
+        // AVATARS_DIR ya apunta a server/data/avatars — antes esto se
+        // reconstruía con path.join(__dirname, '..', avatar...), que da
+        // server/avatars (sin el "data/"), un archivo que nunca existe.
+        // Por eso el avatar viejo nunca se borraba al subir uno nuevo.
+        const oldPath = path.join(AVATARS_DIR, path.basename(users[idx].avatar));
         if (fs.existsSync(oldPath) && oldPath !== path.join(AVATARS_DIR, req.file.filename)) {
-          try { fs.unlinkSync(oldPath); } catch {}
+          try { fs.unlinkSync(oldPath); } catch (e) { console.warn(`  [⚠] No se pudo borrar avatar viejo (${users[idx].username}): ${e.message}`); }
         }
       }
       users[idx].avatar = '/avatars/' + req.file.filename;
@@ -207,7 +253,11 @@ router.post('/users', authMiddleware, (req, res) => {
     return res.status(409).json({ error: 'El usuario ya existe.' });
   const salt    = crypto.randomBytes(16).toString('hex');
   const newUser = {
-    id: Date.now().toString(), username, role: role || 'reader', salt,
+    // randomUUID() en vez de Date.now().toString(): Date.now() puede
+    // repetirse si dos altas de usuario caen en el mismo milisegundo
+    // (ej. doble clic sin debounce en el botón de crear), lo que
+    // pisaría un usuario con otro. randomUUID() no tiene ese riesgo.
+    id: crypto.randomUUID(), username, role: role || 'reader', salt,
     passwordHash: hashPasswordScrypt(password, salt), hashAlgo: 'scrypt', createdAt: new Date().toISOString(),
     canViewAdult:  canViewAdult  !== false,
     canViewNormal: canViewNormal !== false,
@@ -236,7 +286,15 @@ router.put('/users/:id', authMiddleware, (req, res) => {
 router.delete('/users/:id', authMiddleware, (req, res) => {
   if (req.user.role !== 'admin') return res.status(403).json({ error: 'Sin permiso.' });
   if (req.user.userId === req.params.id) return res.status(400).json({ error: 'No puedes eliminarte a ti mismo.' });
-  saveUsers(loadUsers().filter(u => u.id !== req.params.id));
+  const users = loadUsers();
+  const target = users.find(u => u.id === req.params.id);
+  if (target?.avatar) {
+    const avatarPath = path.join(AVATARS_DIR, path.basename(target.avatar));
+    if (fs.existsSync(avatarPath)) {
+      try { fs.unlinkSync(avatarPath); } catch (e) { console.warn(`  [⚠] No se pudo borrar avatar de usuario eliminado (${target.username}): ${e.message}`); }
+    }
+  }
+  saveUsers(users.filter(u => u.id !== req.params.id));
   res.json({ ok: true });
 });
 

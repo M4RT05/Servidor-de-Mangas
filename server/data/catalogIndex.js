@@ -22,6 +22,7 @@ const {
   writeJsonAtomic, naturalCompare, listDirNames, listImageNames,
   getFolderDate, getDirMtimeMs, getMetadataSync, IMAGE_EXT_RE
 } = require('../lib/fsHelpers');
+const { slugifyManga, slugifyChapter } = require('../lib/slug');
 
 const DETECTED_FILE = path.join(__dirname, '../detected_dates.json');
 const SNAPSHOT_FILE = path.join(__dirname, '../catalog_index.json');
@@ -44,6 +45,7 @@ function getMangaRoot() { return getMangaRoots()[0]; }
 // ── ESTADO ────────────────────────────────────────────────────────────────────
 let _index       = new Map();   // name -> entry
 let _rootOf       = new Map();  // name -> root path donde vive
+let _nameBySlug   = new Map();  // slug de manga -> name real (para URLs limpias)
 let _version      = 0;          // se incrementa en cada cambio, para ETags baratos
 let detectedDates = {};
 
@@ -118,12 +120,14 @@ function buildMangaEntry(root, name) {
 
   const chapters = chapterNames.map(ch => ({
     number: ch,
+    slug:   slugifyChapter(ch),
     images: listImageNames(path.join(mp, ch)),
     date:   getEffectiveDate(name, ch, mp).toISOString()
   }));
   const meta = getMetadataSync(mp);
   const entry = {
     name,
+    slug: slugifyManga(name), // se puede pisar en rebuildSlugMaps() si choca con otro manga
     cover: getCoverUrlFor(mp, name, chapters),
     chapters,
     metadata: {
@@ -141,6 +145,30 @@ function buildMangaEntry(root, name) {
   return entry;
 }
 
+// Recalcula el mapa slug -> name de TODO el catálogo. Se hace completo (no
+// incremental) porque una colisión de slug depende de los demás mangas, no
+// solo del que cambió — es barato igual: son un par de cientos de strings,
+// nada de disco. Orden alfabético fijo para que, ante una colisión real (dos
+// mangas con nombre distinto que generan el mismo slug), quién se queda con
+// el slug "limpio" y quién con el "-2" sea siempre el mismo tras un restart,
+// en vez de depender del orden en que el filesystem devuelva las carpetas.
+function rebuildSlugMaps() {
+  _nameBySlug.clear();
+  const names = Array.from(_index.keys()).sort((a, b) => a.localeCompare(b, 'es'));
+  for (const name of names) {
+    const entry = _index.get(name);
+    const base  = slugifyManga(name);
+    let finalSlug = base;
+    if (_nameBySlug.has(finalSlug)) {
+      let n = 2;
+      while (_nameBySlug.has(`${base}-${n}`)) n++;
+      finalSlug = `${base}-${n}`;
+    }
+    entry.slug = finalSlug;
+    _nameBySlug.set(finalSlug, name);
+  }
+}
+
 // Reconstruye SOLO el manga indicado (o lo agrega si es nuevo). Es la única
 // operación que dispara el watcher — nunca se re-escanean los demás.
 function rebuildMangaEntry(name) {
@@ -149,6 +177,7 @@ function rebuildMangaEntry(name) {
     if (fs.existsSync(mp)) {
       _index.set(name, buildMangaEntry(root, name));
       _rootOf.set(name, root);
+      rebuildSlugMaps();
       bumpVersion();
       saveDetectedDatesDebounced();
       saveSnapshotDebounced();
@@ -159,6 +188,7 @@ function rebuildMangaEntry(name) {
   if (_index.has(name)) {
     _index.delete(name);
     _rootOf.delete(name);
+    rebuildSlugMaps();
     bumpVersion();
     saveSnapshotDebounced();
   }
@@ -169,6 +199,27 @@ function getMangaEntry(name) { return _index.get(name) || null; }
 function getAllEntries()     { return Array.from(_index.values()); }
 function findMangaRoot(name) { return _rootOf.get(name) || getMangaRoot(); }
 function getMangaNames()     { return Array.from(_index.keys()); }
+
+// ── RESOLUCIÓN POR SLUG (para las URLs limpias) ──────────────────────────────
+// Devuelve el NOMBRE REAL de carpeta a partir de un slug de manga, o null.
+function getNameBySlug(slug) { return _nameBySlug.get(slug) || null; }
+
+// Acepta nombre real O slug indistintamente — probar nombre exacto primero
+// (más barato, es un Map.get) y recién si no matchea, probar como slug.
+// Así las rutas viejas que todavía linkeen por nombre crudo siguen andando.
+function resolveMangaParam(param) {
+  if (_index.has(param)) return param;
+  return getNameBySlug(param);
+}
+
+// Mismo criterio para capítulo: nombre exacto primero, slug como fallback,
+// buscando dentro de los capítulos YA cargados de esa entry (no toca disco).
+function resolveChapterParam(entry, param) {
+  if (!entry) return null;
+  if (entry.chapters.some(c => c.number === param)) return param;
+  const found = entry.chapters.find(c => c.slug === param);
+  return found ? found.number : null;
+}
 
 // El watcher (fs.watch) no garantiza captar el 100% de los eventos, sobre
 // todo en un disco externo — si se pierde el evento de un capítulo agregado
@@ -226,6 +277,13 @@ function start() {
       const currentMtime = getDirMtimeMs(mp);
       const cached = snapshot[name];
       if (cached && cached.folderMtimeMs === currentMtime) {
+        // Migración en caliente: si el snapshot es de antes de que existieran
+        // los slugs (catalog_index.json viejo), completarlos ahora. No hace
+        // falta tocar disco — ya tenemos la lista de capítulos en memoria.
+        if (!cached.slug) {
+          cached.slug = slugifyManga(name);
+          for (const ch of cached.chapters) if (!ch.slug) ch.slug = slugifyChapter(ch.number);
+        }
         _index.set(name, cached);
         _rootOf.set(name, root);
         reused++;
@@ -244,6 +302,7 @@ function start() {
   }
 
   console.log(`[Catalog] Índice listo: ${reused} manga(s) reusados del snapshot, ${rebuilt} reconstruidos desde disco.`);
+  rebuildSlugMaps();
   saveDetectedDatesDebounced();
   saveSnapshotDebounced();
   bumpVersion();
@@ -256,12 +315,19 @@ function start() {
 // soportado en Linux, y en Windows tiene historial de perder eventos. chokidar
 // normaliza esas diferencias entre plataformas.
 //
-// depth:2 significa que también se escuchan cambios DENTRO de una carpeta de
-// capítulo (no solo la creación de la carpeta en sí) — ver el comentario largo
-// más abajo sobre por qué esto importa. El límite en profundidad evita que
-// chokidar tenga que abrir un watch handle por cada imagen suelta del catálogo,
-// que con una biblioteca grande podría acercarse a límites del sistema
-// operativo (inotify en Linux, por ejemplo).
+// Dos watchers en capas, no uno solo con depth alto:
+//   1. Un watcher BASE por raíz con depth:1 (root -> manga -> capítulo), que
+//      solo ve creación/borrado de CARPETAS — detalle más abajo en
+//      startWatcher().
+//   2. Watchers TEMPORALES con depth:0, uno por capítulo que se está bajando
+//      ahora mismo, abiertos on-demand y cerrados solos a los pocos minutos
+//      — ver watchChapterFolderTemporarily() más abajo.
+// Antes había un único watcher con depth:2 (mirando el contenido de TODOS los
+// capítulos desde el arranque), que con la biblioteca real resultó
+// catastrófico: un watch handle por cada carpeta de capítulo existente,
+// miles desde el día uno. El esquema en capas de arriba deja ese costo
+// proporcional a cuántos capítulos se están descargando en este momento, no
+// al tamaño total de la biblioteca.
 //
 // require() protegido a propósito: si chokidar no está instalado (falta un
 // "npm install", por ejemplo) esto NO debe tirar abajo todo el servidor — que
@@ -436,6 +502,7 @@ module.exports = {
   getConfiguredMangaRoots, getMangaRoots, getMangaRoot, findMangaRoot,
   getMangaEntry, getAllEntries, getMangaNames, getIndexVersion, ensureFresh,
   getDetectedDate, startWatcher, stopWatcher, touchManga,
+  getNameBySlug, resolveMangaParam, resolveChapterParam,
   // expuesto para runProgressCleanup / stats en manga.js
   get detectedDatesRef() { return detectedDates; },
   saveDetectedDatesDebounced

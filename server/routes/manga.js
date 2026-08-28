@@ -19,6 +19,15 @@ const ORPHAN_GRACE_DAYS = 7;
 // definitivo (bak1 = más reciente, bak5 = más viejo).
 const MAX_PROGRESS_BACKUPS = 5;
 
+// El nombre de un manga (viene del cliente: body o params) se usa varias
+// veces más abajo como CLAVE de un objeto (progress[manga] = ...). Si
+// alguien manda literalmente "__proto__", "constructor" o "prototype" como
+// nombre, esa asignación no crea una propiedad común — dispara el setter
+// heredado de Object.prototype y cambia el [[Prototype]] del objeto local
+// en cuestión. No es una contaminación global (cada objeto de progreso acá
+// es local a ese request), pero cuesta una línea cerrarlo del todo.
+const UNSAFE_OBJECT_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
 // ── BACKUP ROTATIVO (solo se llama antes de un borrado definitivo, no en
 // cada guardado normal, para no generar I/O innecesario) ─────────────────────
 function backupBeforeDestructiveWrite(filePath) {
@@ -209,7 +218,7 @@ router.get('/', (req, res) => {
   const mangas = catalogIndex.getAllEntries()
     .filter(e => visibleTo(e, restrictions))
     .map(e => ({
-      name: e.name, cover: e.cover, chapterCount: e.chapters.length,
+      name: e.name, slug: e.slug, cover: e.cover, chapterCount: e.chapters.length,
       lastChapter: e.chapters.length ? e.chapters[e.chapters.length - 1].number : null,
       lastChapterDate: e.lastChapterDate,
       addedDate: e.addedDate,
@@ -249,11 +258,11 @@ router.get('/latest-paged', (req, res) => {
     }
     const prog = progress[e.name] || {};
     const lastChaps = e.chapters.slice(-2).reverse().map(ch => ({
-      chapter: ch.number, date: ch.date, dateLabel: formatDate(ch.date),
+      chapter: ch.number, chapterSlug: ch.slug, date: ch.date, dateLabel: formatDate(ch.date),
       read: prog.readChapters?.includes(ch.number) || false
     }));
     groups.push({
-      manga: e.name, cover: e.cover,
+      manga: e.name, slug: e.slug, cover: e.cover,
       status: e.metadata.status, adult: e.metadata.adult, type: e.metadata.type,
       latestDate: lastChaps[0]?.date || null,
       chapters: lastChaps
@@ -344,6 +353,7 @@ router.post('/progress/import', (req, res) => {
   let count = 0;
 
   for (const [manga, data] of Object.entries(mangaMap)) {
+    if (UNSAFE_OBJECT_KEYS.has(manga)) continue;
     if (!data || !Array.isArray(data.readChapters)) continue;
     if (merge && imported[manga]) {
       const combined = new Set([...(imported[manga].readChapters||[]), ...data.readChapters]);
@@ -361,7 +371,10 @@ router.post('/progress/import', (req, res) => {
 // GET /api/mangas/:manga — antes recalculaba imageCount por capítulo con un
 // readdirSync por cada uno en cada cache miss. Ahora sale directo del índice.
 router.get('/:manga', (req, res) => {
-  const name = decodeURIComponent(req.params.manga);
+  // Acepta el nombre real de carpeta (compatibilidad) O el slug de la URL
+  // linda (/series/:slug) — se prueba nombre exacto primero, slug después.
+  const rawParam = decodeURIComponent(req.params.manga);
+  const name = catalogIndex.resolveMangaParam(rawParam) || rawParam;
   const entry = catalogIndex.ensureFresh(name);
   if (!entry) return res.status(404).json({ error: 'Manga no encontrado.' });
 
@@ -373,10 +386,10 @@ router.get('/:manga', (req, res) => {
 
   setUserDataCacheHeaders(res);
   res.json({
-    name: entry.name, cover: entry.cover, chapterCount: entry.chapters.length,
+    name: entry.name, slug: entry.slug, cover: entry.cover, chapterCount: entry.chapters.length,
     metadata: entry.metadata,
     chapters: entry.chapters.map(ch => ({
-      number: ch.number, imageCount: ch.images.length,
+      number: ch.number, slug: ch.slug, imageCount: ch.images.length,
       read: prog.readChapters?.includes(ch.number) || false,
       date: ch.date, dateLabel: formatDate(ch.date)
     })),
@@ -389,17 +402,25 @@ router.get('/:manga', (req, res) => {
 // índice, así que esta ruta no toca el disco para nada (salvo el
 // precalentado en background de las primeras páginas).
 router.get('/:manga/:chapter/images', (req, res) => {
-  const name  = decodeURIComponent(req.params.manga);
-  const ch    = decodeURIComponent(req.params.chapter);
+  // Igual que en /:manga: acepta nombre real o slug para el manga. El
+  // capítulo se resuelve DESPUÉS de tener la entry (el slug de capítulo solo
+  // tiene sentido buscándolo dentro de los capítulos de ESE manga puntual).
+  const rawMangaParam = decodeURIComponent(req.params.manga);
+  const name  = catalogIndex.resolveMangaParam(rawMangaParam) || rawMangaParam;
   const entry = catalogIndex.ensureFresh(name);
   if (!entry) return res.status(404).json({ error: 'Capítulo no encontrado.' });
 
   const restrictions = req.userRestrictions || { canViewAdult: false, canViewNormal: false, blockedMangas: [] };
   if (!visibleTo(entry, restrictions)) return res.status(404).json({ error: 'Capítulo no encontrado.' });
 
+  const rawChapterParam = decodeURIComponent(req.params.chapter);
+  const ch = catalogIndex.resolveChapterParam(entry, rawChapterParam) || rawChapterParam;
+
   const idx = entry.chapters.findIndex(c => c.number === ch);
   if (idx === -1) return res.status(404).json({ error: 'Capítulo no encontrado.' });
   const chapterEntry = entry.chapters[idx];
+  const prevEntry = idx > 0 ? entry.chapters[idx - 1] : null;
+  const nextEntry = idx < entry.chapters.length - 1 ? entry.chapters[idx + 1] : null;
 
   const images = chapterEntry.images.map(img =>
     `/api/images/${encodeURIComponent(name)}/${encodeURIComponent(ch)}/${encodeURIComponent(img)}`
@@ -414,17 +435,20 @@ router.get('/:manga/:chapter/images', (req, res) => {
 
   setCacheHeaders(res, 300);
   res.json({
-    manga: name, chapter: ch, cover: entry.cover, images, total: images.length,
-    prevChapter: idx > 0 ? entry.chapters[idx - 1].number : null,
-    nextChapter: idx < entry.chapters.length - 1 ? entry.chapters[idx + 1].number : null,
-    allChapters: entry.chapters.map(c => c.number)
+    manga: name, slug: entry.slug, chapter: ch, chapterSlug: chapterEntry.slug,
+    cover: entry.cover, images, total: images.length,
+    prevChapter: prevEntry ? prevEntry.number : null,
+    prevChapterSlug: prevEntry ? prevEntry.slug : null,
+    nextChapter: nextEntry ? nextEntry.number : null,
+    nextChapterSlug: nextEntry ? nextEntry.slug : null,
+    allChapters: entry.chapters.map(c => ({ number: c.number, slug: c.slug }))
   });
 });
 
 // POST /api/mangas/unread
 router.post('/unread', (req, res) => {
   const { manga, chapter } = req.body;
-  if (!manga || !chapter) return res.status(400).json({ error: 'Faltan datos.' });
+  if (!manga || !chapter || UNSAFE_OBJECT_KEYS.has(manga)) return res.status(400).json({ error: 'Faltan datos.' });
   const entry = catalogIndex.getMangaEntry(manga);
   if (!entry) return res.status(404).json({ error: 'Manga no encontrado.' });
   const restrictions = req.userRestrictions || { canViewAdult: false, canViewNormal: false, blockedMangas: [] };
@@ -441,7 +465,7 @@ router.post('/unread', (req, res) => {
 // POST /api/mangas/mark-all-read
 router.post('/mark-all-read', (req, res) => {
   const { manga } = req.body;
-  if (!manga) return res.status(400).json({ error: 'Falta el nombre del manga.' });
+  if (!manga || UNSAFE_OBJECT_KEYS.has(manga)) return res.status(400).json({ error: 'Falta el nombre del manga.' });
   const entry = catalogIndex.ensureFresh(manga);
   if (!entry) return res.status(404).json({ error: 'Manga no encontrado.' });
   const restrictions = req.userRestrictions || { canViewAdult: false, canViewNormal: false, blockedMangas: [] };
@@ -459,7 +483,7 @@ router.post('/mark-all-read', (req, res) => {
 // POST /api/mangas/unread-all
 router.post('/unread-all', (req, res) => {
   const { manga } = req.body;
-  if (!manga) return res.status(400).json({ error: 'Falta el nombre del manga.' });
+  if (!manga || UNSAFE_OBJECT_KEYS.has(manga)) return res.status(400).json({ error: 'Falta el nombre del manga.' });
   const entry = catalogIndex.getMangaEntry(manga);
   if (!entry) return res.status(404).json({ error: 'Manga no encontrado.' });
   const restrictions = req.userRestrictions || { canViewAdult: false, canViewNormal: false, blockedMangas: [] };
@@ -473,7 +497,7 @@ router.post('/unread-all', (req, res) => {
 // POST /api/mangas/progress
 router.post('/progress', (req, res) => {
   const { manga, chapter, page } = req.body;
-  if (!manga || !chapter) return res.status(400).json({ error: 'Faltan datos.' });
+  if (!manga || !chapter || UNSAFE_OBJECT_KEYS.has(manga)) return res.status(400).json({ error: 'Faltan datos.' });
   const entry = catalogIndex.getMangaEntry(manga);
   if (!entry) return res.status(404).json({ error: 'Manga no encontrado.' });
   const restrictions = req.userRestrictions || { canViewAdult: false, canViewNormal: false, blockedMangas: [] };
@@ -492,7 +516,8 @@ router.post('/progress', (req, res) => {
 
 // GET /api/mangas/:manga/metadata
 router.get('/:manga/metadata', (req, res) => {
-  const name = decodeURIComponent(req.params.manga);
+  const rawParam = decodeURIComponent(req.params.manga);
+  const name = catalogIndex.resolveMangaParam(rawParam) || rawParam;
   const entry = catalogIndex.getMangaEntry(name);
   if (!entry) return res.status(404).json({ error: 'Manga no encontrado.' });
   const restrictions = req.userRestrictions || { canViewAdult: false, canViewNormal: false, blockedMangas: [] };
@@ -507,7 +532,8 @@ const ADULT_MARKER_GENRES = ['hentai','ecchi','adultos','+18','adult','18+'];
 
 router.put('/:manga/metadata', (req, res) => {
   if (req.user?.role !== 'admin') return res.status(403).json({ error: 'Solo administradores.' });
-  const name = decodeURIComponent(req.params.manga);
+  const rawParam = decodeURIComponent(req.params.manga);
+  const name = catalogIndex.resolveMangaParam(rawParam) || rawParam;
   const root = catalogIndex.findMangaRoot(name);
   const mp   = path.join(root, name);
   if (!fs.existsSync(mp)) return res.status(404).json({ error: 'Manga no encontrado.' });

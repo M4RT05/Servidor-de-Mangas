@@ -1,0 +1,57 @@
+{
+  "olympus": {
+    "tipo": "exacto",
+    "valores": [
+      "olympusxyz.com"
+    ]
+  },
+  "nexus": {
+    "tipo": "exacto",
+    "valores": [
+      "nexusscanlation.com"
+    ]
+  },
+  "temple": {
+    "tipo": "exacto",
+    "valores": [
+      "aedexnox.akan01.com"
+    ]
+  },
+  "dragon": {
+    "tipo": "exacto",
+    "valores": [
+      "dragontranslation.org"
+    ]
+  },
+  "ikigai": {
+    "tipo": "prefijo",
+    "valores": [
+      "visorikigai.",
+      "visualikigai."
+    ]
+  },
+  "taurus": {
+    "tipo": "exacto",
+    "valores": [
+      "lectortaurus.com"
+    ]
+  },
+  "leercapitulo": {
+    "tipo": "exacto",
+    "valores": [
+      "www.leercapitulo.co"
+    ]
+  },
+  "manhwaweb": {
+    "tipo": "exacto",
+    "valores": [
+      "manhwaweb.com"
+    ]
+  },
+  "tmo": {
+    "tipo": "exacto",
+    "valores": [
+      "zonatmo.org"
+    ]
+  }
+}
