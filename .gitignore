@@ -52,3 +52,7 @@ desktop.ini
 # ── LOGS ──────────────────────────────────────────────────────────────────────
 *.log
 npm-debug.log*
+
+
+server/motor-ia/
+server/upscale-state/

@@ -5,7 +5,8 @@
   "main": "server/index.js",
   "scripts": {
     "start": "node server/index.js",
-    "dev": "nodemon server/index.js"
+    "dev": "nodemon server/index.js",
+    "instalar-ia": "node scripts/instalarMotorIA.js"
   },
   "dependencies": {
     "chokidar": "^3.6.0",

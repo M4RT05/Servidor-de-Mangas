@@ -812,6 +812,23 @@ async function validarYNormalizarManga(input, dominiosFuente, { esNuevo }) {
   return { errores, manga: m };
 }
 
+// ── Identidad de una entrada de seguimiento ─────────────────────────────
+// Una entrada se identifica por (nombre_carpeta + fuente), NO solo por
+// nombre_carpeta: el sistema multi-fuente permite el mismo manga desde
+// varias fuentes (misma carpeta, fuentes distintas). Buscar solo por
+// nombre hacía que editar/borrar la entrada de una fuente afectara a la
+// de otra. Devuelve los índices que coinciden; si 'fuente' no viene
+// (cliente viejo con la página en caché) matchea solo por nombre.
+function localizarManga(mangas, nombre, fuente) {
+  const idxs = [];
+  mangas.forEach((m, i) => {
+    if (m.nombre_carpeta !== nombre) return;
+    if (fuente && m.fuente !== fuente) return;
+    idxs.push(i);
+  });
+  return idxs;
+}
+
 // ── GET /mangas ──────────────────────────────────────────────────────────
 router.get('/mangas', requireAdmin, (req, res) => {
   let data;
@@ -903,6 +920,7 @@ router.put('/mangas', requireAdmin, async (req, res) => {
   }
 
   const original = req.body?.original_nombre_carpeta;
+  const originalFuente = req.body?.original_fuente;
   if (!original) return res.status(400).json({ error: "Falta 'original_nombre_carpeta' para saber cuál editar." });
 
   let data;
@@ -910,12 +928,22 @@ router.put('/mangas', requireAdmin, async (req, res) => {
   catch (e) { return res.status(500).json({ error: `No se pudo leer seguimiento.json: ${e.message}` }); }
 
   const mangas = data.mangas || [];
-  const idx = mangas.findIndex(m => m.nombre_carpeta === original);
-  if (idx === -1) return res.status(404).json({ error: `No se encontró ningún manga con nombre_carpeta '${original}'.` });
+  const coincidencias = localizarManga(mangas, original, originalFuente);
+  if (coincidencias.length === 0) return res.status(404).json({ error: `No se encontró ningún manga con nombre_carpeta '${original}'${originalFuente ? ` y fuente '${originalFuente}'` : ''}.` });
+  if (coincidencias.length > 1) return res.status(400).json({ error: `Hay ${coincidencias.length} entradas que coinciden con '${original}'${originalFuente ? ` / '${originalFuente}'` : ' (de distintas fuentes)'} — falta 'original_fuente' para saber cuál editar.` });
+  const idx = coincidencias[0];
 
   const dominiosFuente = obtenerDominiosFuente();
   const { errores, manga } = await validarYNormalizarManga(req.body?.manga || {}, dominiosFuente, { esNuevo: false });
   if (errores.length) return res.status(400).json({ error: errores.join(' ') });
+
+  // Cambio de FUENTE sin cambio de nombre: el bloque de más abajo solo corre
+  // si cambia el nombre, así que este caso quedaba sin chequear — se podía
+  // dejar dos entradas idénticas (mismo nombre + misma fuente).
+  if (manga.nombre_carpeta === original && manga.fuente !== mangas[idx].fuente &&
+      mangas.some((m, i) => i !== idx && m.nombre_carpeta === manga.nombre_carpeta && m.fuente === manga.fuente)) {
+    return res.status(409).json({ error: `Ya existe otro manga con nombre_carpeta '${manga.nombre_carpeta}' y fuente '${manga.fuente}'.` });
+  }
 
   let avisoMultiFuente;
   if (manga.nombre_carpeta !== original) {
@@ -967,6 +995,7 @@ router.delete('/mangas', requireAdmin, (req, res) => {
   }
 
   const nombre = req.body?.nombre_carpeta;
+  const fuente = req.body?.fuente;
   if (!nombre) return res.status(400).json({ error: "Falta 'nombre_carpeta'." });
 
   let data;
@@ -974,12 +1003,17 @@ router.delete('/mangas', requireAdmin, (req, res) => {
   catch (e) { return res.status(500).json({ error: `No se pudo leer seguimiento.json: ${e.message}` }); }
 
   const mangas = data.mangas || [];
-  const nuevaLista = mangas.filter(m => m.nombre_carpeta !== nombre);
-  if (nuevaLista.length === mangas.length) {
-    return res.status(404).json({ error: `No se encontró ningún manga con nombre_carpeta '${nombre}'.` });
+  const coincidencias = localizarManga(mangas, nombre, fuente);
+  if (coincidencias.length === 0) {
+    return res.status(404).json({ error: `No se encontró ningún manga con nombre_carpeta '${nombre}'${fuente ? ` y fuente '${fuente}'` : ''}.` });
+  }
+  // Nunca borrar "a ciegas" más de una entrada: si hay varias y no vino la
+  // fuente, es ambiguo y se rechaza en vez de llevarse las de otras fuentes.
+  if (coincidencias.length > 1) {
+    return res.status(400).json({ error: `Hay ${coincidencias.length} entradas que coinciden con '${nombre}'${fuente ? ` / '${fuente}'` : ' (de distintas fuentes)'} — falta 'fuente' para saber cuál borrar.` });
   }
 
-  data.mangas = nuevaLista;
+  data.mangas = mangas.filter((_, i) => i !== coincidencias[0]);
   try { guardarSeguimientoAtomico(data); }
   catch (e) { return res.status(500).json({ error: `No se pudo guardar: ${e.message}` }); }
 

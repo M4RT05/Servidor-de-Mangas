@@ -193,6 +193,7 @@
 
       <div id="edit-form-body" style="display:none;">
       <input type="hidden" id="edit-original">
+      <input type="hidden" id="edit-original-fuente">
 
       <label>Nombre de carpeta</label>
       <input type="text" id="edit-nombre" autocomplete="off">
@@ -368,7 +369,7 @@ function renderLista() {
   cont.innerHTML = filtrados.map(m => {
     const f = FUENTE_POR_ID[m.fuente] || { icono: '📖', nombre: m.fuente };
     const nErrores = Array.isArray(m.capitulos_con_error) ? m.capitulos_con_error.length : 0;
-    return `<div class="manga-row" data-nombre="${esc(m.nombre_carpeta)}">
+    return `<div class="manga-row" data-nombre="${esc(m.nombre_carpeta)}" data-fuente="${esc(m.fuente)}">
       <div class="manga-icon">${f.icono}</div>
       <div class="manga-info">
         <div class="manga-name">${esc(m.nombre_carpeta)}</div>
@@ -433,11 +434,13 @@ async function crearManga(forzar = false) {
 // Ver el comentario dentro de abrirEdicion() para el porqué.
 let editPrioridadOriginalTenia = false;
 
-function abrirEdicion(nombreCarpeta) {
-  const m = allMangas.find(x => x.nombre_carpeta === nombreCarpeta);
+function abrirEdicion(nombreCarpeta, fuente) {
+  // Identidad = nombre + fuente (el mismo nombre puede existir en varias fuentes)
+  const m = allMangas.find(x => x.nombre_carpeta === nombreCarpeta && x.fuente === fuente);
   if (!m) return;
 
   document.getElementById('edit-original').value = nombreCarpeta;
+  document.getElementById('edit-original-fuente').value = fuente;
   document.getElementById('edit-nombre').value = m.nombre_carpeta;
   document.getElementById('edit-fuente').value = m.fuente;
   onFuenteChange('edit');
@@ -499,13 +502,14 @@ function leerFormEdicion() {
 
 async function guardarEdicion(forzar = false) {
   const original = document.getElementById('edit-original').value;
+  const originalFuente = document.getElementById('edit-original-fuente').value;
   const manga = leerFormEdicion();
   if (!manga.nombre_carpeta || !manga.url_manga) {
     showEditMsg('Completá al menos nombre de carpeta y URL.', 'err');
     return;
   }
 
-  const res = await API.editSeguimientoManga(original, manga, forzar);
+  const res = await API.editSeguimientoManga(original, originalFuente, manga, forzar);
   if (res?.ok) {
     showMsg(`"${manga.nombre_carpeta}" actualizado.${res.avisoMultiFuente ? ' ' + res.avisoMultiFuente : ''}`, 'ok');
     cerrarModalEdit();
@@ -537,10 +541,11 @@ async function confirmarPendiente() {
 }
 
 // ── Borrar ───────────────────────────────────────────────────────────────
-async function borrarManga(nombreCarpeta) {
-  if (!confirm(`¿Borrar "${nombreCarpeta}" del seguimiento? Esto NO borra los capítulos ya descargados, solo deja de rastrearlo.`)) return;
-  const res = await API.deleteSeguimientoManga(nombreCarpeta);
-  if (res?.ok) { showMsg(`"${nombreCarpeta}" borrado del seguimiento.`, 'ok'); cargarMangas(); }
+async function borrarManga(nombreCarpeta, fuente) {
+  const nombreFuente = (FUENTE_POR_ID[fuente] || { nombre: fuente }).nombre;
+  if (!confirm(`¿Borrar "${nombreCarpeta}" (${nombreFuente}) del seguimiento? Esto NO borra los capítulos ya descargados, solo deja de rastrearlo.`)) return;
+  const res = await API.deleteSeguimientoManga(nombreCarpeta, fuente);
+  if (res?.ok) { showMsg(`"${nombreCarpeta}" (${nombreFuente}) borrado del seguimiento.`, 'ok'); cargarMangas(); }
   else showMsg(res?.error || 'No se pudo borrar.', 'err');
 }
 
@@ -582,9 +587,9 @@ document.getElementById('modal-edit').addEventListener('click', e => { if (e.tar
 // código, así que no importa qué caracteres tenga el nombre.
 document.getElementById('manga-list').addEventListener('click', e => {
   const editBtn = e.target.closest('[data-action="edit-manga"]');
-  if (editBtn) { abrirEdicion(editBtn.closest('[data-nombre]').dataset.nombre); return; }
+  if (editBtn) { const row = editBtn.closest('[data-nombre]'); abrirEdicion(row.dataset.nombre, row.dataset.fuente); return; }
   const delBtn = e.target.closest('[data-action="delete-manga"]');
-  if (delBtn) { borrarManga(delBtn.closest('[data-nombre]').dataset.nombre); }
+  if (delBtn) { const row = delBtn.closest('[data-nombre]'); borrarManga(row.dataset.nombre, row.dataset.fuente); }
 });
 
 // ── Arranque ─────────────────────────────────────────────────────────────

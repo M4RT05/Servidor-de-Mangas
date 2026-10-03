@@ -21,11 +21,13 @@ Servidor personal para leer tu biblioteca de manga, manhwa y manhua desde cualqu
    - [Panel de usuario](#panel-de-usuario)
 6. [Usuarios y permisos](#usuarios-y-permisos)
 7. [Scraper automático](#scraper-automático)
-8. [Acceso desde otros dispositivos](#acceso-desde-otros-dispositivos)
-9. [Acceso remoto con Tailscale](#acceso-remoto-con-tailscale)
-10. [Solución de problemas](#solución-de-problemas)
-11. [Estructura del proyecto](#estructura-del-proyecto)
-12. [Notas de seguridad](#notas-de-seguridad)
+8. [Mejora de calidad con IA](#mejora-de-calidad-con-ia)
+9. [Acceso desde otros dispositivos](#acceso-desde-otros-dispositivos)
+10. [Acceso remoto con Tailscale](#acceso-remoto-con-tailscale)
+11. [Solución de problemas](#solución-de-problemas)
+12. [Estructura del proyecto](#estructura-del-proyecto)
+13. [Notas de seguridad](#notas-de-seguridad)
+14. [Aviso legal](#aviso-legal)
 
 ---
 
@@ -33,16 +35,18 @@ Servidor personal para leer tu biblioteca de manga, manhwa y manhua desde cualqu
 
 Antes de instalar, asegúrate de tener lo siguiente en la PC que va a funcionar como servidor:
 
-- **Node.js v18 o superior** — [descargar en nodejs.org](https://nodejs.org/)
-- **Windows 10 / 11**
+- **Node.js v20.9 o superior** (se recomienda la versión LTS) — [descargar en nodejs.org](https://nodejs.org/). Con versiones anteriores la instalación falla: la librería de miniaturas (`sharp`) exige Node 20.9+
+- **Windows 10 / 11** — el lanzador `iniciar_servidor.bat` y el scraper con Brave están pensados para Windows. El servidor en sí también arranca en Linux/macOS con `npm install` y `npm start` (en ese caso configurá el `.env` a mano)
 - Una carpeta con tus mangas organizados (ver [estructura de carpetas](#estructura-de-carpetas-de-mangas))
 - Para acceso desde otros dispositivos: todos deben estar en la **misma red WiFi** (o usar [Tailscale](#acceso-remoto-con-tailscale) para acceder desde afuera)
+- **Opcional** — para el [scraper automático](#scraper-automático): **Python 3.10+** y, para algunas fuentes, el navegador **Brave** (ver [`scraper/README.md`](scraper/README.md)). Las dependencias de Python se instalan solas la primera vez, o a mano con `pip install -r scraper/requirements.txt`. Sin esto el resto del servidor funciona igual.
+- **Opcional** — para [mejorar la calidad de capítulos con IA](#mejora-de-calidad-con-ia): una GPU con soporte Vulkan (la gran mayoría de GPUs modernas, de cualquier fabricante, lo tienen). Sin esto el resto del servidor funciona igual; esa función puntual no va a estar disponible.
 
 ---
 
 ## Instalación
 
-1. Descarga o clona el repositorio en tu PC
+1. Descarga o clona el repositorio en tu PC: `git clone https://github.com/M4RT05/Servidor-de-Mangas.git`
 2. Copia el archivo **`.env.example`** y renómbralo a **`.env`**
 3. Completa los valores del `.env` (ver [Configuración](#configuración))
 4. Doble clic en **`iniciar_servidor.bat`** — ejecutar como **Administrador** la primera vez para que configure el firewall automáticamente
@@ -79,6 +83,22 @@ MANGA_PATH=D:\Mis Mangas
 
 # Ruta donde el scraper descarga los capítulos (opcional — si no se define, usa MANGA_PATH)
 # MANGA_PATH_SCRAPER=D:\Mis Mangas
+
+# Carpeta donde se guardan las imágenes ORIGINALES antes de mejorarlas con IA
+# (opcional — ver "Mejora de calidad con IA" más abajo). Si no se define, se
+# usa una carpeta "_backups_ia" al lado de tu MANGA_PATH.
+# IA_BACKUP_DIR=D:\Mis Mangas Originales
+
+# Comando para invocar Python al arrancar el scraper desde el panel de administración
+# (opcional — por defecto "python"; cambialo si no está en tu PATH)
+# PYTHON_BIN=python
+
+# Tamaño máximo (en MB) de la caché en memoria de imágenes (opcional — por defecto 200)
+# IMAGE_CACHE_MB=200
+
+# Poné true si tus mangas están en un disco de red o USB que no avisa de los cambios
+# (opcional — ver "Los mangas no aparecen" en Solución de problemas)
+# MANGA_WATCH_POLLING=true
 ```
 
 > **Importante:** El archivo `.env` contiene tu contraseña y la clave de sesión. Nunca lo subas a GitHub. Ya está incluido en `.gitignore`.
@@ -248,6 +268,7 @@ El progreso de lectura se guarda automáticamente a medida que avanzás, capítu
 Accesible tocando el avatar en la esquina superior derecha. Desde aquí podés:
 
 **Configuración:**
+- **Foto de perfil** — Tocá tu avatar dentro del panel para subir una imagen propia
 - **Contenido +18** — Activa o desactiva la visibilidad de mangas marcados como adultos. Cuando está desactivado, esos mangas desaparecen de todas las secciones incluyendo búsqueda, filtros y rankings
 
 **Temas visuales:**
@@ -317,6 +338,7 @@ El repositorio incluye un scraper en Python (`scraper/scraper.py`) que descarga 
 - Reintentos automáticos de capítulos fallidos
 - Detección de huecos comparando contra el catálogo real del sitio
 - Lee `MANGA_PATH_SCRAPER` del `.env` del servidor (fallback a `MANGA_PATH`)
+- Instala solo las dependencias de Python que falten la primera vez que corre (o a mano: `pip install -r scraper/requirements.txt`)
 
 **Dos formas de correrlo:**
 
@@ -328,7 +350,33 @@ El repositorio incluye un scraper en Python (`scraper/scraper.py`) que descarga 
    python scraper.py --una-vez # un solo escaneo
    ```
 
-Los mangas a seguir se configuran en `scraper/seguimiento.json` (copiar desde `scraper/seguimiento.example.json`, o agregarlos directamente desde el `Editor de seguimiento` del panel de administración). Para la documentación completa del scraper, los campos de configuración, el sistema multi-fuente y el detalle de cada sitio, ver [`scraper/README.md`](scraper/README.md).
+Los mangas a seguir se configuran en `scraper/seguimiento.json` (copiar desde `scraper/seguimiento.json.example`, o agregarlos directamente desde el `Editor de seguimiento` del panel de administración). Para la documentación completa del scraper, los campos de configuración, el sistema multi-fuente y el detalle de cada sitio, ver [`scraper/README.md`](scraper/README.md).
+
+---
+
+## Mejora de calidad con IA
+
+El servidor puede mejorar la calidad de los capítulos ya descargados usando el motor de [Upscayl](https://github.com/upscayl/upscayl) (basado en Real-ESRGAN), eligiendo un ancho objetivo para toda la corrida en vez de un factor de escala fijo.
+
+**Características principales:**
+- 7 modelos a elegir (Digital Art, Upscayl Standard, Upscayl Lite, High Fidelity, Remacri, Ultramix Balanced, Ultrasharp) — Digital Art viene por defecto, pensado para línea/arte digital como el manga
+- Ancho de salida configurable (px), igual para toda la corrida; formato de salida WebP, PNG o JPG
+- Por página: si ya está en el ancho y formato pedidos (o mejor), se saltea sola — reintentar un capítulo incompleto no repite trabajo de más
+- Se puede elegir mejorar un manga completo, un rango de capítulos o capítulos puntuales (tocándolos en la lista visual del panel)
+- 2 formas de detener una corrida: terminar el capítulo actual y parar, o parar ya (ese capítulo queda incompleto y se reintenta solo en la próxima corrida)
+- El original de cada página se resguarda siempre antes de reemplazarla (nunca se pisa un backup ya existente), en la carpeta que definas en `IA_BACKUP_DIR` o, si no la definís, en una carpeta `_backups_ia` al lado de tu `MANGA_PATH`
+- Si el servidor se corta a mitad de una mejora (corte de luz, cierre forzado), el capítulo afectado se detecta solo como incompleto y se retoma en la próxima corrida, sin intervención manual
+
+**El motor (binario de Upscayl + modelos, ~170-200MB) no viene incluido en el repositorio** — se descarga aparte, desde el repo oficial de Upscayl, la primera vez que lo necesitás. Dos formas de instalarlo:
+
+1. **Desde el panel (recomendado)** — Como admin, entrá a `Mejora con IA` desde tu perfil. Si el motor no está instalado vas a ver un aviso con el botón **"Instalar motor ahora"**, que descarga todo con una barra de progreso y log en vivo, sin tocar la terminal.
+2. **Desde la terminal** —
+   ```bash
+   npm run instalar-ia
+   ```
+   Si se corta la descarga a la mitad, volvé a correr el mismo comando (o tocá el botón de nuevo): lo que ya se bajó no se repite.
+
+> **Nota:** Upscayl es software libre bajo licencia AGPL-3.0. El binario y los modelos se descargan directo de su repositorio oficial en GitHub en vez de comitearse a este repo — así no hay que redistribuirlos acá y es más fácil mantenerlos al día.
 
 ---
 
@@ -466,7 +514,7 @@ Después de borrarla, no necesitás crear nada a mano: la próxima vez que arran
 - Verificá que dentro de cada manga haya al menos una subcarpeta de capítulo con imágenes
 - Los formatos de imagen válidos son: `.jpg`, `.jpeg`, `.png`, `.webp`, `.gif`
 - Si tenés varias carpetas de mangas (`MANGA_PATH_2`, `MANGA_PATH_3`, etc.) y el manga faltante lo bajó el scraper hace poco, revisá que no haya quedado duplicado en la carpeta equivocada (ver la nota en [Configuración](#configuración))
-- Reiniciá el servidor después de agregar mangas nuevos
+- Los mangas y capítulos nuevos se detectan solos en pocos segundos. Si tu biblioteca está en un disco de red o en un HDD USB que no avisa de los cambios, agregá `MANGA_WATCH_POLLING=true` al `.env`; como último recurso, reiniciá el servidor
 
 ---
 
@@ -498,7 +546,9 @@ Servidor-de-Mangas/
 │   ├── login.html                 ← Pantalla de login
 │   ├── stats.html                 ← Estadísticas de lectura
 │   ├── reader.html                ← Redirección de compatibilidad a "/" (el lector real vive en index.html)
-│   ├── css/app.css                ← Estilos (mobile-first, 4 temas)
+│   ├── css/
+│   │   ├── app.css                ← Estilos (mobile-first)
+│   │   └── themes.css             ← Los 4 temas visuales (Origins, Dark, Lunar Tide, White)
 │   ├── js/
 │   │   ├── api.js                 ← Cliente HTTP con caché, tokens y API.ready
 │   │   ├── router.js              ← Ruteo de la SPA (URLs con slug, historial del navegador)
@@ -510,10 +560,13 @@ Servidor-de-Mangas/
 │       ├── users.html             ← Gestión de usuarios y permisos
 │       ├── metadata.html          ← Editor de metadata
 │       ├── scraper.html           ← Panel de control del scraper (consola en vivo, fuentes)
-│       └── seguimiento.html       ← Editor de la lista de seguimiento del scraper
+│       ├── seguimiento.html       ← Editor de la lista de seguimiento del scraper
+│       └── mejora-ia.html         ← Panel de mejora de calidad con IA
 ├── scraper/                       ← Scraper automático (Python)
-│   ├── scraper.py                 ← Script principal (~6.100 líneas, 9 fuentes)
-│   ├── seguimiento.example.json   ← Plantilla de mangas a seguir
+│   ├── scraper.py                 ← Script principal (~8.000 líneas, 9 fuentes)
+│   ├── requirements.txt           ← Dependencias de Python (también se instalan solas)
+│   ├── seguimiento.json.example   ← Plantilla de mangas a seguir
+│   ├── instrucciones_nuevo_sitio.txt ← Guía para agregar un sitio nuevo al scraper
 │   ├── dominios_fuente.json       ← Dominios válidos por fuente (usado para validar en el editor web)
 │   └── README.md                  ← Documentación completa del scraper
 ├── server/                        ← Backend (Node.js + Express)
@@ -525,23 +578,33 @@ Servidor-de-Mangas/
 │   ├── routes/
 │   │   ├── auth.js                ← Login, usuarios, avatares
 │   │   ├── manga.js                ← Biblioteca, capítulos, progreso, metadata
-│   │   └── scraperControl.js      ← Arrancar/detener el scraper, consola en vivo (SSE), fuentes, seguimiento
+│   │   ├── scraperControl.js      ← Arrancar/detener el scraper, consola en vivo (SSE), fuentes, seguimiento
+│   │   └── upscaleControl.js      ← Control de la mejora IA: cola, 2 modos de parada, instalación del motor
 │   ├── data/
 │   │   ├── usersStore.js          ← Lectura/escritura de usuarios
 │   │   ├── catalogIndex.js        ← Índice de la biblioteca en memoria (evita releer el disco en cada request)
-│   │   └── users.json             ← Usuarios registrados (no subir a Git)
+│   │   └── users.json             ← Usuarios registrados (se crea solo; no se sube a Git)
+│   ├── motor-ia/                   ← Binario + modelos de Upscayl (NO versionado, ver "Mejora de calidad con IA")
+│   ├── upscale-state/              ← Estado en vivo de la mejora IA (NO versionado)
 │   └── lib/
 │       ├── slug.js                ← Generación de slugs para URLs amigables
+│       ├── sources.js             ← Lista de fuentes de descarga conocidas (espejo de las del scraper)
 │       ├── fsHelpers.js           ← Utilidades de sistema de archivos (escritura atómica, orden natural)
 │       ├── imageCache.js          ← Caché LRU en memoria para imágenes servidas
 │       ├── thumbnails.js          ← Generación de miniaturas WebP
-│       └── visibility.js          ← Regla única de "¿este usuario puede ver este manga?"
+│       ├── visibility.js          ← Regla única de "¿este usuario puede ver este manga?"
+│       ├── upscaler.js            ← Motor de mejora IA: resolución del binario, clasificación por página, spawn
+│       └── motorInstaller.js      ← Descarga el binario/modelos de Upscayl (botón del panel y script de terminal)
+├── scripts/
+│   └── instalarMotorIA.js         ← Instala el motor de IA desde la terminal (npm run instalar-ia)
 ├── docs/screenshots/               ← Capturas de pantalla
 ├── .env                            ← Configuración local (NO subir a Git)
 ├── .env.example                    ← Plantilla de configuración
+├── .gitignore / .gitattributes     ← Reglas de Git
 ├── metadata.json.example           ← Ejemplo de metadata.json
 ├── iniciar_servidor.bat            ← Lanzador Windows
-└── package.json
+├── package.json
+└── package-lock.json               ← Versiones exactas de las dependencias
 ```
 
 ---
@@ -550,11 +613,19 @@ Servidor-de-Mangas/
 
 - Diseñado para **red local privada** (directamente o vía Tailscale), no para exposición directa a internet
 - El archivo `.env` está en `.gitignore` — nunca lo subás al repositorio
+- Si no definís `ADMIN_PASSWORD`, el servidor crea el admin con la contraseña `admin` (y avisa por consola): definila siempre en el `.env` antes de abrir el servidor a otros dispositivos
+- Si no definís `JWT_SECRET`, se genera una nueva en cada arranque y todas las sesiones se cierran al reiniciar
 - Los tokens JWT expiran en 30 días
 - Protección contra fuerza bruta en el login: bloquea una IP por 5 minutos tras 10 intentos fallidos
 - Las imágenes requieren sesión activa para ser accesibles: al iniciar sesión el navegador recibe una cookie httpOnly que las autentica automáticamente; el token en la URL de cada imagen queda solo como respaldo, por si el navegador bloquea esa cookie
 - Las restricciones de contenido (+18 y mangas vetados) se aplican del lado del servidor en todos los endpoints, no solo como filtro visual
-- Los paneles de administración (usuarios, metadata, scraper, seguimiento) verifican el rol de admin tanto en el navegador como, de forma independiente y obligatoria, en el servidor
+- Los paneles de administración (usuarios, metadata, scraper, seguimiento, mejora con IA) verifican el rol de admin tanto en el navegador como, de forma independiente y obligatoria, en el servidor
+
+---
+
+## Aviso legal
+
+Este proyecto es una herramienta de uso personal y **no incluye ni distribuye ningún manga**. El scraper descarga contenido de sitios de terceros: usalo bajo tu propia responsabilidad, respetando los términos de uso de cada sitio y las leyes de derechos de autor de tu país. Las capturas de `docs/screenshots` muestran portadas de obras que pertenecen a sus respectivos autores y editoriales, y están solo con fines ilustrativos.
 
 ---
 

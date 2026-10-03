@@ -18,7 +18,7 @@ Todo lo que se puede ajustar (intervalos, timeouts, filtros de imagen, prioridad
 | `dragon` | Dragon Translation | WordPress/Madara | Dominio fijo (`dragontranslation.org`) |
 | `ikigai` | Ikigai Mangas | SSR Qwik | Dominios rotativos anti-bloqueo, con auto-detección de los nuevos |
 | `taurus` | Tauro Scan | WordPress/Madara | Capítulos "programados" (bloqueados para no-VIP hasta su fecha de liberación gratuita) |
-| `leercapitulo` | LeerCapitulo | Plataforma propia | Imágenes ofuscadas client-side — se extraen vía Selenium en vez de reversear el cifrado |
+| `leercapitulo` | LeerCapitulo | Plataforma propia | Lista e imágenes en el HTML directo (`data-src`) — solo `requests` + BeautifulSoup, sin Selenium |
 | `manhwaweb` | ManhwasWEB | SPA React + API JSON | El HTML del frontend está vacío; todo sale del backend en Railway |
 | `tmo` | ZonaTMO | Plataforma propia (Laravel) | Puede tener varios grupos de scanlation subiendo el mismo capítulo — ver `grupo_preferido` en la sección 7 |
 
@@ -29,15 +29,11 @@ Más detalle de cada uno en la sección 7.
 ## 2. Instalación y requisitos
 
 - **Python 3.10+** (probado en 3.10; ojo con f-strings con backslash dentro de `{}`, eso recién se permite desde 3.12).
-- Al arrancar, el script instala solo las dependencias que falten: `requests`, `beautifulsoup4`, `Pillow`, `tqdm`, `pycryptodome`. No hace falta `pip install` manual salvo para Selenium (ver abajo).
-- **Selenium + Brave**:
-  ```
-  pip install selenium
-  ```
-  Brave debe estar instalado en la ruta estándar de Windows; la versión de ChromeDriver se detecta y descarga sola según la versión de Brave instalada.
-  - **LeerCapitulo lo necesita siempre** — es el único método que tiene ese sitio para leer las imágenes de un capítulo (vienen ofuscadas y se decodifican con JavaScript pesado; en vez de reversear el cifrado, se deja que un navegador real lo ejecute y se lee el resultado ya renderizado). Sin Selenium instalado, **ningún** capítulo de LeerCapitulo se puede descargar.
-  - **Temple Scan, Dragon Translation y Tauro Scan** (los tres Madara/WordPress) lo necesitan solo *ocasionalmente*, cuando el lector de un capítulo puntual redirige vía JavaScript a otro dominio. Si Selenium no está instalado, esos capítulos puntuales fallan (quedan en `capitulos_con_error` y se reintentan cada ciclo) en vez de usar el fallback — el resto de esos sitios funciona igual sin él.
-  - El resto de las fuentes (Olympus, Nexus, Ikigai, ManhwasWEB, ZonaTMO) no lo usan para nada.
+- Al arrancar, el script instala solo las dependencias que falten: `requests`, `beautifulsoup4`, `Pillow`, `tqdm`, `pycryptodome`, `selenium` y `curl_cffi`. Si preferís instalarlas a mano: `pip install -r requirements.txt` (archivo en esta misma carpeta).
+- **Selenium + Brave** (solo para algunas fuentes, ver abajo): Brave debe estar instalado en la ruta estándar de Windows; la versión de ChromeDriver se detecta y descarga sola según la versión de Brave instalada. El scraper usa un perfil de Brave **dedicado** (`C:\brave-scraper`, configurable con `BRAVE_PROFILE_DIR` al comienzo de `scraper.py`), así que no toca tu Brave personal.
+  - **Temple Scan requiere sesión iniciada** — el scraper no inicia sesión solo: hereda la cookie de un login que hiciste a mano en ese perfil dedicado (abrí Brave con `--user-data-dir=C:\brave-scraper`, entrá a Temple Scan e iniciá sesión una vez). Cuando la sesión vence hay que repetir el login a mano; mientras tanto el scraper corta esa fuente de forma limpia y sigue con las demás.
+  - **Dragon Translation y Tauro Scan** (Madara/WordPress, como Temple) lo necesitan solo *ocasionalmente*, cuando el lector de un capítulo puntual redirige vía JavaScript a otro dominio. Si Selenium no está instalado, esos capítulos puntuales fallan (quedan en `capitulos_con_error` y se reintentan cada ciclo) en vez de usar el fallback — el resto de esos sitios funciona igual sin él.
+  - El resto de las fuentes (Olympus, Nexus, Ikigai, LeerCapitulo, ManhwasWEB, ZonaTMO) no lo usan para nada.
 
 ---
 
@@ -174,7 +170,7 @@ Si un manga **no** tiene `prioridad_fuente` y solo tiene una entrada en `seguimi
 
 **Ikigai Mangas** — No necesita Selenium (el HTML ya viene server-rendered). El listado de series y el lector de capítulos viven en dominios distintos que rotan de forma independiente por anti-bloqueo; el scraper detecta los cambios de dominio solos (siguiendo las redirecciones) y los persiste en `ikigai_estado.json`, sin depender de ningún dominio fijo más que una semilla inicial. Si algún día todos los dominios conocidos dejan de responder a la vez, no hay forma automática de recuperarse — el scraper loguea un error explícito pidiendo un dominio nuevo a mano en vez de fallar en silencio. Los banners promocionales se descartan comparando la ruta exacta de la URL (viven en una carpeta `posts/misc/` separada de las páginas reales), no por dimensiones, porque comparten tamaño y clase CSS con páginas legítimas.
 
-**LeerCapitulo** — Plataforma propia (no Madara/WordPress). La lista de capítulos viene directo en el HTML, sin AJAX. Las imágenes son otra historia: el contenido real viaja en un blob ofuscado que se decodifica client-side con JavaScript pesadamente ofuscado — en vez de reimplementar ese algoritmo (que puede cambiar sin aviso), el scraper deja que un navegador real (Selenium) lo ejecute y lee el resultado ya renderizado en el DOM. Por eso Selenium es obligatorio para este sitio, a diferencia de Temple/Dragon/Tauro donde es solo un fallback ocasional.
+**LeerCapitulo** — Plataforma propia (no Madara/WordPress). La lista de capítulos viene directo en el HTML (`#chapterList a.lc-chapter-row`, sin AJAX) y las imágenes vienen como `data-src` dentro de `#lcPages` en el HTML inicial, así que alcanza con `requests` + BeautifulSoup, igual que las demás fuentes simples: no necesita Selenium ni navegador. El sitio tuvo un desafío de Cloudflare entre el 19 y el 23 de septiembre de 2026 que obligaba a usar un navegador real; lo sacó por su cuenta. Si volviera a aparecer, el workaround (Brave + Selenium + perfil dedicado) quedó en el historial de git de `scraper.py`.
 
 **ManhwasWEB** — El frontend (`manhwaweb.com`) es una SPA React sin contenido en el HTML; todo sale del backend (Railway). El `slug` en `seguimiento.json` es el `_id` completo del manga tal como aparece en la URL (ej: `gata-rebelde_1780473612629`), no un nombre simplificado. A diferencia del resto de sitios, ManhwasWEB publica tanto **manhwas** (tiras verticales de ancho uniforme) como **mangas** (páginas de ancho variable, paneles a color, etc.) — para estos últimos conviene agregar `"tipo_contenido": "manga"` en su entrada (ver sección 5), sin el cual los filtros de ancho dominante pueden rechazar páginas legítimas cuando un capítulo viene escaneado a resolución distinta del resto.
 

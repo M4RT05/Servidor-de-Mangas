@@ -33,7 +33,7 @@ function isTypeEnabled(type) {
 }
 function isPC()           { return window.innerWidth >= 768; }
 
-const ADULT_MARKER_GENRES = ['hentai','ecchi','adultos','+18','adult','18+'];
+const ADULT_MARKER_GENRES = []; // vacío a propósito: 'adult' manda solo, sin heurística de género (ver conversación 2026-09)
 function isAdultManga(m) {
   if (m.metadata?.adult || m.adult) return true;
   const genres = (m.metadata?.genres || []).map(g => g.toLowerCase());
@@ -80,6 +80,38 @@ function statusBadge(s) {
   if(sl==='hiatus')     return`<span class="b s-hiatus">Hiatus</span>`;
   if(sl==='finalizado') return`<span class="b s-finalizado">Finalizado</span>`;
   return`<span class="b bx">${s}</span>`;
+}
+// ── BADGES DE FUENTE DE DESCARGA ─────────────────────────────────────────────
+// Espejo de KNOWN_SOURCES en server/lib/sources.js — si el scraper agrega un
+// sitio nuevo hay que agregarlo ahí Y acá (más la clase .src-xxx en app.css).
+const SOURCE_INFO = {
+  olympus:      { label: 'Olympus',    cls: 'src-olympus'    },
+  nexus:        { label: 'Nexus',      cls: 'src-nexus'      },
+  dragon:       { label: 'Dragons',    cls: 'src-dragon'     },
+  temple:       { label: 'Temple',     cls: 'src-temple'     },
+  ikigai:       { label: 'Ikigai',     cls: 'src-ikigai'     },
+  taurus:       { label: 'Taurus',     cls: 'src-taurus'     },
+  leercapitulo: { label: 'LeerCap',    cls: 'src-leercap'    },
+  manhwaweb:    { label: 'ManhwasWeb', cls: 'src-manhwaweb'  },
+  tmo:          { label: 'TMO',        cls: 'src-tmo'        },
+  externa:      { label: 'Externa',    cls: 'src-externa'    }
+};
+function sourceBadge(key) {
+  if (!key) return '';
+  const info = SOURCE_INFO[key];
+  if (info) return `<span class="b ${info.cls}">${info.label}</span>`;
+  // Fuente que no está en la lista conocida (typo, sitio viejo renombrado en
+  // scraper.py, etc.) — mismo criterio que statusBadge() con estados raros:
+  // se muestra tal cual en gris neutro en vez de esconderse, así un caso así
+  // se nota en la UI en vez de desaparecer en silencio.
+  return `<span class="b bx">${esc(key)}</span>`;
+}
+// Hasta 2 badges de fuente juntos (últimos capítulos) o 1 solo (ficha del
+// manga) — mismo helper para los dos casos, un solo badge ya queda bien
+// solo dentro de este contenedor chico sin necesitar código aparte.
+function sourceBadgeGroup(keys) {
+  if (!keys || !keys.length) return '';
+  return `<div class="src-badge-group">${keys.map(sourceBadge).join('')}</div>`;
 }
 function showPage(name) {
   document.querySelectorAll('.pg').forEach(p => { p.style.display='none'; p.classList.remove('on'); });
@@ -284,7 +316,7 @@ async function renderCapitulos(page=1) {
         <div class="lci-head" data-open-manga="${esc(g.manga)}">
           <div class="lci-cov">${g.cover ? coverImg(g.cover, g.manga) : ''}</div>
           <div class="lci-title">${esc(g.manga)}</div>
-          ${statusBadge(g.status)}
+          ${sourceBadgeGroup(g.sources)}
         </div>
         ${g.chapters.map(ch => `
         <div class="lci-ch" data-open-chapter data-manga="${esc(g.manga)}" data-chapter="${esc(ch.chapter)}" data-slug="${esc(ch.chapterSlug||'')}">

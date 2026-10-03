@@ -29,6 +29,13 @@ function naturalCompare(a, b) {
 
 const IMAGE_EXT_RE = /\.(jpg|jpeg|png|webp|gif)$/i;
 
+// Extensiones válidas para portadas (cover.*) — mismo criterio en todos lados
+// que necesitan detectar o validar el archivo de portada: catalogIndex.js
+// (detección al construir el índice) e index.js (validación al servir).
+// Definidas una sola vez acá para que ningún lado quede desincronizado.
+const COVER_EXTENSIONS = ['jpg', 'jpeg', 'png', 'webp'];
+const COVER_FILENAME_RE = /^cover\.(jpe?g|png|webp)$/i;
+
 // Lista subcarpetas (capítulos) de un directorio. Usa withFileTypes: readdirSync
 // devuelve el tipo de cada entrada en la misma llamada, así que evita el
 // statSync extra por archivo que tenía la versión anterior (una sola syscall
@@ -71,6 +78,17 @@ function getMetadataSync(mangaFolderPath) {
   try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch { return {}; }
 }
 
+// Igual criterio que getMetadataSync, para el registro de progreso que
+// escribe el scraper (registro_progreso.json, en la misma carpeta del manga
+// — ver §5c en scraper.py). Se usa para calcular de qué fuente(s) viene cada
+// manga (server/lib/sources.js). Si no existe o está corrupto, {} — mismo
+// comportamiento que un manga sin capítulos registrados todavía.
+function getRegistroProgresoSync(mangaFolderPath) {
+  const f = require('path').join(mangaFolderPath, 'registro_progreso.json');
+  if (!fs.existsSync(f)) return {};
+  try { return JSON.parse(fs.readFileSync(f, 'utf8')); } catch { return {}; }
+}
+
 function formatDate(date) {
   const diff  = Date.now() - new Date(date).getTime();
   const mins  = Math.floor(diff / 60000);
@@ -88,5 +106,6 @@ function formatDate(date) {
 module.exports = {
   writeJsonAtomic, naturalCompare,
   listDirNames, listImageNames, getFolderDate, getDirMtimeMs,
-  getMetadataSync, formatDate, IMAGE_EXT_RE
+  getMetadataSync, getRegistroProgresoSync, formatDate, IMAGE_EXT_RE,
+  COVER_EXTENSIONS, COVER_FILENAME_RE
 };

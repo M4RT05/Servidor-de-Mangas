@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover">
+  <title>Mejora con IA — MangaServer</title>
+  <link href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.34.0/dist/tabler-icons.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="/css/themes.css">
+  <style>
+    /* ════════════════════════════════════════════════════════════════
+       Mismas variables/clases base que admin/scraper.html a propósito —
+       para que este panel se sienta parte de la misma app, no un agregado
+       aparte. Lo que sigue después de esta sección es lo nuevo de acá.
+       ════════════════════════════════════════════════════════════════ */
+    :root{
+      --fs-base:    14px;
+      --fs-h2:      15px;
+      --fs-status:  15px;
+      --fs-sub:     12px;
+      --fs-console: 10px;
+    }
+    *{margin:0;padding:0;box-sizing:border-box;}
+    html,body{height:100%;}
+    body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:var(--fs-base);display:flex;flex-direction:column;overflow:hidden;}
+
+    .topbar{background:var(--surf);border-bottom:1px solid var(--brd);padding:14px 20px;display:flex;align-items:center;gap:12px;flex-shrink:0;}
+    .topbar a{color:var(--mut);text-decoration:none;font-size:14px;display:flex;align-items:center;gap:5px;}
+    .topbar a:hover{color:var(--text);}
+    .topbar h1{font-size:16px;font-weight:700;flex:1;}
+
+    .card{background:var(--surf);border:1px solid var(--brd);border-radius:16px;padding:20px;margin-bottom:16px;}
+    h2{font-size:var(--fs-h2);font-weight:700;color:var(--text);margin-bottom:14px;}
+    .btn{padding:10px 18px;border-radius:10px;border:none;cursor:pointer;font-size:13px;font-weight:700;transition:opacity .15s;}
+    .btn:hover{opacity:.85;}
+    .btn:disabled{opacity:.4;cursor:not-allowed;}
+    .btn-pri{background:var(--acc);color:var(--bg);}
+    .btn-del{background:rgba(var(--red-rgb),.15);color:var(--red);border:1px solid rgba(var(--red-rgb),.3);}
+    .btn-sec{background:var(--surf);color:var(--text);border:1px solid var(--brd);}
+    .btn-lg{padding:14px 16px;font-size:13px;flex:1;display:flex;align-items:center;justify-content:center;gap:7px;}
+    .btn-row{display:flex;gap:10px;}
+    .msg{font-size:13px;padding:10px 14px;border-radius:10px;margin-bottom:12px;display:none;}
+    .msg.ok{background:rgba(var(--grn-rgb),.12);color:var(--grn);border:1px solid rgba(var(--grn-rgb),.25);}
+    .msg.err{background:rgba(var(--red-rgb),.12);color:var(--red);border:1px solid rgba(var(--red-rgb),.3);}
+
+    .status-row{display:flex;align-items:center;gap:10px;margin-bottom:4px;}
+    .status-dot{width:10px;height:10px;border-radius:50%;background:var(--mut);flex-shrink:0;}
+    .status-dot.idle{background:var(--mut);}
+    .status-dot.running{background:var(--grn);box-shadow:0 0 0 3px rgba(var(--grn-rgb),.2);animation:pulse 1.6s infinite;}
+    @keyframes pulse{0%,100%{opacity:1;}50%{opacity:.4;}}
+    .status-label{font-size:var(--fs-status);font-weight:700;}
+    .status-sub{font-size:var(--fs-sub);color:var(--mut);margin-top:2px;margin-left:20px;}
+    .info-sub{margin-top:12px;padding-top:12px;border-top:1px solid var(--brd);font-size:var(--fs-sub);color:var(--mut);line-height:1.7;}
+    .info-sub:empty{display:none;}
+
+    .progress-wrap{margin-top:14px;}
+    .progress-bar{height:8px;background:var(--card);border-radius:4px;overflow:hidden;}
+    .progress-fill{height:100%;background:var(--acc);border-radius:4px;width:0%;transition:width .4s ease;}
+    .progress-text{font-size:var(--fs-sub);color:var(--mut);margin-bottom:6px;display:flex;justify-content:space-between;gap:10px;}
+    .progress-sub{font-size:11px;color:var(--mut);margin-top:5px;min-height:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+
+    .no-motor{font-size:var(--fs-sub);color:var(--red);background:rgba(var(--red-rgb),.1);border:1px solid rgba(var(--red-rgb),.3);border-radius:10px;padding:10px 12px;margin-top:12px;line-height:1.5;display:none;}
+    .no-motor.show{display:block;}
+    .cooldown-warn{font-size:var(--fs-sub);color:var(--acc);background:rgba(var(--acc-rgb),.1);border:1px solid rgba(var(--acc-rgb),.25);border-radius:10px;padding:9px 12px;margin-top:10px;display:none;}
+    .cooldown-warn.show{display:block;}
+
+    /* ── Buscador + grilla de portadas ── */
+    .buscador{width:100%;padding:10px 14px;border-radius:10px;border:1px solid var(--brd);background:var(--card);color:var(--text);font-size:13px;margin-bottom:12px;}
+    .buscador:focus{outline:none;border-color:var(--acc);}
+    .manga-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:10px;max-height:280px;overflow-y:auto;padding-right:2px;}
+    .manga-card{cursor:pointer;border-radius:10px;overflow:hidden;border:2px solid transparent;background:var(--card);transition:border-color .15s;}
+    .manga-card:hover{border-color:var(--brd);}
+    .manga-card.sel{border-color:var(--acc);}
+    .manga-card img{width:100%;aspect-ratio:2/3;object-fit:cover;display:block;background:var(--card);}
+    .manga-card .mc-title{font-size:10.5px;padding:5px 6px 6px;line-height:1.3;color:var(--text);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+    .manga-empty{color:var(--mut);font-size:13px;font-style:italic;padding:20px 0;text-align:center;}
+
+    /* ── Manga elegido + lista de capítulos ── */
+    .manga-elegido{display:flex;align-items:center;gap:12px;padding:10px;background:var(--card);border-radius:12px;margin-bottom:12px;}
+    .manga-elegido img{width:44px;aspect-ratio:2/3;object-fit:cover;border-radius:6px;flex-shrink:0;}
+    .manga-elegido .me-info{flex:1;min-width:0;}
+    .manga-elegido .me-title{font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .manga-elegido .me-sub{font-size:var(--fs-sub);color:var(--mut);}
+    .manga-elegido button{background:none;border:none;color:var(--mut);cursor:pointer;font-size:18px;flex-shrink:0;}
+
+    .cap-toolbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;}
+    .cap-toolbar-hint{font-size:var(--fs-sub);color:var(--mut);}
+    .cap-toolbar button{font-size:12px;color:var(--acc);background:none;border:none;cursor:pointer;font-weight:600;}
+    .cap-list{max-height:240px;overflow-y:auto;border:1px solid var(--brd);border-radius:10px;}
+    .cap-row{display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px solid var(--brd);cursor:pointer;font-size:13px;user-select:none;border-left:3px solid transparent;}
+    .cap-row:last-child{border-bottom:none;}
+    .cap-row:hover{background:var(--card);}
+    /* Seleccionado: fondo + barra de color a la izquierda + tilde relleno.
+       Antes era solo un fondo tenue, que casi no se notaba. */
+    .cap-row.sel{background:rgba(var(--acc-rgb),.18);border-left-color:var(--acc);font-weight:700;}
+    .cap-check{font-size:18px;color:var(--mut);opacity:.45;flex-shrink:0;transition:color .12s,opacity .12s;}
+    .cap-row.sel .cap-check{color:var(--acc);opacity:1;}
+    .cap-nombre{flex:1;min-width:0;}
+    .jpg-warn{font-size:var(--fs-sub);color:var(--acc);background:rgba(var(--acc-rgb),.1);border:1px solid rgba(var(--acc-rgb),.25);border-radius:10px;padding:9px 12px;margin-top:8px;line-height:1.5;display:none;}
+    .jpg-warn.show{display:block;}
+    .cap-badge{font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;white-space:nowrap;flex-shrink:0;}
+    .cap-badge.ok{background:rgba(var(--grn-rgb),.15);color:var(--grn);}
+    .cap-badge.incompleto{background:rgba(var(--acc-rgb),.15);color:var(--acc);}
+    .cap-badge.sin{background:var(--surf);color:var(--mut);}
+    .cap-vacio{padding:16px;text-align:center;color:var(--mut);font-size:13px;font-style:italic;}
+
+    /* ── Configuración ── */
+    .campo{margin-bottom:12px;}
+    .campo label{display:block;font-size:var(--fs-sub);color:var(--mut);margin-bottom:5px;}
+    .campo select, .campo input[type=number]{width:100%;padding:9px 12px;border-radius:9px;border:1px solid var(--brd);background:var(--card);color:var(--text);font-size:13px;}
+    .campo select:focus, .campo input:focus{outline:none;border-color:var(--acc);}
+    details.avanzado{margin-top:4px;margin-bottom:14px;}
+    details.avanzado summary{font-size:12px;color:var(--mut);cursor:pointer;font-weight:600;}
+    details.avanzado .campo{margin-top:10px;}
+    .avanzado-row{display:flex;gap:10px;}
+    .avanzado-row .campo{flex:1;}
+
+    /* ── Consola (idéntica a scraper.html) ── */
+    .console-card{display:flex;flex-direction:column;flex:1;min-height:0;margin-bottom:0;}
+    .console{flex:1;min-height:180px;background:#010409;border:1px solid var(--brd);border-radius:12px;padding:12px 14px;overflow-y:auto;-webkit-overflow-scrolling:touch;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.2) transparent;font-family:'SF Mono',Consolas,Menlo,monospace;font-size:var(--fs-console);line-height:1.6;color:#9aa4b2;white-space:pre-wrap;word-break:break-word;}
+    .console::-webkit-scrollbar{width:4px;}
+    .console::-webkit-scrollbar-track{background:transparent;}
+    .console::-webkit-scrollbar-thumb{background:rgba(255,255,255,.25);border-radius:4px;}
+    .console-line{opacity:0;animation:fadein .2s forwards;}
+    @keyframes fadein{to{opacity:1;}}
+    .console-empty{color:#4a5262;font-style:italic;}
+    .console-foot{display:flex;justify-content:flex-end;align-items:center;margin-top:10px;flex-shrink:0;}
+
+    /* ── Layout: 2 páginas swipe en celular / sidebar+consola en PC (igual scraper.html) ── */
+    .layout{flex:1;min-height:0;position:relative;}
+    .swipe-wrap{display:flex;height:100%;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;}
+    .swipe-page{min-width:100%;height:100%;scroll-snap-align:start;overflow-y:auto;padding:16px 16px calc(16px + env(safe-area-inset-bottom,16px));}
+    /* El scrollbar con el color del tema ahora es una regla global en
+       css/themes.css (así corrige también metadata/usuarios/scraper, no
+       solo este panel) — por eso ya no hace falta nada puntual acá. */
+    .swipe-page.console-page{display:flex;flex-direction:column;padding:10px 6px calc(10px + env(safe-area-inset-bottom,10px));}
+    .console-card{padding:14px 10px;}
+    .swipe-dots{position:absolute;bottom:calc(10px + env(safe-area-inset-bottom,0px));left:50%;transform:translateX(-50%);display:flex;gap:7px;z-index:5;}
+    .swipe-dot{width:7px;height:7px;border-radius:50%;background:var(--brd);cursor:pointer;transition:background .15s;}
+    .swipe-dot.on{background:var(--acc);}
+
+    @media (min-width:900px){
+      :root{ --fs-console: 14px; }
+      .swipe-wrap{overflow:visible;display:grid;grid-template-columns:380px 1fr;gap:16px;padding:16px;height:100%;}
+      .swipe-page{scroll-snap-align:none;min-width:0;padding:0;overflow-y:auto;}
+      .swipe-page.console-page{padding:0;}
+      .console-card{padding:20px;}
+      .swipe-dots{display:none;}
+    }
+  </style>
+</head>
+<body>
+<div class="topbar">
+  <a href="/"><i class="ti ti-arrow-left"></i> Volver</a>
+  <h1>Mejora con IA</h1>
+</div>
+
+<div class="layout">
+  <div class="swipe-wrap" id="swipe-wrap">
+
+    <div class="swipe-page" id="page-controles">
+      <div class="msg" id="msg"></div>
+
+      <div class="card">
+        <h2>Estado</h2>
+        <div class="status-row">
+          <div class="status-dot idle" id="status-dot"></div>
+          <div class="status-label" id="status-label">Cargando...</div>
+        </div>
+        <div class="status-sub" id="status-sub"></div>
+
+        <div class="progress-wrap" id="pw-capitulo" style="display:none;">
+          <div class="progress-text"><span id="pw-capitulo-left"></span><span id="pw-capitulo-right"></span></div>
+          <div class="progress-bar"><div class="progress-fill" id="pw-capitulo-fill"></div></div>
+          <div class="progress-sub" id="pw-capitulo-sub"></div>
+        </div>
+        <div class="progress-wrap" id="pw-corrida" style="display:none;">
+          <div class="progress-text"><span id="pw-corrida-left"></span><span id="pw-corrida-right"></span></div>
+          <div class="progress-bar"><div class="progress-fill" id="pw-corrida-fill"></div></div>
+        </div>
+
+        <div class="no-motor" id="no-motor">
+          <div id="no-motor-texto">El motor de IA (el programa de Upscayl + sus modelos, ~200MB) todavía no está instalado en este servidor.</div>
+          <button class="btn btn-pri" id="btn-instalar" style="margin-top:10px;width:100%;"><i class="ti ti-download"></i> Instalar motor ahora</button>
+          <div class="progress-wrap" id="pw-instalacion" style="display:none;">
+            <div class="progress-text"><span id="pw-inst-left"></span><span id="pw-inst-right"></span></div>
+            <div class="progress-bar"><div class="progress-fill" id="pw-inst-fill"></div></div>
+          </div>
+        </div>
+        <div class="cooldown-warn" id="cooldown-warn"></div>
+        <div class="info-sub" id="info-sub"></div>
+      </div>
+
+      <div class="card">
+        <h2>Manga</h2>
+        <div id="bloque-buscador">
+          <input class="buscador" id="buscador-manga" placeholder="Buscar manga...">
+          <div class="manga-grid" id="manga-grid"><div class="manga-empty">Cargando biblioteca...</div></div>
+        </div>
+        <div id="bloque-elegido" style="display:none;">
+          <div class="manga-elegido">
+            <img id="me-cover" src="" alt="">
+            <div class="me-info">
+              <div class="me-title" id="me-title"></div>
+              <div class="me-sub" id="me-sub"></div>
+            </div>
+            <button id="btn-cambiar-manga" title="Elegir otro manga"><i class="ti ti-x"></i></button>
+          </div>
+
+          <div class="cap-toolbar">
+            <span class="cap-toolbar-hint" id="cap-hint">Tocá un capítulo, o Shift+click para un rango.</span>
+            <button id="btn-todos">Seleccionar todos</button>
+          </div>
+          <div class="cap-list" id="cap-list"><div class="cap-vacio">Cargando capítulos...</div></div>
+        </div>
+      </div>
+
+      <div class="card" id="card-config" style="display:none;">
+        <h2>Configuración e iniciar</h2>
+        <div class="campo">
+          <label>Modelo</label>
+          <select id="input-modelo"></select>
+        </div>
+        <div class="campo">
+          <label>Ancho objetivo (px) — igual para toda la corrida</label>
+          <input type="number" id="input-ancho" placeholder="ej. 1600" min="1">
+        </div>
+        <div class="campo">
+          <label>Formato de salida</label>
+          <select id="input-formato"></select>
+          <div class="jpg-warn" id="jpg-warn">
+            ⚠️ El binario de Upscayl tuvo un bug conocido con la salida JPG. Si elegís JPG, revisá las primeras páginas antes de dejar correr un manga entero. WebP o PNG son más seguros.
+          </div>
+        </div>
+        <details class="avanzado">
+          <summary>Avanzado (dejar vacío = automático)</summary>
+          <div class="avanzado-row">
+            <div class="campo"><label>Tile size</label><input type="number" id="input-tile" placeholder="auto" min="0"></div>
+            <div class="campo"><label>GPU id</label><input type="number" id="input-gpu" placeholder="auto" min="0"></div>
+          </div>
+        </details>
+
+        <div class="btn-row">
+          <button class="btn btn-pri btn-lg" id="btn-start"><i class="ti ti-player-play"></i> Iniciar</button>
+        </div>
+        <div class="btn-row" style="margin-top:10px;">
+          <button class="btn btn-sec btn-lg" id="btn-stop-graceful" disabled><i class="ti ti-player-pause"></i> Terminar cap. y parar</button>
+          <button class="btn btn-del btn-lg" id="btn-stop-dura" disabled><i class="ti ti-player-stop"></i> Parar ya</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="swipe-page console-page" id="page-consola">
+      <div class="card console-card">
+        <h2>Consola en vivo</h2>
+        <div class="console" id="console"><span class="console-empty">Sin actividad todavía. Elegí un manga e iniciá una mejora para ver el detalle acá.</span></div>
+        <div class="console-foot">
+          <span id="conn-indicator" style="font-size:var(--fs-sub);color:var(--mut);"></span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="swipe-dots" id="swipe-dots">
+    <div class="swipe-dot on" data-page="0"></div>
+    <div class="swipe-dot" data-page="1"></div>
+  </div>
+</div>
+
+<script src="/js/api.js"></script>
+<script>
+const _theme = localStorage.getItem('manga_theme') || '';
+if (_theme) document.body.classList.add(_theme);
+
+// ── Estado local de la UI ──────────────────────────────────────────────────
+let currentStatus   = 'idle';       // 'idle' | 'corriendo'
+let eventSource     = null;
+let mangasTodos     = [];           // cache de API.getMangas()
+let mangaSeleccionado = null;       // { name, cover, chapterCount }
+let capitulosDelManga = [];         // [{ capitulo, estado, esperadas, validas, ia }]
+let seleccion       = new Set();    // capítulos elegidos (strings)
+let ultimoClickIdx  = null;         // ancla para shift+click
+let motorInstaladoFlag = true;      // se corrige al cargar /modelos
+let cooldownTimer   = null;
+let refrescandoMotor = false;      // evita pedir /modelos varias veces seguidas al terminar la instalación
+let cooldownHasta   = 0;            // Date.now() hasta el que btn-start sigue bloqueado tras un stop
+
+// Cuenta regresiva visual de los 15s de cooldown que exige el backend
+// después de un stop — sin esto, el botón "Iniciar" parece habilitado
+// (el estado ya volvió a "idle") pero el servidor lo va a rechazar igual,
+// y no queda claro por qué.
+function iniciarCooldownVisual(segundos) {
+  cooldownHasta = Date.now() + segundos * 1000;
+  clearInterval(cooldownTimer);
+  const el = document.getElementById('cooldown-warn');
+  el.classList.add('show');
+  document.getElementById('btn-start').disabled = true;
+  cooldownTimer = setInterval(() => {
+    const restante = Math.ceil((cooldownHasta - Date.now()) / 1000);
+    if (restante <= 0) {
+      clearInterval(cooldownTimer);
+      el.classList.remove('show');
+      renderState({ status: currentStatus, progreso: null });
+      return;
+    }
+    el.textContent = `Podés volver a iniciar recién en ${restante}s...`;
+  }, 500);
+}
+
+function showMsg(text, type) {
+  const el = document.getElementById('msg');
+  el.textContent = text;
+  el.className = 'msg ' + type;
+  el.style.display = 'block';
+  setTimeout(() => el.style.display = 'none', 3500);
+}
+
+// ── Manga: grilla + búsqueda ────────────────────────────────────────────────
+async function cargarMangas() {
+  mangasTodos = await API.getMangas();
+  renderGrillaMangas(mangasTodos);
+}
+
+function renderGrillaMangas(lista) {
+  const cont = document.getElementById('manga-grid');
+  if (!lista.length) { cont.innerHTML = '<div class="manga-empty">No se encontró ningún manga.</div>'; return; }
+  cont.innerHTML = '';
+  for (const m of lista) {
+    const div = document.createElement('div');
+    div.className = 'manga-card';
+    div.innerHTML = `<img src="${API.thumbSrc(m.cover)}" alt=""><div class="mc-title">${m.name}</div>`;
+    div.addEventListener('click', () => elegirManga(m));
+    cont.appendChild(div);
+  }
+}
+
+document.getElementById('buscador-manga').addEventListener('input', (e) => {
+  const q = norm(e.target.value);
+  renderGrillaMangas(q ? mangasTodos.filter(m => norm(m.name).includes(q)) : mangasTodos);
+});
+
+async function elegirManga(m) {
+  mangaSeleccionado = m;
+  document.getElementById('bloque-buscador').style.display = 'none';
+  document.getElementById('bloque-elegido').style.display = 'block';
+  document.getElementById('card-config').style.display = 'block';
+  document.getElementById('me-cover').src = API.thumbSrc(m.cover);
+  document.getElementById('me-title').textContent = m.name;
+  document.getElementById('me-sub').textContent = `${m.chapterCount} capítulo(s)`;
+  seleccion = new Set();
+  ultimoClickIdx = null;
+  await cargarCapitulos();
+}
+
+document.getElementById('btn-cambiar-manga').addEventListener('click', () => {
+  mangaSeleccionado = null;
+  seleccion = new Set();
+  document.getElementById('bloque-buscador').style.display = 'block';
+  document.getElementById('bloque-elegido').style.display = 'none';
+  document.getElementById('card-config').style.display = 'none';
+});
+
+// ── Capítulos del manga elegido ──────────────────────────────────────────
+async function cargarCapitulos() {
+  const cont = document.getElementById('cap-list');
+  cont.innerHTML = '<div class="cap-vacio">Cargando capítulos...</div>';
+  const res = await API.getIaCapitulos(mangaSeleccionado.name);
+  if (!res?.capitulos) { cont.innerHTML = '<div class="cap-vacio">No se pudo cargar.</div>'; return; }
+  capitulosDelManga = res.capitulos;
+  renderCapitulos();
+}
+
+function badgeDe(cap) {
+  if (!cap.ia) return `<span class="cap-badge sin">sin mejorar</span>`;
+  if (cap.ia.estado === 'completado') return `<span class="cap-badge ok">✓ ${cap.ia.ancho_objetivo}px${cap.ia.formato ? ' ' + cap.ia.formato : ''}</span>`;
+  if (cap.ia.estado === 'incompleto') return `<span class="cap-badge incompleto">incompleto</span>`;
+  return `<span class="cap-badge sin">${cap.ia.estado || 'sin mejorar'}</span>`;
+}
+
+function renderCapitulos() {
+  const cont = document.getElementById('cap-list');
+  if (!capitulosDelManga.length) { cont.innerHTML = '<div class="cap-vacio">Este manga no tiene capítulos en disco.</div>'; return; }
+  cont.innerHTML = '';
+  capitulosDelManga.forEach((cap, idx) => {
+    const row = document.createElement('div');
+    const marcado = seleccion.has(cap.capitulo);
+    row.className = 'cap-row' + (marcado ? ' sel' : '');
+    row.innerHTML =
+      `<i class="ti ${marcado ? 'ti-square-rounded-check-filled' : 'ti-square-rounded'} cap-check"></i>` +
+      `<span class="cap-nombre">Cap. ${cap.capitulo}</span>${badgeDe(cap)}`;
+    row.addEventListener('click', (e) => onClickCapitulo(idx, e.shiftKey));
+    cont.appendChild(row);
+  });
+  actualizarHintSeleccion();
+}
+
+// Cada click AGREGA o QUITA ese capítulo de la selección (antes, un click
+// sin Shift reemplazaba todo por ese único capítulo — por eso solo se podía
+// elegir "1 o todos"). Shift+click suma además el tramo completo entre el
+// último capítulo tocado y este, sin borrar lo que ya estaba elegido.
+function onClickCapitulo(idx, conShift) {
+  if (conShift && ultimoClickIdx !== null) {
+    const [ini, fin] = [ultimoClickIdx, idx].sort((a, b) => a - b);
+    capitulosDelManga.slice(ini, fin + 1).forEach(c => seleccion.add(c.capitulo));
+  } else {
+    const capitulo = capitulosDelManga[idx].capitulo;
+    if (seleccion.has(capitulo)) seleccion.delete(capitulo);
+    else seleccion.add(capitulo);
+  }
+  ultimoClickIdx = idx;
+  renderCapitulos();
+}
+
+document.getElementById('btn-todos').addEventListener('click', () => {
+  const yaEstanTodos = seleccion.size === capitulosDelManga.length;
+  seleccion = yaEstanTodos ? new Set() : new Set(capitulosDelManga.map(c => c.capitulo));
+  ultimoClickIdx = null;
+  renderCapitulos();
+});
+
+function actualizarHintSeleccion() {
+  const hint = document.getElementById('cap-hint');
+  if (!seleccion.size) hint.textContent = 'Tocá los capítulos que quieras (Shift+click suma un tramo).';
+  else if (seleccion.size === capitulosDelManga.length) hint.textContent = 'Manga completo seleccionado.';
+  else if (seleccion.size === 1) hint.textContent = `Capítulo ${[...seleccion][0]} seleccionado.`;
+  else hint.textContent = `${seleccion.size} capítulos seleccionados.`;
+}
+
+function alcanceActual() {
+  if (!seleccion.size) return null;
+  if (seleccion.size === capitulosDelManga.length) return { tipo: 'manga' };
+  if (seleccion.size === 1) return { tipo: 'capitulo', capitulo: [...seleccion][0] };
+  const idxs = [...seleccion].map(c => capitulosDelManga.findIndex(x => x.capitulo === c)).sort((a, b) => a - b);
+  // Si los elegidos son un tramo seguido, se manda como 'rango' (más claro
+  // en los logs); si hay saltos, se manda la lista exacta — así nunca se
+  // cuelan capítulos que no tocaste entre medio.
+  const esTramoSeguido = idxs[idxs.length - 1] - idxs[0] + 1 === idxs.length;
+  if (esTramoSeguido) {
+    return { tipo: 'rango', desde: capitulosDelManga[idxs[0]].capitulo, hasta: capitulosDelManga[idxs[idxs.length - 1]].capitulo };
+  }
+  return { tipo: 'lista', capitulos: idxs.map(i => capitulosDelManga[i].capitulo) };
+}
+
+// ── Modelos y formatos ─────────────────────────────────────────────────────
+function actualizarAvisoJpg() {
+  const esJpg = document.getElementById('input-formato').value === 'jpg';
+  document.getElementById('jpg-warn').classList.toggle('show', esJpg);
+}
+document.getElementById('input-formato').addEventListener('change', actualizarAvisoJpg);
+
+async function cargarModelos() {
+  const res = await API.getIaModelos();
+  const sel = document.getElementById('input-modelo');
+  if (!res?.modelos) { sel.innerHTML = '<option>No se pudo cargar</option>'; return; }
+  sel.innerHTML = res.modelos.map(m => `<option value="${m.id}">${m.nombre}</option>`).join('');
+  sel.value = res.default;
+
+  const selFormato = document.getElementById('input-formato');
+  selFormato.innerHTML = (res.formatos || []).map(f => `<option value="${f.id}">${f.nombre}</option>`).join('');
+  if (res.formatoDefault) selFormato.value = res.formatoDefault;
+  actualizarAvisoJpg();
+
+  motorInstaladoFlag = !!res.motorInstalado;
+  document.getElementById('no-motor').classList.toggle('show', !motorInstaladoFlag);
+}
+
+// ── Estado / progreso / SSE ────────────────────────────────────────────────
+function renderState(state) {
+  currentStatus = state.status || 'idle';
+  const dot   = document.getElementById('status-dot');
+  const label = document.getElementById('status-label');
+  const sub   = document.getElementById('status-sub');
+
+  dot.className = 'status-dot ' + (currentStatus === 'corriendo' ? 'running' : 'idle');
+  label.textContent = currentStatus === 'corriendo' ? 'Mejorando...' : 'Detenido';
+  sub.textContent = state.cayoInesperadamente
+    ? 'La corrida anterior se cortó sola (¿corte de luz?) — el capítulo afectado se reintenta solo.'
+    : '';
+
+  const info = document.getElementById('info-sub');
+  info.textContent = state.since ? `Inicio: ${new Date(state.since).toLocaleString('es')}` : '';
+
+  const corriendo = currentStatus === 'corriendo';
+  document.getElementById('btn-start').disabled = corriendo || !motorInstaladoFlag || Date.now() < cooldownHasta;
+  document.getElementById('btn-stop-graceful').disabled = !corriendo;
+  document.getElementById('btn-stop-dura').disabled = !corriendo;
+
+  // ── Instalación del motor (botón "Instalar motor ahora") ──
+  const inst = state.instalacion || { status: 'idle' };
+  const instalando = inst.status === 'instalando';
+  document.getElementById('btn-instalar').disabled = instalando;
+  document.getElementById('btn-instalar').innerHTML = instalando
+    ? '<i class="ti ti-loader-2"></i> Instalando...'
+    : '<i class="ti ti-download"></i> ' + (inst.status === 'error' ? 'Reintentar instalación' : 'Instalar motor ahora');
+  const pwInst = document.getElementById('pw-instalacion');
+  pwInst.style.display = instalando ? 'block' : 'none';
+  if (instalando && inst.total) {
+    const fraccion = (inst.hechos + (inst.porcentaje_archivo || 0) / 100) / inst.total;
+    document.getElementById('pw-inst-fill').style.width = Math.round(fraccion * 100) + '%';
+    document.getElementById('pw-inst-left').textContent = `Archivo ${Math.min(inst.hechos + 1, inst.total)}/${inst.total}`;
+    document.getElementById('pw-inst-right').textContent = inst.archivo ? `${inst.archivo} (${inst.porcentaje_archivo || 0}%)` : '';
+  }
+  document.getElementById('no-motor-texto').textContent = inst.status === 'error'
+    ? `No se pudo instalar: ${inst.error} Podés reintentar (lo que ya se bajó no se repite).`
+    : 'El motor de IA (el programa de Upscayl + sus modelos, ~200MB) todavía no está instalado en este servidor.';
+  // Al terminar, se vuelve a preguntar al servidor para ocultar el aviso y habilitar "Iniciar".
+  if (inst.status === 'listo' && !motorInstaladoFlag && !refrescandoMotor) {
+    refrescandoMotor = true;
+    cargarModelos().then(() => { refrescandoMotor = false; refreshStatus(); showMsg('Motor instalado. Ya podés mejorar capítulos.', 'ok'); });
+  }
+
+  const p = state.progreso;
+  const pwCorrida  = document.getElementById('pw-corrida');
+  const pwCapitulo = document.getElementById('pw-capitulo');
+  if (corriendo && p) {
+    // Barra 1 — el CAPÍTULO en curso: cuántas páginas tiene y en cuál va.
+    pwCapitulo.style.display = 'block';
+    const totalPag = p.paginas_total || 0;
+    const hechasPag = p.paginas_hechas || 0;
+    const fraccionPagina = (p.porcentaje_pagina || 0) / 100;   // avance de la imagen que se está procesando ahora
+    let fraccionCap = 0;
+    if (totalPag) {
+      // Si hay una página en curso, cuenta su avance parcial (así la barra se mueve suave).
+      fraccionCap = Math.min(1, (hechasPag + (p.pagina_indice ? fraccionPagina : 0)) / totalPag);
+      document.getElementById('pw-capitulo-left').textContent =
+        `${p.capitulo_actual || 'Capítulo'} — ` + (p.pagina_indice ? `página ${p.pagina_indice} de ${totalPag}` : `${totalPag} páginas`);
+      document.getElementById('pw-capitulo-right').textContent = `${hechasPag} listas · faltan ${Math.max(0, totalPag - hechasPag)}`;
+    } else {
+      document.getElementById('pw-capitulo-left').textContent = `${p.capitulo_actual || 'Capítulo'} — leyendo páginas...`;
+      document.getElementById('pw-capitulo-right').textContent = '';
+    }
+    document.getElementById('pw-capitulo-fill').style.width = Math.round(fraccionCap * 100) + '%';
+    document.getElementById('pw-capitulo-sub').textContent = p.pagina_actual
+      ? `Ahora: ${p.pagina_actual} · ${Math.round(p.porcentaje_pagina || 0)}%`
+      : '';
+
+    // Barra 2 — GENERAL: capítulos hechos y cuántos faltan. Suma el avance del
+    // capítulo actual para que no quede en 0% durante todo un capítulo largo
+    // (o toda la corrida, si elegiste uno solo).
+    pwCorrida.style.display = 'block';
+    const totalCap = p.capitulos_total || 0;
+    const hechosCap = p.capitulos_hechos || 0;
+    const fraccionGeneral = totalCap ? Math.min(1, (hechosCap + fraccionCap) / totalCap) : 0;
+    document.getElementById('pw-corrida-fill').style.width = Math.round(fraccionGeneral * 100) + '%';
+    document.getElementById('pw-corrida-left').textContent = `General — ${hechosCap} de ${totalCap} capítulos`;
+    document.getElementById('pw-corrida-right').textContent = `faltan ${Math.max(0, totalCap - hechosCap)}`;
+  } else {
+    pwCorrida.style.display = 'none';
+    pwCapitulo.style.display = 'none';
+  }
+}
+
+function appendLog(line) {
+  const el = document.getElementById('console');
+  if (el.querySelector('.console-empty')) el.innerHTML = '';
+  const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+  const div = document.createElement('div');
+  div.className = 'console-line';
+  div.textContent = line;
+  el.appendChild(div);
+  while (el.children.length > 500) el.removeChild(el.firstChild);
+  if (atBottom) el.scrollTop = el.scrollHeight;
+}
+
+function connectStream() {
+  if (eventSource) eventSource.close();
+  eventSource = new EventSource('/api/admin/upscale/stream');
+  const indicator = document.getElementById('conn-indicator');
+  eventSource.addEventListener('open', () => { indicator.textContent = ''; });
+  eventSource.addEventListener('log', e => { try { appendLog(JSON.parse(e.data)); } catch {} });
+  eventSource.addEventListener('state', e => { try { renderState(JSON.parse(e.data)); } catch {} });
+  eventSource.addEventListener('error', () => { indicator.textContent = 'Reconectando...'; refreshStatus(); });
+}
+
+async function refreshStatus() {
+  const state = await API.getIaStatus();
+  if (state) renderState(state);
+}
+
+// ── Botones ──────────────────────────────────────────────────────────────
+document.getElementById('btn-start').addEventListener('click', async () => {
+  if (!mangaSeleccionado) return showMsg('Elegí un manga primero.', 'err');
+  const alcance = alcanceActual();
+  if (!alcance) return showMsg('Elegí al menos un capítulo.', 'err');
+  const ancho = parseInt(document.getElementById('input-ancho').value, 10);
+  if (!ancho || ancho <= 0) return showMsg('Poné un ancho objetivo válido.', 'err');
+
+  const tile = document.getElementById('input-tile').value;
+  const gpu  = document.getElementById('input-gpu').value;
+
+  document.getElementById('btn-start').disabled = true;
+  const res = await API.startIa({
+    carpetaManga: mangaSeleccionado.name,
+    alcance,
+    modelo: document.getElementById('input-modelo').value,
+    formato: document.getElementById('input-formato').value,
+    anchoObjetivo: ancho,
+    tileSize: tile ? parseInt(tile, 10) : undefined,
+    gpuId: gpu ? parseInt(gpu, 10) : undefined,
+  });
+  if (res?.ok) showMsg(`Mejora iniciada — ${res.capitulos} capítulo(s) en cola.`, 'ok');
+  else showMsg(res?.error || 'No se pudo iniciar.', 'err');
+  refreshStatus();
+});
+
+document.getElementById('btn-instalar').addEventListener('click', async () => {
+  document.getElementById('btn-instalar').disabled = true;
+  const res = await API.instalarMotorIa();
+  if (res?.ok) showMsg('Descargando el motor... mirá el avance abajo y en la consola.', 'ok');
+  else showMsg(res?.error || 'No se pudo iniciar la instalación.', 'err');
+  refreshStatus();
+});
+
+document.getElementById('btn-stop-graceful').addEventListener('click', async () => {
+  const res = await API.stopIa('graceful');
+  if (res?.ok) { showMsg('Va a terminar el capítulo actual y parar.', 'ok'); iniciarCooldownVisual(15); }
+  else showMsg(res?.error || 'No se pudo detener.', 'err');
+  refreshStatus();
+});
+
+document.getElementById('btn-stop-dura').addEventListener('click', async () => {
+  if (!confirm('¿Parar ya? El capítulo en curso va a quedar incompleto (se retoma solo la próxima vez).')) return;
+  const res = await API.stopIa('dura');
+  if (res?.ok) { showMsg('Detención inmediata enviada.', 'ok'); iniciarCooldownVisual(15); }
+  else showMsg(res?.error || 'No se pudo detener.', 'err');
+  refreshStatus();
+});
+
+// ── Navegación swipe (celular) ───────────────────────────────────────────
+const swipeWrap = document.getElementById('swipe-wrap');
+const dots = document.querySelectorAll('.swipe-dot');
+dots.forEach(d => d.addEventListener('click', () => {
+  document.querySelectorAll('.swipe-page')[Number(d.dataset.page)].scrollIntoView({ behavior: 'smooth', inline: 'start', block: 'nearest' });
+}));
+swipeWrap.addEventListener('scroll', () => {
+  const idx = Math.round(swipeWrap.scrollLeft / swipeWrap.clientWidth);
+  dots.forEach((d, i) => d.classList.toggle('on', i === idx));
+}, { passive: true });
+
+// Respaldo del SSE: mientras corre una mejora o una instalación, se consulta el
+// estado cada 3s. Si el SSE funciona es redundante (y barato); si algún proxy
+// o antivirus lo bufferea, las barras igual se siguen moviendo.
+setInterval(() => {
+  if (currentStatus === 'corriendo' || document.getElementById('btn-instalar').disabled) refreshStatus();
+}, 3000);
+
+// ── Arranque ──────────────────────────────────────────────────────────────
+(async () => {
+  await API.ready;
+  if (API.getRole() !== 'admin') { alert('Sin permiso.'); window.location.href = '/'; return; }
+  await Promise.all([cargarMangas(), cargarModelos(), refreshStatus()]);
+  connectStream();
+})();
+</script>
+</body>
+</html>

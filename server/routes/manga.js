@@ -6,6 +6,7 @@ const router  = express.Router();
 const catalogIndex = require('../data/catalogIndex');
 const imageCache   = require('../lib/imageCache');
 const { writeJsonAtomic, formatDate } = require('../lib/fsHelpers');
+const { ALLOWED_FORCED_SOURCES } = require('../lib/sources');
 
 const PROGRESS_FILE = path.join(__dirname, '../progress.json');
 const ORPHANS_FILE  = path.join(__dirname, '../progress_orphans.json');
@@ -264,6 +265,7 @@ router.get('/latest-paged', (req, res) => {
     groups.push({
       manga: e.name, slug: e.slug, cover: e.cover,
       status: e.metadata.status, adult: e.metadata.adult, type: e.metadata.type,
+      sources: (e.sources?.ranked || []).slice(0, 2),
       latestDate: lastChaps[0]?.date || null,
       chapters: lastChaps
     });
@@ -388,6 +390,7 @@ router.get('/:manga', (req, res) => {
   res.json({
     name: entry.name, slug: entry.slug, cover: entry.cover, chapterCount: entry.chapters.length,
     metadata: entry.metadata,
+    sources: (entry.sources?.ranked || []).slice(0, 1),
     chapters: entry.chapters.map(ch => ({
       number: ch.number, slug: ch.slug, imageCount: ch.images.length,
       read: prog.readChapters?.includes(ch.number) || false,
@@ -522,13 +525,17 @@ router.get('/:manga/metadata', (req, res) => {
   if (!entry) return res.status(404).json({ error: 'Manga no encontrado.' });
   const restrictions = req.userRestrictions || { canViewAdult: false, canViewNormal: false, blockedMangas: [] };
   if (!visibleTo(entry, restrictions)) return res.status(404).json({ error: 'Manga no encontrado.' });
-  res.json(entry.metadata);
+  // 'detectedSources' es solo informativo para el editor (mostrar "detectado
+  // automáticamente: X, Y" al lado del selector de fuente forzada) — siempre
+  // es el resultado REAL de registro_progreso.json, sin pisar por una fuente
+  // forzada activa, así el admin ve ambos datos aunque haya un override puesto.
+  res.json({ ...entry.metadata, detectedSources: entry.sources?.autoRanked || [] });
 });
 
 // PUT /api/mangas/:manga/metadata
 // Géneros que el cliente interpreta como +18 aunque "adult" diga false
 // (client/js/app.js → filterAdult / adultGenres). Deben coincidir.
-const ADULT_MARKER_GENRES = ['hentai','ecchi','adultos','+18','adult','18+'];
+const ADULT_MARKER_GENRES = []; // vacío a propósito: 'adult' manda solo, sin heurística de género (ver conversación 2026-09)
 
 router.put('/:manga/metadata', (req, res) => {
   if (req.user?.role !== 'admin') return res.status(403).json({ error: 'Solo administradores.' });
@@ -538,12 +545,20 @@ router.put('/:manga/metadata', (req, res) => {
   const mp   = path.join(root, name);
   if (!fs.existsSync(mp)) return res.status(404).json({ error: 'Manga no encontrado.' });
   const entry = catalogIndex.getMangaEntry(name);
-  const allowed = ['type','status','genres','synopsis','ranking','adult'];
+  const allowed = ['type','status','genres','synopsis','ranking','adult','forcedSource'];
   const current = entry ? entry.metadata : {};
   const updated = { ...current };
   for (const key of allowed) {
     if (req.body[key] !== undefined) updated[key] = req.body[key];
   }
+  // 'forcedSource': o es null/'' (modo automático, según registro_progreso.json)
+  // o una de las fuentes conocidas + 'externa' — cualquier otro valor se
+  // rechaza acá para no dejar guardar un typo que después el badge muestre
+  // como "fuente desconocida" para siempre (ver lib/sources.js).
+  if (updated.forcedSource && !ALLOWED_FORCED_SOURCES.includes(updated.forcedSource)) {
+    return res.status(400).json({ error: `forcedSource inválida: "${updated.forcedSource}".` });
+  }
+  updated.forcedSource = updated.forcedSource || null;
   // Si el manga queda marcado como NO +18, sacar cualquier género que lo
   // siga etiquetando como adulto (ej. "Hentai", "+18"). El editor guarda
   // "adult" y "genres" como campos independientes — si no se hace esto,

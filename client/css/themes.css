@@ -8,3 +8,22 @@
 body.theme-dark{--bg:#111318;--bg-rgb:17,19,24;--surf:#1a1d24;--card:#22262f;--acc:#E0E0E0;--acc-dark:#606060;--acc-hover:#FFFFFF;--acc-rgb:224,224,224;--acc-text:#111318;--text:#F0F0F0;--mut:#888888;--grn:#22C55E;--red:#ef4444;--red-rgb:239,68,68;--grn-rgb:34,197,94;--blue:#58a6ff;--blue-rgb:88,166,255;--brd:#2a2e38;--teal:#A0A0A0;--badge-green:rgba(34,197,94,.18);--badge-blue:rgba(200,200,200,.14);--badge-red:rgba(239,68,68,.18);--badge-yellow:rgba(220,220,100,.16);--badge-teal:rgba(160,160,160,.13);--badge-purple:rgba(180,160,220,.14);--hover:#2c3040;--nav-bg:#0d0f14;--detail-bg:#111318;--tb-bg:#1e2130;--tb-brd:#2e3348;--tb-set:#111318;}
 body.theme-lunar-tide{--bg:#F0F4F8;--bg-rgb:240,244,248;--surf:#E2ECF4;--card:#D0DFF0;--acc:#1A237E;--acc-dark:#0a0f40;--acc-hover:#283593;--acc-rgb:26,35,126;--acc-text:#F0F4F8;--text:#1A1A2E;--mut:#546E7A;--grn:#2E7D32;--red:#c62828;--red-rgb:198,40,40;--grn-rgb:46,125,50;--blue:#1A237E;--blue-rgb:26,35,126;--brd:#90A4AE;--teal:#00695C;--badge-green:rgba(46,125,50,.16);--badge-blue:rgba(26,35,126,.14);--badge-red:rgba(198,40,40,.14);--badge-yellow:rgba(230,130,0,.15);--badge-teal:rgba(0,105,92,.14);--badge-purple:rgba(106,27,154,.14);--hover:#C5D4E8;--nav-bg:#CBD8E8;--detail-bg:#E4EDF6;--tb-bg:#C5D5E8;--tb-brd:#90A4AE;--tb-set:#F0F4F8;}
 body.theme-white{--bg:#FAFAFA;--bg-rgb:250,250,250;--surf:#F0F0F0;--card:#E6E6E6;--acc:#222222;--acc-dark:#555555;--acc-hover:#444444;--acc-rgb:34,34,34;--acc-text:#FAFAFA;--text:#111111;--mut:#666666;--grn:#2E7D32;--red:#b41e1e;--red-rgb:180,30,30;--grn-rgb:46,125,50;--blue:#1565C0;--blue-rgb:21,101,192;--brd:#D4D4D4;--teal:#00695C;--badge-green:rgba(46,125,50,.14);--badge-blue:rgba(34,34,34,.10);--badge-red:rgba(180,30,30,.13);--badge-yellow:rgba(180,120,0,.13);--badge-teal:rgba(0,105,92,.12);--badge-purple:rgba(90,30,140,.12);--hover:#E0E0E0;--nav-bg:#E8E8E8;--detail-bg:#F5F5F5;--tb-bg:#E0E0E0;--tb-brd:#CCCCCC;--tb-set:#FAFAFA;}
+
+/* ── SCROLLBAR GLOBAL CON EL ACENTO DEL TEMA ─────────────────────────────
+   Antes quedaba la del sistema operativo (gris, sin relación con el tema)
+   en cualquier elemento con scroll propio: la sinopsis del editor de
+   metadata, el panel de usuarios, el control del scraper, etc. Al vivir
+   acá (el único CSS que enlazan todas las páginas) se corrige en todas a
+   la vez, con el --acc de cada tema (dorado en Origins, gris claro en
+   Dark, azul en Lunar Tide, negro en White).
+   Un selector de clase puntual (como .console, que fuerza fondo oscuro
+   siempre y por eso necesita su propio scrollbar claro fijo) le gana a
+   esto por especificidad — esta regla es solo el default de todo lo demás.
+   EXCEPCIÓN: html y body (la scroll bar principal de la página) quedan
+   fuera con :not(html):not(body), así usan la barra por defecto del
+   navegador/sistema y no el color de acento del tema. */
+*:not(html):not(body){scrollbar-width:thin;scrollbar-color:rgba(var(--acc-rgb),.45) transparent;}
+*:not(html):not(body)::-webkit-scrollbar{width:6px;height:6px;}
+*:not(html):not(body)::-webkit-scrollbar-track{background:transparent;}
+*:not(html):not(body)::-webkit-scrollbar-thumb{background:rgba(var(--acc-rgb),.45);border-radius:4px;}
+*:not(html):not(body)::-webkit-scrollbar-thumb:hover{background:rgba(var(--acc-rgb),.75);}

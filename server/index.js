@@ -20,6 +20,7 @@ const catalogIndex   = require('./data/catalogIndex');
 const imageCache     = require('./lib/imageCache');
 const { visibleTo }  = require('./lib/visibility');
 const thumbnails     = require('./lib/thumbnails');
+const { COVER_FILENAME_RE } = require('./lib/fsHelpers');
 
 const app  = express();
 const PORT = process.env.PORT || 3000;
@@ -107,8 +108,13 @@ app.use('/api/mangas', authMiddleware, restrictionsMiddleware, mangaRoutes);
 // header Authorization, solo cookies.
 const imageAuth = require('./middleware/cookieOrHeaderAuth');
 
+
 const scraperControlRoutes = require('./routes/scraperControl');
 app.use('/api/admin/scraper', imageAuth, scraperControlRoutes);
+
+const upscaleControlRoutes = require('./routes/upscaleControl');
+app.use('/api/admin/upscale', imageAuth, upscaleControlRoutes);
+
 
 // ── IMÁGENES PROTEGIDAS CON CACHÉ LARGO ──────────────────────────────────────
 app.get('/api/images/:manga/:chapter/:image', imageAuth, restrictionsMiddleware, async (req, res) => {
@@ -128,8 +134,18 @@ app.get('/api/images/:manga/:chapter/:image', imageAuth, restrictionsMiddleware,
   }
 
   const mangaRoot = catalogIndex.findMangaRoot(manga);
+  // Antes esto ignoraba el parámetro `image` para portadas y siempre abría
+  // 'cover.jpg' a mano — por eso una portada cover.webp/.png nunca se servía
+  // aunque catalogIndex.js ya la hubiera detectado y armado la URL correcta.
+  // Ahora se usa el nombre real pedido, pero SOLO si matchea el patrón
+  // cover.(jpg|jpeg|png|webp) — no se puede usar el parámetro `image` para
+  // pedir cualquier otro archivo suelto dentro de la carpeta del manga
+  // (metadata.json, etc.), que de otra forma quedaría expuesto por esta ruta.
+  if (chapter === '__cover__' && !COVER_FILENAME_RE.test(image)) {
+    return res.status(404).send('Imagen no encontrada.');
+  }
   const imagePath = chapter === '__cover__'
-    ? path.join(mangaRoot, manga, 'cover.jpg')
+    ? path.join(mangaRoot, manga, image)
     : path.join(mangaRoot, manga, chapter, image);
   const resolved = path.resolve(imagePath);
   if (!resolved.startsWith(path.resolve(mangaRoot))) return res.status(404).send('Imagen no encontrada.');

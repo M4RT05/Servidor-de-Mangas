@@ -92,7 +92,7 @@ async function openDetail(encodedName, isColdStart = false, skipHistory = false)
       if(pcPh)  pcPh.style.display  = 'flex';
     }
     if(g('det-pc-title'))  g('det-pc-title').textContent  = data.name;
-    if(g('det-pc-meta'))   g('det-pc-meta').innerHTML     = badgeRow(meta);
+    if(g('det-pc-meta'))   g('det-pc-meta').innerHTML     = badgeRow(meta, data.sources);
     if(g('det-pc-genres')) g('det-pc-genres').innerHTML   = genreChips(meta, 'det-pc-genre-chip');
     if(g('det-pc-syn'))    g('det-pc-syn').innerHTML      = synopsisHTML(meta.synopsis, data.name+'_pc');
     const first = data.chapters[0]?.number;
@@ -112,7 +112,7 @@ async function openDetail(encodedName, isColdStart = false, skipHistory = false)
       } else { heroCover.src = BLANK; heroCover.style.opacity='0'; if(heroDiamond) heroDiamond.style.opacity='0'; }
     }
     if(g('det-title'))      g('det-title').textContent      = data.name;
-    if(g('det-status-row')) g('det-status-row').innerHTML   = badgeRow(meta);
+    if(g('det-status-row')) g('det-status-row').innerHTML   = badgeRow(meta, data.sources);
     if(g('det-genres-row')) g('det-genres-row').innerHTML   = genreChips(meta, 'b genre-chip');
     if(g('det-syn'))        g('det-syn').innerHTML          = synopsisHTML(meta.synopsis, data.name);
     if(g('chap-count-num')) g('chap-count-num').textContent = data.chapterCount;
@@ -132,12 +132,13 @@ async function openDetail(encodedName, isColdStart = false, skipHistory = false)
   }
 }
 
-function badgeRow(meta) {
+function badgeRow(meta, sources) {
   return [
     meta.type    ? `<span class="${typeClass(meta.type)}">${esc(meta.type)}</span>` : '',
     meta.status  ? statusBadge(meta.status)                                          : '',
     meta.adult   ? '<span class="b b18">+18</span>'                                 : '',
-    meta.ranking ? `<span class="b by">Rank #${esc(meta.ranking)}</span>`           : ''
+    meta.ranking ? `<span class="b by">Rank #${esc(meta.ranking)}</span>`           : '',
+    sourceBadge(sources?.[0])
   ].filter(Boolean).join('');
 }
 function sortGenres(genres) {

@@ -206,9 +206,17 @@ const API = {
   async resetOrdenFuentes()        { const r = await this.fetchRaw('/api/admin/scraper/orden-fuentes', { method: 'POST', body: JSON.stringify({ resetear: true }) }); return r ? r.json() : null; },
   async getSeguimientoMangas()     { const r = await this.fetchRaw('/api/admin/scraper/mangas'); return r ? r.json() : null; },
   async addSeguimientoManga(manga) { const r = await this.fetchRaw('/api/admin/scraper/mangas', { method: 'POST', body: JSON.stringify(manga) }); return r ? r.json() : null; },
-  async editSeguimientoManga(originalNombreCarpeta, manga, forzar = false) { const body = { original_nombre_carpeta: originalNombreCarpeta, manga }; if (forzar) body.forzar = true; const r = await this.fetchRaw('/api/admin/scraper/mangas', { method: 'PUT', body: JSON.stringify(body) }); return r ? r.json() : null; },
-  async deleteSeguimientoManga(nombreCarpeta) { const r = await this.fetchRaw('/api/admin/scraper/mangas', { method: 'DELETE', body: JSON.stringify({ nombre_carpeta: nombreCarpeta }) }); return r ? r.json() : null; },
+  async editSeguimientoManga(originalNombreCarpeta, originalFuente, manga, forzar = false) { const body = { original_nombre_carpeta: originalNombreCarpeta, original_fuente: originalFuente, manga }; if (forzar) body.forzar = true; const r = await this.fetchRaw('/api/admin/scraper/mangas', { method: 'PUT', body: JSON.stringify(body) }); return r ? r.json() : null; },
+  async deleteSeguimientoManga(nombreCarpeta, fuente) { const r = await this.fetchRaw('/api/admin/scraper/mangas', { method: 'DELETE', body: JSON.stringify({ nombre_carpeta: nombreCarpeta, fuente }) }); return r ? r.json() : null; },
   async getDominiosFuente()        { const r = await this.fetchRaw('/api/admin/scraper/dominios'); return r ? r.json() : null; },
+
+  // Mejora con IA (admin)
+  async getIaModelos()             { const r = await this.fetchRaw('/api/admin/upscale/modelos'); return r ? r.json() : null; },
+  async getIaCapitulos(manga)      { const r = await this.fetchRaw('/api/admin/upscale/capitulos?manga=' + encodeURIComponent(manga)); return r ? r.json() : null; },
+  async getIaStatus()              { const r = await this.fetchRaw('/api/admin/upscale/status'); return r ? r.json() : null; },
+  async instalarMotorIa()          { const r = await this.fetchRaw('/api/admin/upscale/instalar-motor', { method: 'POST', body: JSON.stringify({}) }); return r ? r.json() : null; },
+  async startIa(payload)           { const r = await this.fetchRaw('/api/admin/upscale/start', { method: 'POST', body: JSON.stringify(payload) }); return r ? r.json() : null; },
+  async stopIa(modo)               { const r = await this.fetchRaw('/api/admin/upscale/stop', { method: 'POST', body: JSON.stringify({ modo }) }); return r ? r.json() : null; },
 
   // ── EXPORT / IMPORT DE PROGRESO ─────────────────────────────────────────
   // Compartido entre el panel principal (app.js) y stats.html — antes cada

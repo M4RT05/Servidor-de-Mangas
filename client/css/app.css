@@ -51,6 +51,28 @@ body{height:100%;overflow:hidden;}
 .type-manhwa {background:rgba(59,130,246,.18);color:#3b82f6;border:1px solid rgba(59,130,246,.3);font-size:11px;font-weight:600;padding:3px 9px;border-radius:20px;display:inline-block;}
 .type-manhua {background:rgba(239,68,68,.18);color:#ef4444;border:1px solid rgba(239,68,68,.3);font-size:11px;font-weight:600;padding:3px 9px;border-radius:20px;display:inline-block;}
 
+/* ── FUENTES DE DESCARGA ── */
+/* Mismo patrón que los tipos fijos de arriba (rgba fijo, no depende del tema
+   claro/oscuro) — la idea es reconocer cada fuente de un vistazo siempre con
+   el mismo color, sin importar si pisan tonos ya usados por tipo/estado. */
+.src-olympus   {background:rgba(234,179,8,.18);  color:#eab308;border:1px solid rgba(234,179,8,.3); font-size:11px;font-weight:600;padding:3px 9px;border-radius:20px;display:inline-block;}
+.src-nexus     {background:rgba(59,130,246,.18); color:#3b82f6;border:1px solid rgba(59,130,246,.3);font-size:11px;font-weight:600;padding:3px 9px;border-radius:20px;display:inline-block;}
+.src-dragon    {background:rgba(239,68,68,.18);  color:#ef4444;border:1px solid rgba(239,68,68,.3); font-size:11px;font-weight:600;padding:3px 9px;border-radius:20px;display:inline-block;}
+.src-temple    {background:rgba(153,27,27,.22);  color:#f87171;border:1px solid rgba(153,27,27,.4); font-size:11px;font-weight:600;padding:3px 9px;border-radius:20px;display:inline-block;}
+.src-ikigai    {background:rgba(236,72,153,.18); color:#ec4899;border:1px solid rgba(236,72,153,.3);font-size:11px;font-weight:600;padding:3px 9px;border-radius:20px;display:inline-block;}
+.src-taurus    {background:rgba(120,53,15,.28);  color:#d99a5b;border:1px solid rgba(120,53,15,.45);font-size:11px;font-weight:600;padding:3px 9px;border-radius:20px;display:inline-block;}
+.src-leercap   {background:rgba(249,115,22,.18); color:#f97316;border:1px solid rgba(249,115,22,.3);font-size:11px;font-weight:600;padding:3px 9px;border-radius:20px;display:inline-block;}
+.src-manhwaweb {background:rgba(21,128,61,.22);  color:#4ade80;border:1px solid rgba(21,128,61,.4); font-size:11px;font-weight:600;padding:3px 9px;border-radius:20px;display:inline-block;}
+.src-tmo       {background:rgba(6,182,212,.18);  color:#06b6d4;border:1px solid rgba(6,182,212,.3); font-size:11px;font-weight:600;padding:3px 9px;border-radius:20px;display:inline-block;}
+.src-externa   {background:rgba(125,133,144,.18);color:var(--mut);border:1px solid rgba(125,133,144,.3);font-size:11px;font-weight:600;padding:3px 9px;border-radius:20px;display:inline-block;}
+/* Contenedor de 1 o 2 badges de fuente en la tarjeta de "últimos capítulos"
+   (client/js/app.js → sourceBadgeGroup). Apilados verticalmente (uno arriba,
+   uno abajo) en vez de uno al lado del otro: al lado horizontal le come
+   ancho al título y en mangas con nombre largo lo corta (ver conversación
+   2026-09) — apilado usa el ancho del badge más angosto de los dos.
+   Con 1 solo badge la dirección no cambia nada, se ve igual que antes. */
+.src-badge-group{display:flex;flex-direction:column;align-items:flex-end;justify-content:center;gap:4px;flex-shrink:0;}
+
 /* ── GRID SERIES MOBILE ── */
 .sgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;}
 .sc{cursor:pointer;}
@@ -128,7 +150,17 @@ body.theme-white      .det-hero-gradient{background:linear-gradient(to bottom,tr
 
 /* ÚLTIMOS CAPÍTULOS */
 .lci{background:var(--card);border-radius:16px;margin-bottom:10px;overflow:hidden;position:relative;}
-.lci-bg{position:absolute;left:-5px;top:50%;transform:translateY(-50%);width:80px;object-fit:cover;opacity:0.07;pointer-events:none;z-index:0;}
+/* Misma tira angosta de 80px que ya estaba — el alto ahora es height:100%
+   (toca arriba y abajo, ver nota de más arriba del archivo). El left
+   quedaba en -5px desde la versión vieja: corría la imagen 5px afuera del
+   borde izquierdo, y el overflow:hidden de .lci recortaba justo esa
+   tajada, dejándola "cortada de lado". Con left:0 arranca exacto en el
+   borde del contenedor, completa. */
+/* object-fit:contain (no cover): muestra la portada ENTERA sin recortar
+   nada — puede dejar un margen vacío a los costados si la proporción de la
+   imagen no calza exacto con la caja, pero nunca corta contenido. Por eso
+   tampoco hace falta object-position ni ninguna máscara de desvanecido. */
+.lci-bg{position:absolute;left:0;top:0;height:100%;width:80px;object-fit:contain;opacity:0.07;pointer-events:none;z-index:0;}
 .lci-head{display:flex;align-items:center;gap:10px;padding:11px 12px 9px;position:relative;z-index:1;cursor:pointer;}
 .lci-cov{width:40px;height:54px;border-radius:8px;overflow:hidden;flex-shrink:0;background:var(--bg);display:flex;align-items:center;justify-content:center;font-size:20px;}
 .lci-cov img{width:100%;height:100%;object-fit:cover;}

@@ -14,7 +14,7 @@
 ║    • ZonaTMO              (plataforma propia, grupos de scanlation)  ║
 ║                                                                      ║
 ║  Instalar deps: pip install requests beautifulsoup4 Pillow tqdm      ║
-║                 pycryptodome selenium                                ║
+║                 pycryptodome selenium curl_cffi                      ║
 ╚══════════════════════════════════════════════════════════════════════╝
 """
 
@@ -23,6 +23,7 @@ import re
 import sys
 import json
 import time
+import base64
 import shutil
 import hashlib
 import logging
@@ -34,6 +35,7 @@ import unicodedata
 import statistics
 from abc import ABC, abstractmethod
 from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlparse, urljoin
 
@@ -69,6 +71,12 @@ _PAQUETES = {
                                    # fuentes — antes faltaba acá, así que
                                    # nunca se instalaba solo con correr
                                    # el scraper la primera vez.
+    "curl_cffi": "curl_cffi",     # sesión con fingerprint TLS/HTTP2 de
+                                   # navegador real — usado para los
+                                   # dominios en
+                                   # DOMINIOS_REQUIEREN_FINGERPRINT_BROWSER
+                                   # (hoy: image*.ikigaimangas.cloud,
+                                   # bloqueado por WAF a nivel de conexión).
 }
 
 def _auto_instalar():
@@ -104,6 +112,12 @@ try:
 except ImportError:
     TQDM_OK = False
 
+try:
+    from curl_cffi import requests as curl_cffi_requests
+    CURL_CFFI_OK = True
+except ImportError:
+    CURL_CFFI_OK = False
+
 # Handler que redirige el logging a través de tqdm.write
 # para que no se mezclen con las barras de progreso
 class _TqdmLogHandler(logging.StreamHandler):
@@ -133,6 +147,16 @@ LOCK_PATH         = SCRIPT_DIR / "scraper.lock"
 LOCK_MAX_HORAS    = 6  # más viejo que esto = se asume colgado de una corrida anterior
 ESTADO_VIVO_PATH  = SCRIPT_DIR / "estado_vivo.json"   # estado en vivo para la app web
 DETENER_FLAG_PATH = SCRIPT_DIR / "detener.flag"        # presencia = "pedido de detener"
+
+# ── Exclusión mutua con la mejora IA (panel Node, server/routes/
+# upscaleControl.js) ─────────────────────────────────────────────────
+# No hay un lock file separado para la IA — se lee el mismo
+# estado_vivo.json que ese subsistema ya mantiene, con el mismo
+# criterio de heartbeat que usa el propio panel para autodetectar una
+# caída (ver leerEstado() en upscaleControl.js). Así los dos lados
+# están de acuerdo en qué significa "corriendo de verdad".
+UPSCALE_ESTADO_VIVO_PATH       = SCRIPT_DIR.parent / "server" / "upscale-state" / "estado_vivo.json"
+UPSCALE_HEARTBEAT_MAX_SEGUNDOS = 120
 
 # ── Reporte de escaneos ───────────────────────────────────────────────
 # Un solo archivo: el historial completo de escaneos vive embebido
@@ -180,10 +204,21 @@ DELAY_ENTRE_IMGS  = 0.3  # pausa antes de cada descarga individual de imagen
                           # pero suaviza la carga sobre el servidor)
 
 # ── Selenium (solo se usa para Temple Scan / sitios con redirección JS) ──
-# Poner en False para ver el navegador real durante una corrida —
-# útil para diagnosticar visualmente si Temple cambia su flujo.
-# En uso normal dejar en True (headless, sin ventana visible).
+# En uso normal queda en True (headless, sin ventana visible) — es el
+# comportamiento de siempre, no cambia si no se hace nada.
+#
+# Para ver el navegador real durante una corrida (útil para diagnosticar
+# visualmente si un sitio cambia su flujo, muestra un login, un captcha,
+# etc.) lanzar el script agregando --visible, sin tocar esta constante:
+#     python scraper.py --una-vez --visible
+# Solo tiene efecto corriendo el script a mano en el propio PC (con
+# sesión de escritorio activa) — si lo dispara el panel web y estás
+# conectado por Tailscale/Cloudflare Tunnel, la ventana se abre en el
+# escritorio del PC, no en tu pantalla remota.
 SELENIUM_HEADLESS = True
+if "--visible" in sys.argv:
+    SELENIUM_HEADLESS = False
+    print("  [Selenium] Modo --visible activado: la ventana de Brave va a ser visible en esta corrida")
 
 # Carpeta del perfil de Brave dedicado al scraper (no es tu perfil
 # personal — así no interfiere con sesiones/cookies que tengas
@@ -195,6 +230,16 @@ BRAVE_PROFILE_DIR = r"C:\brave-scraper"
 # revisar/subir este número de tanto en tanto si Brave se actualiza
 # solo y este fallback queda muy atrás.
 CHROMEDRIVER_VERSION_FALLBACK = "149"
+
+# ── LeerCapitulo + Cloudflare ─────────────────────────────────────────
+# Entre 2026-09-19 y 2026-09-23 leercapitulo.co desafió con JS de
+# Cloudflare a todo cliente que no pareciera un navegador real —
+# necesitaba lanzar Brave directo (subprocess, sin chromedriver) con
+# perfil propio para pasarlo. El sitio sacó Cloudflare por su cuenta:
+# confirmado el 2026-09-23, requests plano ya devuelve la página real.
+# No queda config activa por esto — si Cloudflare volviera a aparecer,
+# el historial de git de este archivo tiene el workaround completo
+# (Brave + Selenium + perfil dedicado) ya armado y probado.
 
 # Cuántas veces se reutiliza el mismo driver de Selenium (mismo
 # navegador/pestaña) antes de cerrarlo y lanzar uno fresco, dentro del
@@ -246,6 +291,14 @@ UMBRAL_FALLBACK_SOSPECHOSO = 5
 # sitio se arregló solo mientras tanto.
 UMBRAL_ABANDONAR_REQUESTS = 2
 
+# Temple dejó de exigir sesión iniciada para leer (2026-09) — por default
+# se prueba todo sin sesión (ver TempleScraper._asegurar_cookies_temple).
+# Si esta cantidad de mangas SEGUIDOS (sin que se intercale ninguno
+# exitoso) tienen capítulos nuevos pero terminan en 0 imágenes
+# descargadas, se interpreta como señal de que el sitio volvió a pedir
+# login, y recién ahí se carga la sesión (ver _escanear_temple).
+TEMPLE_UMBRAL_SIN_SESION = 3
+
 # ── Límite de tiempo por manga ───────────────────────────────────────
 # Tiempo máximo total que se le da a UN manga (todos sus capítulos
 # pendientes) dentro de un mismo ciclo de escaneo. Si se supera, se
@@ -278,6 +331,15 @@ TIMEOUT_MANGA_SEG = 20 * 60  # 20 minutos
 # que ven el valor ya actualizado del ciclo actual sin cambiar nada más.
 ORDEN_FUENTES_DEFAULT = ["olympus", "nexus", "temple", "dragon", "ikigai", "taurus", "leercapitulo", "manhwaweb", "tmo"]
 ORDEN_FUENTES = list(ORDEN_FUENTES_DEFAULT)
+
+# Ícono por fuente para el log de consola (bloque de escaneo y resumen
+# final) — un solo lugar, así nunca se desincroniza el ícono entre los
+# dos usos.
+ICONOS_FUENTE = {
+    "olympus": "🏛", "temple": "🏯", "nexus": "🔗", "dragon": "🐉",
+    "manhwaweb": "📚", "ikigai": "🌸", "leercapitulo": "📕",
+    "taurus": "🐂", "tmo": "📙",
+}
 
 
 def aplicar_orden_personalizado(data: dict) -> None:
@@ -432,6 +494,14 @@ def _motivo_imagen_invalida(datos, error: Exception) -> str:
                 f"ninguna imagen real pesa tan poco; esto no se arregla "
                 f"reintentando, hay que esperar a que el sitio lo resuba)")
     return f"no son una imagen válida ({type(error).__name__})"
+
+def _url_para_log(img_url: str) -> str:
+    """Trunca las data: URI (screenshots de Selenium, ver
+    _capturar_paginas_via_screenshot) antes de loguearlas — son varios
+    MB de base64 y no aportan nada legible en un log."""
+    if img_url.startswith("data:") and len(img_url) > 60:
+        return img_url[:40] + f"...(+{len(img_url)-40} bytes base64)"
+    return img_url
 
 # Prioridad reservada para contenido que apareció en la carpeta de un
 # manga SIN que ningún scraper lo haya descargado (ej: lo agregaste a
@@ -612,6 +682,27 @@ HEADERS_BASE = {
     ),
     "Accept-Language": "es-ES,es;q=0.9,en;q=0.8",
 }
+
+# Dominios donde el WAF (Cloudflare u otro) bloquea la conexión por el
+# fingerprint TLS/HTTP2 del cliente, no por headers ni cookies — un
+# navegador real pasa, requests/urllib3 (y curl/Invoke-WebRequest) no.
+#
+# Confirmado en Ikigai el 11/09/2026: la misma imagen de
+# image3.ikigaimangas.cloud daba 403 idéntico desde Python (requests)
+# Y desde PowerShell (Invoke-WebRequest, stack TLS de .NET) — con y
+# sin Referer, sin ninguna cookie de por medio en ningún lado — pero
+# cargaba 200 sin problema desde Brave. Eso descarta rate-limit,
+# hotlink-check por Referer y challenge por cookie (ahí sí habría que
+# resolverlo con Selenium, como Temple) — apunta a bot-management por
+# fingerprint de conexión, que _get_sesion_impersonada() (ver más abajo)
+# esquiva impersonando el TLS/HTTP2 de un Chrome real vía curl_cffi.
+#
+# El match es por substring sobre el netloc, así que cubre solos los
+# cambios de subdominio (image1/image2/image3/imageN.ikigaimangas.cloud)
+# sin tocar esta lista cada vez que Ikigai rota de subdominio de imagen.
+DOMINIOS_REQUIEREN_FINGERPRINT_BROWSER = (
+    "ikigaimangas.cloud",
+)
 
 # ══════════════════════════════════════════════════════════════════════
 # §2  LOGGING
@@ -816,6 +907,25 @@ class ControlEjecucion:
         if not forzar and (ahora - self._ultimo_escrito) < 1.0:
             return
         self._ultimo_escrito = ahora
+
+        # Refrescar el mtime de scraper.lock en el mismo pulso que
+        # estado_vivo.json (como mucho 1 vez por segundo). Sin esto, un
+        # proceso sano de modo continuo con más de LOCK_MAX_HORAS de
+        # vida real tiene un lock que SIEMPRE se ve "viejo" para
+        # cualquier intento de arranque duplicado (tarea programada,
+        # reinicio, apretar "Iniciar" de nuevo en el panel web) —
+        # confirmado en la práctica: dos instancias corriendo a la vez
+        # sobre el mismo seguimiento.json (WinError 32 en el rename de
+        # seguimiento.tmp, logs de dos ciclos completos mezclados).
+        # _adquirir_lock() ya no depende de la edad como criterio
+        # principal (chequea el PID de verdad, ver ese docstring), pero
+        # no cuesta nada mantener esto fresco también, como segunda red
+        # de seguridad para el caso en que ese chequeo de PID falle.
+        try:
+            LOCK_PATH.touch(exist_ok=True)
+        except OSError:
+            pass
+
         self._escribir_archivo({
             "status": self._estado_actual(),
             "pid": os.getpid(),
@@ -1032,6 +1142,43 @@ def hacer_post(url: str, session: requests.Session, data: dict, **kwargs) -> req
             else:
                 log.error(f"  Falló después de {MAX_REINTENTOS} intentos: {url}")
                 return None
+
+def _ancho_visible(texto: str) -> int:
+    """
+    Ancho real en columnas de terminal, no cantidad de caracteres. La
+    mayoría de los emoji (🏛 🌸 📕 ✅ etc.) ocupan 2 columnas visuales en
+    la consola pero cuentan como 1 solo carácter para Python — por eso
+    rellenar a mano con ' ' * (N - len(texto)) cerraba las cajas del log
+    en un lugar distinto según qué emoji llevara cada línea.
+    unicodedata ya clasifica bien CJK/Fullwidth (W/F); para el resto de
+    los emoji comunes (que unicodedata no marca como anchos pero la
+    terminal sí dibuja en 2 columnas) alcanza con los rangos de bloques
+    Unicode donde vive la inmensa mayoría de los que usa este script.
+    """
+    ancho = 0
+    for ch in texto:
+        if unicodedata.combining(ch):
+            continue  # marca combinante: no suma columna propia
+        cp = ord(ch)
+        if (unicodedata.east_asian_width(ch) in ("W", "F")
+                or 0x1F300 <= cp <= 0x1FAFF    # emoji pictográficos y símbolos
+                or 0x2600  <= cp <= 0x27BF     # misceláneos + dingbats (✅ ✗ ...)
+                or 0x2300  <= cp <= 0x23FF):   # símbolos técnicos misceláneos
+            ancho += 2
+        else:
+            ancho += 1
+    return ancho
+
+
+def _linea_caja(texto: str, ancho_interior: int) -> str:
+    """
+    Arma una línea "║texto...║" rellenada para que el borde derecho
+    siempre caiga en la misma columna sea cual sea el contenido —
+    calcula el relleno con _ancho_visible(), no con len().
+    """
+    relleno = max(0, ancho_interior - _ancho_visible(texto))
+    return f"║{texto}{' ' * relleno}║"
+
 
 _CARACTERES_INVALIDOS_WINDOWS = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
 
@@ -1443,6 +1590,23 @@ class BlockDetector:
             return sum(info["pausas"] for info in self._estado.values())
 
 
+class SesionExpiradaError(Exception):
+    """
+    Se lanza cuando un scraper que depende de una sesión iniciada (ej:
+    Temple, vía el perfil dedicado de Selenium) detecta que esa sesión
+    ya no es válida.
+
+    A diferencia de SitioRotoError (que es por-manga: "este manga en
+    particular no se pudo leer"), esta es a nivel FUENTE completa: no
+    tiene sentido seguir intentando el resto de los manga de esta
+    fuente en la misma corrida si la sesión está vencida — todos van a
+    fallar por el mismo motivo. El loop principal la atrapa y corta el
+    resto de la fuente, pasando a la siguiente, en vez de gastar tiempo
+    repitiendo el mismo fallo manga por manga.
+    """
+    pass
+
+
 class SitioRotoError(Exception):
     """
     Se lanza cuando un scraper detecta que el sitio probablemente cambió
@@ -1495,6 +1659,12 @@ class ScraperBase(ABC):
         )
         self.session = requests.Session()
         self.session.headers.update(HEADERS_BASE)
+        # Sesión con fingerprint TLS/HTTP2 de navegador real (curl_cffi),
+        # para los dominios en DOMINIOS_REQUIEREN_FINGERPRINT_BROWSER. Se
+        # crea recién al primer uso (_get_sesion_impersonada) — la mayoría
+        # de los scrapers nunca la necesitan, no tiene sentido pagar el
+        # costo de armarla si no hace falta.
+        self._session_impersonada = None
         # Driver de Selenium reutilizado entre capítulos de un mismo manga
         # (ver _checkout_driver_selenium / cerrar_driver_selenium) — evita
         # relanzar el navegador en cada capítulo. El lock evita que dos
@@ -1527,6 +1697,39 @@ class ScraperBase(ABC):
         Retorna lista de URLs de imágenes del capítulo.
         """
         ...
+
+    def _get_sesion_impersonada(self) -> "curl_cffi_requests.Session":
+        """
+        Sesión HTTP separada que impersona el fingerprint TLS/HTTP2 de un
+        Chrome real vía curl_cffi — para dominios donde el WAF bloquea la
+        conexión por el fingerprint del cliente y no por headers/cookies
+        (ver DOMINIOS_REQUIEREN_FINGERPRINT_BROWSER más arriba).
+
+        A propósito NO se le pisan los headers con HEADERS_BASE: curl_cffi
+        ya arma un set de headers realista y consistente con la versión de
+        Chrome impersonada (impersonate="chrome" apunta siempre a la
+        última que soporte la versión instalada de la librería, sin
+        hardcodear un número que se desactualiza solo). Pisarlos con nuestro
+        User-Agent fijo (que además dice Chrome/120, desactualizado)
+        generaría una inconsistencia entre el User-Agent declarado y el
+        fingerprint TLS real — exactamente el tipo de señal que un WAF
+        puede usar para detectar que algo no es un navegador de verdad.
+
+        Se crea una sola vez por scraper y se reusa entre capítulos
+        (mismo criterio que self.session) — curl_cffi ya maneja el curl
+        interno como thread-local, así que es seguro compartir esta
+        instancia entre los 4 hilos de descarga en paralelo.
+        """
+        if self._session_impersonada is None:
+            if not CURL_CFFI_OK:
+                raise RuntimeError(
+                    "Este sitio necesita el paquete 'curl_cffi' para esquivar "
+                    "un bloqueo por fingerprint TLS/HTTP2 del WAF (ver "
+                    "DOMINIOS_REQUIEREN_FINGERPRINT_BROWSER), pero no está "
+                    "instalado. Instalalo con: pip install curl_cffi"
+                )
+            self._session_impersonada = curl_cffi_requests.Session(impersonate="chrome")
+        return self._session_impersonada
 
     def descargar_capitulo(self, cap: dict, carpeta_manga: Path) -> bool:
         """
@@ -1610,9 +1813,23 @@ class ScraperBase(ABC):
         speed       = SpeedTracker()
         self.detector_bloqueo.reset()
         _dominios_almacenamiento_avisados: set[str] = set()
+        _dominios_sin_curl_cffi_avisados: set[str] = set()
 
         def _bajar_raw(args):
             i, img_url = args
+            # Imagen ya resuelta del lado del navegador (ej: páginas de
+            # Temple Scan compuestas vía screenshot de Selenium — ver
+            # _capturar_paginas_via_screenshot). No hay red de por medio:
+            # se decodifica directo y se procesa igual que cualquier otra.
+            if img_url.startswith("data:"):
+                try:
+                    _, b64data = img_url.split(",", 1)
+                    contenido = self.procesar_imagen(img_url, base64.b64decode(b64data))
+                    speed.add(len(contenido))
+                    return i, img_url, contenido, True
+                except Exception as e:
+                    log.warning(f"  [⚠] No se pudo decodificar imagen embebida (data URI): {e}")
+                    return i, img_url, None, False
             from urllib.parse import urlparse as _up
             dominio = _up(img_url).netloc.lower()
             self.detector_bloqueo.esperar_si_pausado(dominio)
@@ -1630,9 +1847,23 @@ class ScraperBase(ABC):
                     "Referer": "https://manhwaweb.com/",
                     "Accept":  "image/webp,image/apng,image/*,*/*;q=0.8",
                 }
+            # Dominios con WAF que bloquea por fingerprint TLS/HTTP2 (ver
+            # DOMINIOS_REQUIEREN_FINGERPRINT_BROWSER): se usa la sesión
+            # impersonada de curl_cffi en vez de self.session. Si falta la
+            # dependencia, se avisa UNA vez por dominio y se rinde para
+            # esta imagen — no tiene sentido reintentar sin la herramienta
+            # que hace falta.
+            try:
+                usa_fingerprint = any(d in dominio for d in DOMINIOS_REQUIEREN_FINGERPRINT_BROWSER)
+                cliente_http = self._get_sesion_impersonada() if usa_fingerprint else self.session
+            except RuntimeError as e:
+                if dominio not in _dominios_sin_curl_cffi_avisados:
+                    _dominios_sin_curl_cffi_avisados.add(dominio)
+                    log.error(f"  [⚠] {e}")
+                return i, img_url, None, False
             for intento in range(1, 4):
                 try:
-                    r = self.session.get(img_url, timeout=TIMEOUT,
+                    r = cliente_http.get(img_url, timeout=TIMEOUT,
                                          stream=False, headers=headers_extra)
                     # Bucket S3/R2 privado o credenciales faltantes: error
                     # PERMANENTE, no tiene sentido reintentar ni avisarle
@@ -1729,7 +1960,7 @@ class ScraperBase(ABC):
                 if datos is not None and len(datos) < UMBRAL_ARCHIVO_ROTO_BYTES:
                     fallidas_por_archivo_roto += 1
                 log.warning(f"  [{self.nombre}] Cap {cap.get('numero')}: bytes descargados "
-                           f"pero {_motivo_imagen_invalida(datos, e)} en {img_url}")
+                           f"pero {_motivo_imagen_invalida(datos, e)} en {_url_para_log(img_url)}")
                 fallidas_desc += 1
                 fallidas_idx.append(idx)
 
@@ -1791,6 +2022,12 @@ class ScraperBase(ABC):
             así que diagnosticar un rechazo de este tipo obligaba a leer
             el código para adivinar. Ahora el motivo mismo lo dice.
             """
+            if img_url.startswith("data:"):
+                # Viene de un screenshot de un .page-break real (ver
+                # _capturar_paginas_via_screenshot) — nunca es ruido por
+                # construcción, y hacer .split("/") sobre un data URI de
+                # varios MB (el alfabeto base64 usa "/") sale caro para nada.
+                return None
             fname   = img_url.split("/")[-1].lower()
             url_low = img_url.lower()
             for x in RUIDO_FN:
@@ -2025,7 +2262,7 @@ class ScraperBase(ABC):
                     motivo_inv = _motivo_imagen_invalida(datos_r, e)
                     consola(f"{pref}❌ Se descargó pero {motivo_inv}")
                     log.warning(f"  [{self.nombre}] Cap {cap.get('numero')}: bytes descargados "
-                               f"pero {motivo_inv} en {img_url}")
+                               f"pero {motivo_inv} en {_url_para_log(img_url)}")
                     aun_sin_resolver.append(idx + 1)
                     continue
                 consola(f"{pref}♻  Recuperada (había fallado la descarga)")
@@ -2063,7 +2300,13 @@ class ScraperBase(ABC):
             ancho = meta["ancho"]; alto = meta["alto"]
             pref  = f"  {contador:>4}  {ancho}x{alto:<7}  "
             try:
-                if "#scramble=" in img_url:
+                if img_url.startswith("data:"):
+                    # ej: "data:image/png;base64,..." (screenshot de
+                    # Selenium) — no hay ningún '.' que extraer como en
+                    # una URL normal, la extensión real es el mimetype
+                    # declarado antes del ';'.
+                    ext = img_url.split(";")[0].split("/")[-1][:4] or "png"
+                elif "#scramble=" in img_url:
                     ext = "png"
                 else:
                     ext = img_url.split(".")[-1].split("?")[0][:4]
@@ -2197,6 +2440,22 @@ class ScraperBase(ABC):
             except Exception as e:
                 log.debug(f"  [Selenium] No se pudo eliminar {nombre}: {e}")
 
+    @staticmethod
+    def _detectar_ruta_brave() -> str | None:
+        """
+        Busca el ejecutable de Brave en las ubicaciones típicas de
+        instalación en Windows. Extraído de _crear_driver_selenium para
+        poder reusarlo también al abrir un Brave "normal" (sin pasar
+        por Selenium) para relogueos manuales — ver
+        _abrir_navegador_para_login más abajo, usado por TempleScraper.
+        """
+        brave_paths = [
+            os.path.join(os.environ.get("PROGRAMFILES", ""), "BraveSoftware", "Brave-Browser", "Application", "brave.exe"),
+            os.path.join(os.environ.get("PROGRAMFILES(X86)", ""), "BraveSoftware", "Brave-Browser", "Application", "brave.exe"),
+            os.path.expanduser(os.path.join("~", "AppData", "Local", "BraveSoftware", "Brave-Browser", "Application", "brave.exe")),
+        ]
+        return next((p for p in brave_paths if os.path.isfile(p)), None)
+
     def _crear_driver_selenium(self):
         """
         Arma y lanza una instancia de Brave (o Chrome como fallback)
@@ -2204,8 +2463,10 @@ class ScraperBase(ABC):
         persiste entre sesiones — guarda cookies, extensiones, config.
         Descarga el ChromeDriver correcto automáticamente.
 
-        Retorna el driver ya lanzado y con navigator.webdriver ocultado,
-        o None si no se pudo lanzar (queda logueado el motivo).
+        Retorna el driver ya lanzado, con navigator.webdriver y
+        navigator.brave ocultos en TODAS las páginas que cargue de acá
+        en más (no solo la primera), o None si no se pudo lanzar (queda
+        logueado el motivo).
         """
         import zipfile
         import urllib.request
@@ -2219,12 +2480,7 @@ class ScraperBase(ABC):
             return None
 
         # ── Detectar Brave ────────────────────────────────────────────
-        brave_paths = [
-            os.path.join(os.environ.get("PROGRAMFILES", ""), "BraveSoftware", "Brave-Browser", "Application", "brave.exe"),
-            os.path.join(os.environ.get("PROGRAMFILES(X86)", ""), "BraveSoftware", "Brave-Browser", "Application", "brave.exe"),
-            os.path.expanduser(os.path.join("~", "AppData", "Local", "BraveSoftware", "Brave-Browser", "Application", "brave.exe")),
-        ]
-        ruta_brave = next((p for p in brave_paths if os.path.isfile(p)), None)
+        ruta_brave = self._detectar_ruta_brave()
 
         # ── Versión de Brave ──────────────────────────────────────────
         def _version_brave(ruta: str) -> str:
@@ -2342,13 +2598,175 @@ class ScraperBase(ABC):
                 return None
 
         try:
-            driver.execute_script(
-                "Object.defineProperty(navigator,'webdriver',{get:()=>undefined})"
-            )
-        except Exception:
-            pass
+            # Page.addScriptToEvaluateOnNewDocument (vía CDP) en vez de
+            # execute_script: este último solo corre una vez, sobre la
+            # página que esté cargada en ESE momento — se pierde apenas
+            # se navega a otra URL real, porque cada nuevo documento
+            # arranca con su propio contexto de JS limpio. El comando
+            # CDP registra el script para que se inyecte automáticamente
+            # ANTES de que corra el JS propio de la página, en TODAS las
+            # navegaciones futuras de esta sesión del navegador — no hay
+            # que volver a llamarlo por cada driver.get().
+            #
+            # navigator.brave se agrega acá (no estaba antes): Temple
+            # empezó a chequear esa propiedad específicamente — solo
+            # existe en Brave — para mostrar un cartel de "navegador no
+            # compatible" y cortar el acceso (2026-09). Ocultarla hace
+            # que el sitio vea un navigator normal, sin esa marca.
+            driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {
+                "source": (
+                    "Object.defineProperty(navigator,'webdriver',{get:()=>undefined});"
+                    "Object.defineProperty(navigator,'brave',{get:()=>undefined});"
+                )
+            })
+        except Exception as e:
+            log.debug(f"  [Selenium] No se pudo registrar el script de "
+                     f"camuflaje (navigator.webdriver/brave): {e}")
 
         return driver
+
+    def _sincronizar_cookies_selenium(self, driver) -> None:
+        """
+        Copia las cookies de la sesión actual del navegador (Selenium)
+        hacia self.session (requests).
+
+        Motivo: la descarga de los BYTES de cada imagen siempre se hace
+        vía self.session (ver _bajar_raw en descargar_capitulo), nunca
+        a través del propio navegador — Selenium solo se usa para
+        resolver la LISTA de URLs cuando requests plano no alcanza. Si
+        un sitio empieza a exigir sesión iniciada para servir las
+        imágenes (ej: Temple Scan desde 2026-08), que el navegador esté
+        logueado no sirve de nada por sí solo: sin este puente, self.
+        session sigue pegándole sin cookie de sesión y las imágenes
+        siguen bloqueadas igual.
+
+        Requiere que el navegador YA esté logueado en el sitio — esto
+        no inicia sesión solo. Con el perfil dedicado de Selenium
+        (BRAVE_PROFILE_DIR), que persiste entre corridas, alcanza con
+        loguearse una vez manualmente en ese perfil para que quede
+        disponible en todas las corridas futuras hasta que el sitio
+        invalide la sesión.
+
+        Es inofensivo para sitios que no la necesitan: en el peor caso
+        copia cookies irrelevantes (o de protecciones tipo Cloudflare,
+        que de paso también pueden ayudarle a requests).
+        """
+        try:
+            cookies = driver.get_cookies()
+        except Exception as e:
+            log.debug(f"  [Selenium] No se pudo leer las cookies del navegador: {e}")
+            return
+
+        for c in cookies:
+            try:
+                self.session.cookies.set(
+                    c["name"], c["value"],
+                    domain=c.get("domain") or None,
+                    path=c.get("path", "/"),
+                )
+            except Exception as e:
+                log.debug(f"  [Selenium] No se pudo sincronizar la cookie "
+                         f"'{c.get('name')}': {e}")
+
+    def _capturar_paginas_via_screenshot(self, elementos_pagina) -> list[str]:
+        """
+        Captura cada elemento de página YA renderizado por el navegador
+        como PNG, en vez de extraer una URL de imagen del DOM.
+
+        Para qué sirve: algunos sitios (ej: Temple Scan desde 2026-08/09,
+        plugin "wp-manga-chapter-images-protection") parten cada página
+        real en 4 <img> con contenido en base64 (no URLs) que un CSS/JS
+        ofuscado reacomoda visualmente en el navegador para que quede
+        como una sola imagen — pero cada <img> por separado es solo un
+        fragmento ilegible. En vez de reversear esa recomposición a
+        mano (CSS + JS minificado, sin garantía de que no cambie),
+        se aprovecha que el navegador YA la dibuja bien en pantalla:
+        se le saca una foto al contenedor de la página tal como se ve
+        compuesta y esos bytes se usan directo como la imagen final.
+
+        Devuelve una lista de "urls" en formato data:image/png;base64,...
+        — no son URLs reales, pero viajan por el mismo campo `urls` que
+        ya usa todo el pipeline. _bajar_raw() reconoce el prefijo
+        `data:` y decodifica directo, sin pegarle a ninguna red.
+        """
+        resultado = []
+        hashes    = []
+        for idx, el in enumerate(elementos_pagina, start=1):
+            try:
+                el.parent.execute_script(
+                    "arguments[0].scrollIntoView({block: 'center'});", el
+                )
+                time.sleep(0.3)  # dar tiempo a que termine de pintar tras el scroll
+                png_bytes = el.screenshot_as_png
+                hashes.append(hashlib.md5(png_bytes).hexdigest())
+                b64 = base64.b64encode(png_bytes).decode("ascii")
+                resultado.append(f"data:image/png;base64,{b64}")
+            except Exception as e:
+                log.warning(f"  [Selenium] No se pudo capturar página {idx}/"
+                           f"{len(elementos_pagina)} vía screenshot: {e}")
+
+        # Red de seguridad: cada .page-break está en una posición de
+        # scroll distinta, así que páginas REALES no pueden dar el
+        # mismo screenshot byte a byte. Si la mayoría sale idéntica,
+        # es casi seguro un overlay tapando todo el lector (cartel de
+        # edad que _confirmar_edad_si_aparece no pudo cerrar, cookie
+        # banner, algo que no terminó de cargar) — se descarta el
+        # capítulo entero en vez de guardarlo con la misma imagen
+        # repetida como si fuera contenido real (esto es justo lo que
+        # pasó sin este chequeo: 15/16 páginas idénticas = el cartel,
+        # y quedó "guardado" con 1 imagen sin ningún error visible).
+        if len(hashes) >= 2:
+            hash_mas_comun, repeticiones = Counter(hashes).most_common(1)[0]
+            if repeticiones > len(hashes) / 2:
+                log.warning(f"  [Selenium] {repeticiones}/{len(hashes)} página(s) "
+                           f"salieron IDÉNTICAS — probable overlay tapando el "
+                           f"capítulo (cartel de edad, cookie banner, etc.) que no "
+                           f"se pudo cerrar. Se descarta el capítulo entero en vez "
+                           f"de guardarlo con contenido repetido.")
+                return []
+
+        log.info(f"  [Selenium] {len(resultado)}/{len(elementos_pagina)} página(s) "
+                 f"capturada(s) vía screenshot (esquema de imágenes en partes detectado)")
+        return resultado
+
+    def _confirmar_edad_si_aparece(self, driver) -> None:
+        """
+        Algunos manga (contenido +18) muestran un modal de verificación
+        de edad ("¿Tiene más de 18 años?" / "Sí Soy Mayor" / "No") que
+        tapa TODO el lector con un overlay fijo. Sin esto, un screenshot
+        de cualquier .page-break en ese estado captura el modal entero
+        — siempre la misma imagen sin importar a qué página se haga
+        scroll —, y en una corrida headless (nadie para clickear "Sí" a
+        mano) el capítulo completo termina "descargado" con una sola
+        imagen (la del cartel) SIN ningún error visible, porque esa
+        imagen pasa los filtros de tamaño sin problema.
+
+        Se confirma SIEMPRE que aparece (nunca "No") porque este scraper
+        baja contenido para la propia biblioteca personal, que ya filtra
+        contenido adulto por usuario del lado del servidor (ver sistema
+        de restricciones de contenido) — la restricción real vive ahí,
+        no en este cartel.
+
+        Detecta el botón por su TEXTO ("Soy Mayor") en vez de por clase
+        CSS/id — no hay HTML real del modal para confirmar selectores
+        estables, y el texto es justamente lo único que se vio en
+        pantalla al probarlo a mano. Si el sitio cambia el texto del
+        botón, esto deja de matchear y hay que ajustarlo con evidencia
+        nueva, no es motivo para adivinar selectores ahora.
+        """
+        try:
+            from selenium.webdriver.common.by import By
+            botones = driver.find_elements(
+                By.XPATH,
+                "//*[self::button or self::a or self::div or self::span]"
+                "[contains(., 'Soy Mayor')]"
+            )
+            if botones:
+                botones[0].click()
+                time.sleep(1.5)  # dar tiempo a que el modal se cierre y el lector se pinte
+                log.info("  [Selenium] Modal de verificación de edad confirmado")
+        except Exception as e:
+            log.debug(f"  [Selenium] No se pudo confirmar modal de edad (o no apareció): {e}")
 
     def _checkout_driver_selenium(self):
         """
@@ -2619,16 +3037,6 @@ class OlympusScraper(ScraperBase):
 
         log.info(f"  [Olympus] {len(novedades)} capítulos encontrados en {self.MAX_PAGINAS} páginas")
         return novedades
-
-    def _extraer_nombre_base(self, slug: str) -> str:
-        """
-        Quita el timestamp del slug para quedarnos con el nombre legible.
-        'caballero-en-eterna-regresion-20260611-080407883'
-        → 'caballero en eterna regresion'
-        """
-        s = re.sub(r"-\d{6,}-\d{6,}$", "", slug)
-        s = re.sub(r"-\d{8,}$", "", s)
-        return s.strip("-").replace("-", " ")
 
     @staticmethod
     def _normalizar_nombre(texto: str) -> str:
@@ -3375,6 +3783,28 @@ class MadaraScraper(ScraperBase):
     Comparten la misma estructura: Temple Scan y Dragon Translation.
     """
 
+    # Por defecto, ningún sitio Madara necesita sesión iniciada. Temple
+    # lo pisa a True — ver el chequeo de "logged-in" en obtener_imagenes
+    # más abajo, que solo se activa si esto es True (así Dragon/Tauro
+    # no se ven afectados en absoluto por este chequeo).
+    REQUIERE_LOGIN = False
+
+    # Default defensivo para que self._cookies_compartidas nunca tire
+    # AttributeError acá (obtener_imagenes lo lee sin pasar por
+    # REQUIRE_LOGIN=True primero solo por el 'and' de short-circuit —
+    # ver ese chequeo). TempleScraper lo pisa con su propio caché real.
+    _cookies_compartidas: list | None = None
+
+    def _marcar_sesion_muerta(self) -> None:
+        """
+        Hook para que las subclases que dependen de una sesión iniciada
+        (REQUIERE_LOGIN=True) registren que se cayó — no-op acá porque
+        MadaraScraper no sabe (ni le corresponde saber) cómo cada
+        subclase guarda ese estado. TempleScraper lo sobreescribe para
+        marcar TempleScraper._sesion_muerta = True.
+        """
+        pass
+
     def __init__(self, base_url: str):
         super().__init__()
         self.base_url = base_url.rstrip("/")
@@ -3713,10 +4143,34 @@ class MadaraScraper(ScraperBase):
                 # 1a. Protector AES
                 protector = soup.select_one("#chapter-protector-data")
                 if protector:
-                    urls = self._desencriptar_protector(protector.get_text(strip=True), r.text)
+                    urls = self._desencriptar_protector(protector.get_text(), r.text)
                     if urls:
                         self._fallos_requests_seguidos = 0
                         return urls
+
+                # Chequeo de sesión vencida A MITAD DE LA CORRIDA (solo
+                # para sitios que la necesitan, ver REQUIERE_LOGIN — no
+                # afecta a Dragon/Tauro). Solo tiene sentido si HABÍA una
+                # sesión cargada este run (self._cookies_compartidas no
+                # es None) que ahora dejó de servir — si todavía no se
+                # cargó ninguna (2026-09: Temple ya no la exige de
+                # entrada, ver _asegurar_cookies_temple), que no haya
+                # imágenes acá no significa nada sobre la sesión, es
+                # simplemente que no hacía falta intentarla todavía.
+                clases_body = (soup.body.get("class") or []) if soup.body else []
+                if (self.REQUIERE_LOGIN and self._cookies_compartidas is not None
+                        and "logged-in" not in clases_body):
+                    self._marcar_sesion_muerta()
+                    log.error("")
+                    log.error("  🔴🔴🔴  SESIÓN VENCIDA A MITAD DE LA CORRIDA  🔴🔴🔴")
+                    log.error(f"  [{self.nombre}] Volvé a loguearte a mano en el perfil "
+                             f"de Brave para que vuelva a funcionar.")
+                    log.error(f"  [{self.nombre}] Queda deshabilitado el resto de esta "
+                             f"corrida — se sigue con la siguiente fuente.")
+                    log.error("")
+                    raise SesionExpiradaError(
+                        "sesión vencida detectada a mitad de la corrida "
+                        "(sin 'logged-in' en la página del capítulo)")
 
                 # 1b. Imágenes directas
                 imgs = soup.select(
@@ -3802,6 +4256,22 @@ class MadaraScraper(ScraperBase):
                 except Exception:
                     pass
 
+            # Puente de sesión: si el navegador (Selenium) está logueado
+            # en el sitio — ej: Temple, sesión iniciada manualmente una
+            # vez en el perfil dedicado —, esa cookie pasa acá a self.
+            # session, que es quien de verdad baja los bytes de cada
+            # imagen más abajo en el flujo (ver _sincronizar_cookies_
+            # selenium para el detalle de por qué hace falta).
+            self._sincronizar_cookies_selenium(driver)
+
+            # Cartel de "¿Sos mayor de 18?" (manga con contenido +18) —
+            # si aparece y no se confirma, el screenshot de cualquier
+            # página termina siendo el cartel mismo, siempre igual (ver
+            # _confirmar_edad_si_aparece). Va ANTES de esperar a que el
+            # lector se estabilice para que esa espera cuente contenido
+            # real, no el modal tapando todo.
+            self._confirmar_edad_si_aparece(driver)
+
             # Esperar carga del lector — sondeo con estabilización, no
             # una espera fija ni un simple ">0" (ver historial: la
             # primera versión de este fix usaba WebDriverWait a secas
@@ -3814,17 +4284,38 @@ class MadaraScraper(ScraperBase):
             # ya usa TauroScraper._selenium_tauro: se corta apenas la
             # cantidad de imágenes deja de crecer durante 2 chequeos
             # seguidos, en vez de conformarse con que aparezca una sola.
+            #
+            # IMPORTANTE (2026-09): se agregó scroll activo en cada
+            # vuelta. Sin esto, un lector con carga perezosa por scroll
+            # (habitual en tiras de webtoon larguísimas, por rendimiento
+            # — cargar de una sola vez 16 imágenes de 10.000px sería
+            # pesadísimo) nunca llega a disparar la carga de las páginas
+            # de más abajo: el conteo se "estabiliza" solo con lo que
+            # entra en la pantalla inicial, y el capítulo se guarda
+            # incompleto SIN ningún error visible (a diferencia del
+            # camino del protector desencriptado, que trae la lista
+            # completa de una — este scroll es solo necesario acá, en
+            # el fallback por DOM). Confirmado como riesgo real:
+            # Martín vio en el Network de su propio navegador que la
+            # página 2 y 3 de un capítulo no cargaban hasta hacer scroll
+            # o refrescar. Re-scrollear al scrollHeight actual en cada
+            # vuelta (no una sola vez) porque ese alto sigue creciendo a
+            # medida que se revela contenido nuevo más abajo.
             _SELECTOR_LECTOR = (
                 "img.manga-page-img, .chapter-images img, .reading-content img, "
                 "img[src*=WP-manga], img[data-src*=WP-manga], "
                 "img[data-lazy-src*=WP-manga], img[data-original*=WP-manga]"
             )
-            MAX_ESPERA_SEG    = 15
+            MAX_ESPERA_SEG    = 25
             ESTABLE_REQUERIDO = 2
             prev_count = -1
             estable    = 0
             inicio     = time.time()
             while time.time() - inicio < MAX_ESPERA_SEG:
+                try:
+                    driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+                except Exception:
+                    pass
                 count = len(driver.find_elements(By.CSS_SELECTOR, _SELECTOR_LECTOR))
                 if count > 0 and count == prev_count:
                     estable += 1
@@ -3834,6 +4325,38 @@ class MadaraScraper(ScraperBase):
                     estable = 0
                 prev_count = count
                 time.sleep(0.5)
+
+            # Detectar el esquema de "página partida en 4 fragmentos base64"
+            # (plugin wp-manga-chapter-images-protection, visto por primera
+            # vez en Temple Scan 2026-08/09): si aparece, ni el selector de
+            # arriba ni el fallback genérico de abajo sirven de nada — todos
+            # los src son data: en vez de URLs http (así que el filtro
+            # "startswith http" los descarta a todos), y cada <img> es solo
+            # un pedazo que un CSS/JS ofuscado reacomoda en pantalla, no la
+            # página completa.
+            #
+            # Esto casi seguro NO debería pasar en la práctica: si llegamos
+            # hasta acá es porque el protector AES (_desencriptar_protector,
+            # paso 1a de obtener_imagenes) ya se intentó con requests y no
+            # encontró el protector o falló al desencriptar — algo cambió
+            # del lado del sitio y hay que mirarlo con evidencia real, no
+            # adivinar. Antes acá se sacaba un screenshot de cada página
+            # como reemplazo, pero la calidad salía mala (recorte de
+            # ventana, reescalado) — Martín prefiere que el capítulo quede
+            # sin descargar y bien marcado como fallo, antes que guardarlo
+            # con páginas que se ven mal. El método sigue disponible
+            # (_capturar_paginas_via_screenshot) por si hace falta invocarlo
+            # a mano para revisar un caso puntual.
+            paginas_partidas = driver.find_elements(By.CSS_SELECTOR, ".page-break")
+            if paginas_partidas and any(
+                p.find_elements(By.CSS_SELECTOR, ".theimage") for p in paginas_partidas
+            ):
+                log.warning(f"  [Selenium] Esquema de imágenes en partes detectado "
+                           f"({len(paginas_partidas)} página(s)) pero el protector AES "
+                           f"no se pudo desencriptar por requests — el sitio puede haber "
+                           f"cambiado algo. Capítulo sin descargar, revisar a mano "
+                           f"(HTML en debug_selenium.html si se llegó a volcar).")
+                return []
 
             page_src = driver.page_source
             urls     = []
@@ -3948,6 +4471,19 @@ class MadaraScraper(ScraperBase):
                                f"real con lector no estándar. "
                                f"HTML volcado en {debug_path} para revisar.")
 
+            # Red de seguridad final: comparar contra la cantidad de
+            # contenedores .page-break en el DOM (mismo chequeo que ya
+            # se usa para el protector desencriptado). Si el scroll de
+            # arriba por algún motivo no alcanzó a disparar la carga de
+            # todas las páginas, esto lo deja anotado en vez de que el
+            # capítulo se guarde incompleto sin ningún aviso.
+            n_pagebreak = len(driver.find_elements(By.CSS_SELECTOR, ".page-break"))
+            if n_pagebreak and n_pagebreak != len(urls):
+                log.warning(f"  [Selenium] El DOM tiene {n_pagebreak} contenedor(es) "
+                           f".page-break pero se extrajeron {len(urls)} imagen(es) — "
+                           f"no coincide, revisar el capítulo a mano (podría estar "
+                           f"incompleto por carga perezosa que no llegó a dispararse).")
+
             log.info(f"  [Selenium] {len(urls)} imágenes — {driver.current_url}")
             return self._ordenar_por_numero_archivo(urls)
 
@@ -4026,33 +4562,106 @@ class MadaraScraper(ScraperBase):
         # Otras imágenes por extensión
         return any(url_l.endswith(ext) for ext in [".jpg", ".jpeg", ".png", ".webp", ".gif"])
 
-    def _desencriptar_protector(self, data_str: str, page_html: str) -> list[str]:
+    @staticmethod
+    def _evp_bytes_to_key(passphrase: bytes, salt: bytes, key_len: int = 32, iv_len: int = 16):
         """
-        Intenta desencriptar el protector AES de Madara.
-        Si no puede (falta la clave), devuelve lista vacía.
+        Deriva key+iv al estilo OpenSSL EVP_BytesToKey (MD5, 1 vuelta)
+        — es lo que hace CryptoJS por debajo cuando se le pasa un
+        passphrase en texto plano (en vez de una key ya derivada) en
+        AES.decrypt(). Confirmado leyendo plugin.obf.js de Temple Scan
+        y probando contra un chapter_data real (2026-09).
+        """
+        d = d_i = b""
+        while len(d) < key_len + iv_len:
+            d_i = hashlib.md5(d_i + passphrase + salt).digest()
+            d += d_i
+        return d[:key_len], d[key_len:key_len + iv_len]
+
+    def _desencriptar_protector(self, protector_text: str, page_html: str) -> list[str]:
+        """
+        Desencripta el protector AES de Madara (plugin
+        wp-manga-chapter-images-protection, visto en Temple Scan desde
+        2026-08/09 — capítulos que exigen sesión iniciada y parten
+        cada página en 3-4 fragmentos base64 reacomodados por CSS/JS).
+
+        El passphrase es el nonce (`wpmangaprotectornonce`) TAL CUAL,
+        sin hashear — la key (32 bytes, AES-256) y el iv se derivan de
+        ese passphrase + el salt incluido en el propio JSON (campo
+        "s"), con EVP_BytesToKey. El campo "iv" del JSON NO se usa: en
+        el modo password-based de CryptoJS, key e iv se re-derivan
+        siempre desde el salt.
+
+        (La versión anterior de este método usaba key=md5(nonce)[:16]
+        —AES-128, ignorando el salt— y el "iv" del JSON directo. Fallaba
+        siempre en silencio por el padding roto, y el capítulo terminaba
+        cayendo a Selenium sin que se notara el motivo real.)
+
+        chapter_data y el nonce se extraen por regex del texto del
+        <script id="chapter-protector-data"> puntual (protector_text),
+        no de la página entera — antes se le pasaba ese texto completo
+        tal cual (`var chapter_data='{...}'; var chapter_image_gap='on';
+        ...`, código JS completo, NO JSON puro) directo a json.loads(),
+        lo que rompía siempre con "Expecting value: line 1 column 1" —
+        nunca llegaba a intentar la desencriptación real. Acotarlo a
+        este script puntual (en vez de buscar en toda la página, donde
+        podría haber otro bloque parecido en un widget de "capítulos
+        relacionados") es más seguro que antes.
+
+        page_html (la página completa) se usa aparte, solo para la
+        verificación cruzada de cantidad de páginas al final.
+
+        El resultado son las URLs de las páginas ORIGINALES sin recortar
+        — el corte en partes que se ve en el navegador lo hace el
+        plugin recién después, del lado del cliente; a nosotros no nos
+        afecta en absoluto.
         """
         try:
             from Crypto.Cipher import AES
-            from Crypto.Util.Padding import unpad
             import base64
 
-            # Extraer nonce del HTML
-            m_nonce = re.search(r"wpmangaprotectornonce\s*=\s*['\"]([^'\"]+)['\"]", page_html)
+            m_data = re.search(r"var\s+chapter_data\s*=\s*'(\{.*?\})'\s*;", protector_text, re.DOTALL)
+            if not m_data:
+                return []
+            m_nonce = re.search(r"wpmangaprotectornonce\s*=\s*['\"]([^'\"]+)['\"]", protector_text)
             if not m_nonce:
                 return []
             nonce = m_nonce.group(1)
 
-            # La clave es el nonce hasheado
-            key = hashlib.md5(nonce.encode()).hexdigest()[:16].encode()
+            data = json.loads(m_data.group(1))
+            ciphertext = base64.b64decode(data.get("ct", ""))
+            salt_hex   = data.get("s", "")
+            if not salt_hex:
+                return []  # formato sin salt — no es el esquema que sabemos resolver
+            salt = bytes.fromhex(salt_hex)
 
-            data = json.loads(data_str)
-            ct   = base64.b64decode(data.get("ct", ""))
-            iv   = bytes.fromhex(data.get("iv", ""))
+            key, iv   = self._evp_bytes_to_key(nonce.encode("utf-8"), salt)
+            plaintext = AES.new(key, AES.MODE_CBC, iv).decrypt(ciphertext)
+            pad_len   = plaintext[-1]
+            if not (1 <= pad_len <= 16):
+                return []
+            plaintext = plaintext[:-pad_len]
 
-            cipher     = AES.new(key, AES.MODE_CBC, iv)
-            decrypted  = unpad(cipher.decrypt(ct), AES.block_size)
-            urls       = json.loads(decrypted.decode("utf-8"))
-            return [u.strip() for u in urls if isinstance(u, str)]
+            parsed = json.loads(plaintext.decode("utf-8"))
+            if isinstance(parsed, str):
+                # chapter_data viene doblemente serializado: un JSON
+                # string que a su vez contiene el JSON del array.
+                parsed = json.loads(parsed)
+            if not isinstance(parsed, list):
+                return []
+            urls = [u.strip() for u in parsed if isinstance(u, str) and u.strip().startswith("http")]
+
+            # Red de seguridad (no bloquea, solo avisa): la cantidad de
+            # URLs debería coincidir con la cantidad de <div
+            # class="page-break"> del HTML. Si no coincide, podría haber
+            # páginas cargándose aparte para capítulos largos — no
+            # confirmado todavía, por eso solo se registra el aviso.
+            n_pagebreak = len(re.findall(r'class="page-break', page_html))
+            if n_pagebreak and n_pagebreak != len(urls):
+                log.warning(f"  [{self.nombre}] El HTML tiene {n_pagebreak} "
+                           f"page-break pero el protector trajo {len(urls)} URLs "
+                           f"— revisar el capítulo a mano")
+
+            return urls
 
         except ImportError:
             log.warning("  pycryptodome no instalado — saltando capítulo protegido")
@@ -4061,9 +4670,99 @@ class MadaraScraper(ScraperBase):
             log.warning(f"  Error desencriptando protector: {e}")
             return []
 
+
 # ══════════════════════════════════════════════════════════════════════
 # §9  TEMPLE SCAN
 # ══════════════════════════════════════════════════════════════════════
+
+# ── Reloguéo manual asistido cuando la sesión vence ─────────────────
+# Ver _asegurar_cookies_temple más abajo: cuando la sesión guardada en
+# BRAVE_PROFILE_DIR ya no es válida, además de avisar y deshabilitar
+# Temple el resto de la corrida (como ya hacía), se le pregunta al
+# usuario si quiere reloguearse ahora mismo. Estas dos funciones son
+# genéricas (no dependen de nada específico de Temple) para poder
+# reusarlas el día que otra fuente necesite login — hoy solo Temple
+# lo usa (ver REQUIERE_LOGIN).
+
+def _preguntar_reautenticar(nombre_fuente: str, timeout: int = 30) -> bool:
+    """
+    Pregunta en la terminal si se quiere reloguear a mano AHORA, sin
+    bloquear más de `timeout` segundos esperando una respuesta.
+
+    Devuelve False (= comportamiento de siempre, sin abrir nada) en
+    CUALQUIERA de estos casos, todos tratados exactamente igual:
+      - no hay una terminal interactiva real de por medio (p.ej.
+        cuando Node.js lanza este script con la entrada/salida
+        redirigida desde el panel de la app web — ver el comentario
+        de encoding en la cabecera del archivo; ahí no hay nadie del
+        otro lado que pueda escribir una respuesta, así que ni vale
+        la pena esperar los 30s)
+      - pasaron los `timeout` segundos sin respuesta
+      - la respuesta fue explícitamente "no"
+    Solo un "sí"/"s" explícito dentro del plazo devuelve True.
+    """
+    if not sys.stdin.isatty():
+        return False
+
+    respuesta: dict[str, str | None] = {"valor": None}
+
+    def _leer_linea():
+        try:
+            respuesta["valor"] = input().strip().lower()
+        except Exception:
+            respuesta["valor"] = ""
+
+    log.error(f"  [{nombre_fuente}] ¿Iniciar sesión ahora a mano? (s/N) — "
+             f"esperando {timeout}s, si no se sigue sin loguear...")
+    hilo = threading.Thread(target=_leer_linea, daemon=True)
+    hilo.start()
+    hilo.join(timeout)
+
+    if hilo.is_alive():
+        # El hilo sigue esperando el Enter — se lo deja morir solo (es
+        # daemon) y se sigue de largo como si hubiera dicho que no.
+        log.info(f"  [{nombre_fuente}] Sin respuesta en {timeout}s — se sigue sin reloguear.")
+        return False
+
+    quiere = respuesta["valor"] in ("s", "si", "sí", "y", "yes")
+    if not quiere:
+        log.info(f"  [{nombre_fuente}] Ok, se sigue sin reloguear.")
+    return quiere
+
+
+def _abrir_navegador_para_login(nombre_fuente: str, url: str) -> None:
+    """
+    Abre Brave apuntando al mismo perfil dedicado que usa Selenium
+    (BRAVE_PROFILE_DIR) — pero lanzado directo con subprocess, SIN
+    pasar por Selenium/webdriver. Así el login manual (y un eventual
+    captcha/2FA) no se topa con los flags de automation que delatan
+    "esto es un bot" en algunos sitios.
+
+    Al quedar guardada en ese mismo perfil, la sesión iniciada acá
+    queda lista para que _crear_driver_selenium la reconozca en la
+    PRÓXIMA corrida (esta corrida ya sigue sin loguear — ver
+    _asegurar_cookies_temple, que llama a esto ANTES de deshabilitar
+    la fuente, no en vez de).
+    """
+    ruta_brave = ScraperBase._detectar_ruta_brave()
+    if not ruta_brave:
+        log.error(f"  [{nombre_fuente}] No se encontró Brave instalado — no se puede "
+                 f"abrir el navegador automáticamente. Iniciá sesión a mano en el "
+                 f"perfil '{BRAVE_PROFILE_DIR}' con el navegador que uses.")
+        return
+    try:
+        subprocess.Popen(
+            [ruta_brave,
+             f"--user-data-dir={BRAVE_PROFILE_DIR}",
+             "--profile-directory=Default",
+             url],
+            close_fds=True,
+        )
+        log.info(f"  [{nombre_fuente}] Navegador abierto en {url} — iniciá sesión a "
+                f"mano y volvé a correr el scraper cuando termines.")
+    except Exception as e:
+        log.error(f"  [{nombre_fuente}] No se pudo abrir el navegador: {e}")
+
 
 class TempleScraper(MadaraScraper):
     """
@@ -4078,6 +4777,11 @@ class TempleScraper(MadaraScraper):
     SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlhdCI6MTYzMDYwODc1OSwiZXhwIjoxOTQ2MTg0NzU5fQ.9u3GGsP3t5HgBCqiV4bDEPL84xBbhPE5eXsV7x6EBfU"
     FALLBACK_URL = "https://aedexnox.akan01.com"
 
+    # Pisa el default de MadaraScraper (False) — sin esto, el chequeo de
+    # "sesión vencida a mitad de corrida" en obtener_imagenes NUNCA se
+    # activaría para Temple, quedaría heredando False en silencio.
+    REQUIERE_LOGIN = True
+
     def __init__(self):
         base = self._resolver_url()
         super().__init__(base)
@@ -4085,6 +4789,178 @@ class TempleScraper(MadaraScraper):
     @property
     def nombre(self) -> str:
         return "Temple Scan"
+
+    # Caché a nivel de CLASE (no de instancia): escanear_manga() crea una
+    # instancia nueva de TempleScraper por cada manga, así que un flag en
+    # self se reiniciaría en cada uno de los ~35 manga de la fuente —
+    # terminaría abriendo Selenium 35 veces por corrida en vez de 1.
+    # Estos dos viven mientras dure el proceso (una corrida completa del
+    # scraper), compartidos por todas las instancias.
+    _cookies_compartidas: list | None = None
+    _sesion_muerta: bool = False
+
+    def _marcar_sesion_muerta(self) -> None:
+        """
+        Implementa el hook de MadaraScraper (ver ese docstring): lo usa
+        el chequeo de "sesión vencida a mitad de la corrida" en
+        obtener_imagenes(). Antes esto era un no-op heredado sin
+        pisar — el aviso y el SesionExpiradaError salían igual (por
+        eso no se notaba en la práctica, el loop principal corta con
+        el 'break' apenas ve esa excepción), pero el flag de clase
+        nunca quedaba en True. Se pisa acá para que quede consistente
+        con _asegurar_cookies_temple(), que sí lo setea directo en sus
+        propios dos casos de sesión muerta.
+        """
+        TempleScraper._sesion_muerta = True
+
+    def obtener_capitulos(self, slug: str) -> list[dict]:
+        """
+        Se engancha acá (y no en obtener_imagenes) porque este es el
+        primer punto de la corrida por cada manga, y el llamador
+        (escanear_manga) ya lo espera dentro de un try/except simple —
+        no enterrado en la lógica de reintentos por capítulo.
+
+        2026-09: Temple dejó de exigir sesión para leer, así que esto
+        NO fuerza cargarla — si ya hay una cacheada de esta corrida
+        (porque _escanear_temple la cargó al detectar la racha de
+        mangas sin imágenes) la copia; si no hay ninguna todavía, sigue
+        de largo sin sesión (ver _asegurar_cookies_temple más abajo). Si
+        la sesión YA está confirmada vencida, corta acá antes de gastar
+        nada más — eso no cambió.
+        """
+        self._asegurar_cookies_temple()
+        return super().obtener_capitulos(slug)
+
+    def _asegurar_cookies_temple(self, forzar_carga: bool = False) -> None:
+        """
+        Carga la cookie de sesión (login) en self.session — una sola
+        vez por CORRIDA (no por manga, ver _cookies_compartidas arriba).
+
+        Con forzar_carga=False (el default, así la llama obtener_capitulos
+        para CADA manga): si ya hay cookies cacheadas de esta corrida,
+        las copia; si no hay nada cacheado todavía Y tampoco se pidió
+        forzar la carga, no hace nada — Temple ya no exige sesión para
+        leer (2026-09), así que el caso normal es seguir sin ella. Quien
+        decide CUÁNDO vale la pena pagar el costo de levantar Selenium
+        es _escanear_temple(), llamando con forzar_carga=True tras
+        detectar TEMPLE_UMBRAL_SIN_SESION mangas seguidos sin imágenes.
+
+        Si ya se cargaron cookies en esta corrida (cualquier manga ya
+        pasó por acá con forzar_carga=True), simplemente las copia a
+        self.session sin tocar el navegador de nuevo — pase lo que
+        pase con forzar_carga.
+
+        Si la sesión resulta estar vencida (o ya se sabía vencida de
+        antes en esta corrida), lo marca a nivel de clase
+        (_sesion_muerta) y lanza SesionExpiradaError — que el loop
+        principal atrapa para deshabilitar Temple el resto de la
+        corrida y seguir con la siguiente fuente, en vez de repetir el
+        mismo fallo en cada uno de los manga restantes.
+
+        Requiere que el perfil dedicado de Selenium (BRAVE_PROFILE_DIR)
+        ya tenga la sesión de Temple iniciada manualmente — esto NO
+        inicia sesión solo, solo hereda una que ya existe. Cuando esa
+        sesión vence, hay que repetir el login a mano en ese perfil
+        (con chance de hacerlo al toque vía _preguntar_reautenticar,
+        ver más abajo).
+        """
+        if TempleScraper._sesion_muerta:
+            raise SesionExpiradaError("sesión de Temple vencida (detectado antes en esta misma corrida)")
+
+        if TempleScraper._cookies_compartidas is not None:
+            for c in TempleScraper._cookies_compartidas:
+                self.session.cookies.set(c["name"], c["value"], domain=c.get("domain") or None)
+            return
+
+        if not forzar_carga:
+            # Todavía no hace falta — ni se probó a cargar sesión en
+            # esta corrida, ni nadie pidió forzarla ahora. Seguir sin
+            # cookies; es responsabilidad de _escanear_temple decidir
+            # cuándo pasar forzar_carga=True.
+            return
+
+        log.info(f"  [{self.nombre}] Cargando sesión iniciada (una vez por corrida)...")
+        driver, es_compartido = self._checkout_driver_selenium()
+        if not driver:
+            TempleScraper._sesion_muerta = True
+            log.error("")
+            log.error("  🔴🔴🔴  NO SE PUDO LEVANTAR SELENIUM PARA TEMPLE  🔴🔴🔴")
+            log.error(f"  [{self.nombre}] Sin esto no se puede cargar la sesión — "
+                     f"revisar Brave/chromedriver a mano (ver logs de arriba para el "
+                     f"motivo puntual).")
+            log.error(f"  [{self.nombre}] Temple queda deshabilitado el resto de esta "
+                     f"corrida — se sigue con la siguiente fuente.")
+            log.error("")
+            # Sin marcar _sesion_muerta acá, CADA uno de los manga
+            # restantes de Temple reintentaría levantar Selenium de
+            # nuevo y volvería a fallar igual — mejor cortar una sola
+            # vez con el mismo mecanismo que usa la sesión vencida.
+            raise SesionExpiradaError("no se pudo levantar Selenium para cargar la sesión")
+        sesion_muerta_detectada = False
+        try:
+            driver.get(self.base_url)
+            self._confirmar_edad_si_aparece(driver)
+
+            # Chequeo real de login: WordPress agrega la clase "logged-in"
+            # al <body> solo cuando hay una sesión válida — confirmado
+            # contra un HTML real ya logueado (2026-09). Es más confiable
+            # que asumir que "cargó sin 404" significa que estamos logueados.
+            #
+            # Importante: si ESTE chequeo falla (Selenium no pudo leer el
+            # <body> por lo que sea — nada que ver con la sesión), NO se
+            # trata como "no logueado" — sería un falso positivo que
+            # deshabilitaría Temple por un hiccup de Selenium, no por una
+            # sesión realmente vencida. En ese caso se sigue sin confirmar
+            # nada, y son los fallos reales por capítulo los que van a
+            # terminar avisando si hay un problema de verdad.
+            try:
+                clases_body = driver.find_element("tag name", "body").get_attribute("class") or ""
+                logueado = "logged-in" in clases_body.split()
+            except Exception as e:
+                log.debug(f"  [{self.nombre}] No se pudo leer la clase del <body> para "
+                         f"verificar login ({e}) — se sigue sin confirmar, no se asume "
+                         f"sesión vencida por esto solo.")
+                logueado = True  # no confirmado, pero tampoco se penaliza por un hiccup ajeno a la sesión
+
+            self._sincronizar_cookies_selenium(driver)
+            TempleScraper._cookies_compartidas = driver.get_cookies()
+
+            if not logueado:
+                TempleScraper._sesion_muerta = True
+                sesion_muerta_detectada = True  # ver el finally: fuerza murio=True
+                log.error("")
+                log.error("  🔴🔴🔴  SESIÓN DE TEMPLE VENCIDA  🔴🔴🔴")
+                log.error(f"  [{self.nombre}] El perfil de Brave (BRAVE_PROFILE_DIR) ya no "
+                         f"tiene una sesión válida iniciada en Temple.")
+                log.error(f"  [{self.nombre}] Volvé a loguearte a mano en ese perfil para "
+                         f"que las próximas corridas funcionen de nuevo.")
+                log.error(f"  [{self.nombre}] Temple queda deshabilitado el resto de esta "
+                         f"corrida — se sigue con la siguiente fuente.")
+                log.error("")
+
+                # Chance de reloguearse a mano antes de seguir. Pase lo
+                # que pase acá (sí, no, o sin respuesta a tiempo), Temple
+                # igual queda deshabilitado el resto de ESTA corrida —
+                # abrir el navegador solo ayuda a que la PRÓXIMA funcione.
+                if _preguntar_reautenticar(self.nombre):
+                    _abrir_navegador_para_login(self.nombre, self.base_url)
+
+                raise SesionExpiradaError("el <body> no tiene la clase 'logged-in' tras cargar la sesión")
+
+            log.info(f"  [{self.nombre}] Sesión cargada y verificada")
+        except SesionExpiradaError:
+            raise
+        except Exception as e:
+            log.warning(f"  [{self.nombre}] No se pudo cargar la sesión: {e}")
+        finally:
+            # murio=True cuando la sesión está vencida: además de liberar
+            # el lock, esto cierra y descarta el driver del caché (ver
+            # _devolver_driver_selenium) — sin esto, esta excepción sale
+            # de escanear_manga ANTES de llegar al finally que normalmente
+            # cierra el driver compartido (el de _descargar_caps_nuevos,
+            # más abajo en el flujo), y quedaría un Brave huérfano
+            # corriendo de más hasta la limpieza de la próxima corrida.
+            self._devolver_driver_selenium(driver, es_compartido, murio=sesion_muerta_detectada)
 
     def _resolver_url(self) -> str:
         """Obtiene la URL actual de Temple Scan desde Supabase."""
@@ -4422,7 +5298,6 @@ class ManhwasWebScraper(ScraperBase):
     """
 
     BACKEND = "https://manhwawebbackend-production.up.railway.app"
-    IMG_CDN  = "https://img2mw.xyz"  # fallback si no viene "base" en la API
 
     def __init__(self):
         super().__init__()
@@ -4440,6 +5315,25 @@ class ManhwasWebScraper(ScraperBase):
         """
         Llama a /manhwa/see/{slug} y extrae la lista de capítulos.
         El slug es el _id completo: ej "gata-rebelde_1780473612629"
+
+        El campo "link" de nivel superior de cada capítulo es un caché
+        de la última versión subida — puede venir vacío por un glitch
+        de sync del backend de ManhwasWEB aunque el capítulo exista y
+        tenga imágenes completas (confirmado 13/09/2026 en los caps
+        83-87 de "El Villano Rubio De La Novela De La Protagonista
+        Femenina Quiere Ser Feliz": "link": "" pero GET
+        /chapters/see/{id} con el id sacado de "versions" devolvía 200
+        con imágenes). El dato real y vigente siempre está en
+        versions[] — se usa como fallback cuando el link de nivel
+        superior no sirve, tomando la versión con "create" más alto
+        (no asumimos que vengan en orden cronológico).
+
+        Si ni el link de nivel superior ni versions[] dan un cap_id
+        utilizable, el capítulo se omite de este escaneo (no se
+        intenta con una URL vacía, que solo generaría 404 y gastaría
+        3 reintentos por las puras) — como obtener_capitulos() se
+        vuelve a llamar entero en cada ciclo, se reintenta solo, sin
+        necesitar capitulos_con_error.
         """
         url = f"{self.BACKEND}/manhwa/see/{slug}"
         r   = hacer_get(url, self.session)
@@ -4463,10 +5357,24 @@ class ManhwasWebScraper(ScraperBase):
 
         caps = []
         for c in caps_raw:
-            num     = numero_a_float(c.get("chapter", 0))
-            link    = c.get("link", "")
+            num  = numero_a_float(c.get("chapter", 0))
+            link = c.get("link", "") or ""
+
+            if "/leer/" not in link:
+                # Fallback: buscar el link en la versión más reciente.
+                versiones = c.get("versions", []) or []
+                if versiones:
+                    ultima = max(versiones, key=lambda v: v.get("create", 0))
+                    link = ultima.get("link", "") or ""
+
             # Extraer el cap_id del link: manhwaweb.com/leer/{cap_id}
-            cap_id  = link.split("/leer/")[1] if "/leer/" in link else ""
+            cap_id = link.split("/leer/")[1] if "/leer/" in link else ""
+            if not cap_id:
+                log.warning(f"  [ManhwasWEB] Cap {num}: sin link utilizable "
+                            f"(ni en el listado ni en versions) — se omite "
+                            f"este escaneo, se reintenta en el próximo")
+                continue
+
             # Las imágenes del capítulo pueden venir en c["img"] (lista)
             # o construirse desde el CDN — guardamos ambos
             imgs_api = c.get("img", [])
@@ -4532,15 +5440,22 @@ class ManhwasWebScraper(ScraperBase):
 class NexusScraper(ScraperBase):
     """
     API JSON propia (Next.js). Las imágenes pueden venir "scrambled":
-    la API entrega junto a la URL un objeto opcional 'sc' = {c, r, s}
-    (columnas, filas, semilla). La imagen descargada está cortada en
-    una grilla c×r y las celdas reordenadas con un shuffle determinista
-    (Fisher-Yates con PRNG mulberry32, semilla = s). Acá se reconstruye
-    la imagen original con Pillow antes de guardarla a disco.
+    la API entrega junto a la URL un objeto opcional 'sc' = {c, r, s, v}
+    (columnas, filas, semilla, versión del algoritmo). La imagen
+    descargada está cortada en una grilla c×r y las celdas reordenadas
+    con un shuffle determinista (Fisher-Yates con PRNG mulberry32,
+    semilla = s). Acá se reconstruye la imagen original con Pillow
+    antes de guardarla a disco.
 
-    Algoritmo sacado de la extensión oficial de Tachiyomi/Mihon para
-    este sitio (decompilado del .dex) — es exactamente lo mismo que
-    hace el lector web, no es un bypass de nada nuevo.
+    Algoritmo base (permutación) sacado originalmente de la extensión
+    oficial de Tachiyomi/Mihon para este sitio (decompilado del .dex).
+    Con v=2 (confirmado el 11/09/2026 leyendo directo el bundle JS del
+    sitio: nexusscanlation.com/_next/static/chunks/0e34f4fddf7269ad.js),
+    cada tile ADEMÁS puede venir espejado — un valor extra por tile
+    (0-3, bit0=flip horizontal, bit1=flip vertical), generado
+    continuando la MISMA instancia del PRNG justo después del
+    Fisher-Yates (nunca una instancia nueva). Chapters con v=1 o sin
+    'v' se tratan como antes, sin flips.
     """
 
     BASE_URL = "https://nexusscanlation.com"
@@ -4629,14 +5544,47 @@ class NexusScraper(ScraperBase):
                 continue
             sc = p.get("sc")
             if sc and all(k in sc for k in ("c", "r", "s")):
-                img_url = f"{img_url}#scramble={sc['c']},{sc['r']},{sc['s']}"
+                v = sc.get("v", 1)
+                img_url = f"{img_url}#scramble={sc['c']},{sc['r']},{sc['s']},{v}"
             urls.append(img_url)
         return urls
 
     # ── Descramble ──────────────────────────────────────────────────
+    #
+    # Algoritmo confirmado leyendo el bundle JS real del sitio
+    # (0e34f4fddf7269ad.js, 11/09/2026) — no es una reconstrucción a
+    # ciegas. La función que arma el canvas hace, en esencia:
+    #
+    #   for t in range(total):                    # t = posición en la
+    #                                              # imagen CRUDA (la
+    #                                              # que se descarga)
+    #       destino = perm[t]                      # dónde va en la
+    #                                              # imagen final
+    #       dibujar tile_cruda[t]  →  canvas[destino]
+    #
+    # O sea: canvas[perm[t]] = cruda[t]. Con `v >= 2` (confirmado en
+    # los capítulos que fallaban: todas las páginas traen "v": 2), el
+    # sitio además genera un número extra por tile — CONTINUANDO la
+    # misma secuencia del generador que ya se usó para el shuffle,
+    # nunca una instancia nueva — que indica si ese tile hay que
+    # voltearlo: bit 0 = espejado horizontal, bit 1 = espejado
+    # vertical. El código viejo no leía `v` ni aplicaba ningún volteo,
+    # por eso el resultado quedaba con ~3 de cada 4 tiles mal
+    # orientados (solo flip=0 queda intacto) aunque la posición fuera
+    # correcta — de ahí el aspecto de "rompecabezas" mezclado con
+    # contenido invertido/espejado.
 
     @staticmethod
-    def _mulberry32_shuffle(n: int, seed: int) -> list[int]:
+    def _mulberry32_perm_flips(n: int, seed: int, con_flips: bool) -> tuple[list[int], list[int] | None]:
+        """
+        Genera el orden de reconstrucción (`perm`) y, si con_flips=True,
+        el array de volteos (`flips`) — ambos de la MISMA instancia del
+        generador mulberry32, en el mismo orden que el sitio: primero
+        las n-1 llamadas del Fisher-Yates, y recién después (sin
+        reiniciar el seed) las n llamadas para los volteos. Invertir
+        ese orden o usar generadores separados da un resultado
+        completamente distinto — el estado del generador es acumulativo.
+        """
         MASK = 0xFFFFFFFF
         state = seed & MASK
 
@@ -4652,9 +5600,14 @@ class NexusScraper(ScraperBase):
         for i in range(n - 1, 0, -1):
             j = int(rng() * (i + 1))
             perm[i], perm[j] = perm[j], perm[i]
-        return perm
 
-    def _descramble(self, datos: bytes, cols: int, rows: int, seed: int) -> bytes:
+        if not con_flips:
+            return perm, None
+
+        flips = [int(4 * rng()) for _ in range(n)]
+        return perm, flips
+
+    def _descramble(self, datos: bytes, cols: int, rows: int, seed: int, v: int = 1) -> bytes:
         from PIL import Image
         import io
 
@@ -4665,27 +5618,24 @@ class NexusScraper(ScraperBase):
         if tile_w == 0 or tile_h == 0 or total == 0:
             return datos
 
-        perm = self._mulberry32_shuffle(total, seed)
-        # IMPORTANTE: el sitio arma el rompecabezas aplicando la
-        # permutación hacia adelante (tile original i → posición
-        # perm[i] en la imagen mezclada que se sirve). Para deshacerlo
-        # hay que usar la INVERSA de esa permutación, no la
-        # permutación directa — confirmado empíricamente reconstruyendo
-        # una imagen real con ambas variantes y midiendo continuidad de
-        # bordes entre celdas vecinas (la inversa da una imagen nítida
-        # y coherente; la directa da el mismo tipo de "rompecabezas"
-        # cortado que se ve en capítulos mal descrambleados).
-        inv_perm = [0] * total
-        for i, p in enumerate(perm):
-            inv_perm[p] = i
+        perm, flips = self._mulberry32_perm_flips(total, seed, con_flips=(v >= 2))
 
         salida = Image.new("RGB", (tile_w * cols, tile_h * rows))
 
-        for i in range(total):
-            dest_x, dest_y = (i % cols) * tile_w, (i // cols) * tile_h
-            src_idx = inv_perm[i]
-            src_x, src_y = (src_idx % cols) * tile_w, (src_idx // cols) * tile_h
+        # Mismo recorrido que el sitio: se itera la posición EN LA
+        # IMAGEN CRUDA (t) y se calcula a dónde va en la reconstruida
+        # (perm[t]) — no hace falta invertir la permutación, alcanza
+        # con replicar el mismo sentido que usa el canvas real.
+        for t in range(total):
+            dest_idx = perm[t]
+            src_x, src_y = (t % cols) * tile_w, (t // cols) * tile_h
+            dest_x, dest_y = (dest_idx % cols) * tile_w, (dest_idx // cols) * tile_h
             celda = img.crop((src_x, src_y, src_x + tile_w, src_y + tile_h))
+            if flips is not None and flips[t]:
+                if flips[t] & 1:
+                    celda = celda.transpose(Image.FLIP_LEFT_RIGHT)
+                if flips[t] & 2:
+                    celda = celda.transpose(Image.FLIP_TOP_BOTTOM)
             salida.paste(celda, (dest_x, dest_y))
 
         buf = io.BytesIO()
@@ -4697,9 +5647,10 @@ class NexusScraper(ScraperBase):
             return datos
         frag = img_url.split("#scramble=", 1)[1]
         try:
-            c_str, r_str, s_str = frag.split(",")
-            cols, rows, seed = int(c_str), int(r_str), int(s_str)
-            return self._descramble(datos, cols, rows, seed)
+            partes = frag.split(",")
+            cols, rows, seed = int(partes[0]), int(partes[1]), int(partes[2])
+            v = int(partes[3]) if len(partes) > 3 else 1
+            return self._descramble(datos, cols, rows, seed, v)
         except Exception as e:
             log.warning(f"  [{self.nombre}] Error descrambling ({frag}): {e}")
             return datos
@@ -4998,178 +5949,105 @@ class LeerCapituloScraper(ScraperBase):
     """
     LeerCapitulo (leercapitulo.co).
 
-    Plataforma propia (NO Madara/WordPress — sin rastro de wp-manga en
-    el HTML). Lista de capítulos: HTML directo, sin AJAX. Imágenes: el
-    contenido real viaja en un blob ofuscado (#array_data, ~62 símbolos
-    de charset, N segmentos = N páginas del capítulo) que se decodifica
-    client-side por JS pesadamente ofuscado (usa el Deobfuscator de
-    "synchrony", visto en el APK de Mihon/Tachiyomi de este sitio). En
-    vez de reimplementar ese algoritmo, se deja que un navegador real
-    (Selenium) ejecute el JS y se lee el resultado ya renderizado en
-    el DOM (`.comic_wraCon img`) — igual de robusto y mucho menos
-    frágil que reversear un cifrado que puede cambiar sin aviso.
+    Tuvo Cloudflare desde sept. 2026 (exigía lanzar Brave directo, sin
+    chromedriver, para pasar el desafío) hasta que el sitio lo sacó por
+    su cuenta — confirmado el 2026-09-23: requests plano ya devuelve la
+    página real (sin ninguna marca de desafío) probado con requests
+    puro, con User-Agent de navegador, y con curl_cffi impersonate=chrome
+    — los tres casos dieron 200 con la lista de capítulos real. Si
+    Cloudflare volviera a aparecer, el historial de git de este archivo
+    tiene el workaround completo (Brave + Selenium + perfil dedicado)
+    ya armado y probado — no hace falta reinventarlo de cero.
+
+    Plataforma propia (NO Madara/WordPress). Lista de capítulos: HTML
+    directo (`#chapterList a.lc-chapter-row`, número en `span.n`), sin
+    AJAX. Imágenes: vienen directas en el HTML inicial como `data-src`
+    dentro de `<main id="lcPages">`, sin blob ofuscado ni JS de por medio
+    — ni Selenium ni navegador hacen falta para nada, todo es requests
+    + BeautifulSoup como el resto de las fuentes simples.
 
     slug: se guarda el path completo tal cual aparece en la URL,
-    "{id}/{slug-largo}" (ej: "7mbadjh023/pensaste-que-podrias-..."),
-    igual que Olympus combina ID + slug. No hace falta separarlos en
-    dos campos — se usa directo para armar tanto la URL del manga
-    como la de cada capítulo.
+    "{id}/{slug-largo}" (ej: "otm2fas7/atm-ojisan-isekai-de-moteki-ga-tomaranai"),
+    igual que Olympus combina ID + slug.
     """
 
     BASE_URL = "https://www.leercapitulo.co"
-
-    def __init__(self):
-        super().__init__()
-        self.session.headers.update({"Referer": self.BASE_URL + "/"})
 
     @property
     def nombre(self) -> str:
         return "LeerCapitulo"
 
+    # ── Capítulos ───────────────────────────────────────────────────
     def obtener_capitulos(self, slug: str) -> list[dict]:
-        """
-        Parsea la lista de capítulos directo del HTML de la página del
-        manga — confirmado que viene completa ahí (selector
-        `.chapter-list a.xanh`), sin necesidad de AJAX.
-        """
-        url = f"{self.BASE_URL}/manga/{slug}/"
-        r = hacer_get(url, self.session)
+        r = hacer_get(f"{self.BASE_URL}/manga/{slug}/", self.session)
         if not r:
-            raise SitioRotoError(
-                f"No se pudo obtener la página del manga '{slug}' en "
-                f"LeerCapitulo — el manga pudo haber sido removido o "
-                f"la URL/slug guardado en seguimiento.json cambió"
-            )
+            raise SitioRotoError(f"No se pudo cargar la página de '{slug}'")
 
-        soup = BeautifulSoup(r.text, "html.parser")
-        enlaces = soup.select(".chapter-list a.xanh")
-        if not enlaces:
+        caps = self._parsear_capitulos(r.text, slug)
+        if not caps:
             raise SitioRotoError(
-                f"La página de '{slug}' respondió 200 pero no se encontró "
-                f"NINGÚN capítulo con el selector '.chapter-list a.xanh' — "
-                f"posible cambio de estructura en el sitio"
+                f"La página de '{slug}' respondió pero no se encontró NINGÚN "
+                f"capítulo con el selector '#chapterList a.lc-chapter-row' — "
+                f"posible cambio de estructura en el sitio, o el manga fue removido"
             )
+        return caps
 
+    def _parsear_capitulos(self, html: str, slug: str) -> list[dict]:
+        """Extrae la lista de capítulos del HTML (selector `#chapterList a.lc-chapter-row`,
+        número en `span.n`). [] si no hay."""
+        soup = BeautifulSoup(html, "html.parser")
         caps = []
-        for a in enlaces:
+        for a in soup.select("#chapterList a.lc-chapter-row"):
             href = (a.get("href") or "").strip()
             if not href:
                 continue
-            texto = a.get_text(" ", strip=True) or a.get("title", "")
+            span_n = a.select_one("span.n")
+            texto = span_n.get_text(strip=True) if span_n else a.get_text(" ", strip=True)
             m = re.search(r"(\d+(?:\.\d+)?)", texto)
             if not m:
                 continue
-            num = float(m.group(1))
             caps.append({
-                "numero": num,
+                "numero": float(m.group(1)),
                 "url":    href if href.startswith("http") else f"{self.BASE_URL}{href}",
                 "titulo": texto,
                 "slug":   slug,
             })
-
         caps.sort(key=lambda x: x["numero"])
         return caps
 
+    # ── Imágenes ────────────────────────────────────────────────────
     def obtener_imagenes(self, cap_url: str, slug: str, numero) -> list[str]:
-        """
-        Las imágenes SIEMPRE están detrás del JS ofuscado (#array_data
-        nunca aparece resuelto en el HTML crudo) — no tiene sentido
-        intentar primero con requests como en Madara, se va directo a
-        Selenium.
-
-        El sitio tiene dos modos de lectura (dropdown `.loadImgType`):
-        "Uno por uno" (default — solo renderiza la página actual en
-        .comic_wraCon, el resto espera que el usuario haga clic en
-        "Próximo") y "Todo en uno" (renderiza TODAS las páginas de
-        una). Sin forzar el segundo modo, solo se ve 1 imagen por
-        capítulo sea cual sea su cantidad real de páginas.
-        """
-        from selenium.webdriver.common.by import By
-        from selenium.webdriver.support.ui import WebDriverWait, Select
-
-        driver = self._crear_driver_selenium()
-        if not driver:
+        r = hacer_get(cap_url, self.session)
+        if not r:
+            log.error(f"  [{self.nombre}] No se pudo cargar el cap {numero}")
             return []
 
-        try:
-            driver.get(cap_url)
+        soup = BeautifulSoup(r.text, "html.parser")
+        urls, vistos = [], set()
+        for img in soup.select("#lcPages img"):
+            for attr in ("data-src", "src", "data-lazy-src"):
+                src = (img.get(attr) or "").strip()
+                if src and src not in vistos and src.startswith("http"):
+                    urls.append(src)
+                    vistos.add(src)
 
-            # ── Forzar modo "Todo en uno" ──────────────────────────
-            # Sin esto el reader queda en modo paginado y solo se ve
-            # la página 1 del capítulo.
-            try:
-                WebDriverWait(driver, 10).until(
-                    lambda d: d.find_elements(By.CSS_SELECTOR, "select.loadImgType")
-                )
-                select_el = driver.find_element(By.CSS_SELECTOR, "select.loadImgType")
-                Select(select_el).select_by_value("1")
-                log.info("  [LeerCapitulo] Modo 'Todo en uno' activado")
-            except Exception as e:
-                log.warning(f"  [LeerCapitulo] No se pudo forzar modo 'Todo en "
-                           f"uno' (¿cambió el selector?): {e} — puede que solo "
-                           f"se recupere 1 página")
-
-            # ── Esperar a que .comic_wraCon termine de llenarse ────
-            # No sabemos de antemano cuántas páginas tiene el capítulo,
-            # así que se sondea la cantidad de <img> cada 1s y se corta
-            # cuando se mantiene estable 2 veces seguidas (o al llegar
-            # al tope de espera).
-            MAX_ESPERA_SEG    = 25
-            ESTABLE_REQUERIDO = 2
-            prev_count = -1
-            estable    = 0
-            inicio     = time.time()
-            while time.time() - inicio < MAX_ESPERA_SEG:
-                count = len(driver.find_elements(By.CSS_SELECTOR, ".comic_wraCon img"))
-                if count > 0 and count == prev_count:
-                    estable += 1
-                    if estable >= ESTABLE_REQUERIDO:
-                        break
-                else:
-                    estable = 0
-                prev_count = count
-                time.sleep(1)
-
-            urls   = []
-            vistos = set()
-            for img in driver.find_elements(By.CSS_SELECTOR, ".comic_wraCon img"):
-                for attr in ["src", "data-src", "data-lazy-src"]:
-                    src = (img.get_attribute(attr) or "").strip()
-                    if src and src not in vistos and src.startswith("http"):
+        if not urls:
+            # Fallback genérico, por si #lcPages cambia de nombre/clase.
+            for img in soup.select("img"):
+                for attr in ("data-src", "src", "data-lazy-src"):
+                    src = (img.get(attr) or "").strip()
+                    if (src and src not in vistos and src.startswith("http")
+                            and any(src.lower().split("?")[0].endswith(ext)
+                                    for ext in (".jpg", ".jpeg", ".png", ".webp", ".gif"))):
                         urls.append(src)
                         vistos.add(src)
+            if urls:
+                log.warning(f"  [{self.nombre}] {len(urls)} imagen(es) vía fallback genérico "
+                           f"(#lcPages vacío) en cap {numero}")
+            else:
+                log.warning(f"  [{self.nombre}] Sin imágenes en cap {numero} — ¿cambió el sitio?")
 
-            if not urls:
-                # Fallback genérico + volcado de debug, igual que Madara,
-                # por si .comic_wraCon cambia de nombre/clase en el sitio.
-                for img in driver.find_elements(By.CSS_SELECTOR, "img"):
-                    for attr in ["src", "data-src", "data-lazy-src"]:
-                        src = (img.get_attribute(attr) or "").strip()
-                        if (src and src not in vistos and src.startswith("http")
-                                and any(src.lower().split("?")[0].endswith(ext)
-                                        for ext in [".jpg", ".jpeg", ".png", ".webp", ".gif"])):
-                            urls.append(src)
-                            vistos.add(src)
-                debug_path = DEBUG_SELENIUM_PATH
-                debug_path.write_text(driver.page_source, encoding="utf-8")
-                if urls:
-                    log.warning(f"  [LeerCapitulo] {len(urls)} imagen(es) vía fallback "
-                               f"genérico (.comic_wraCon vacío) — HTML volcado en "
-                               f"{debug_path} para revisar.")
-                else:
-                    log.warning(f"  [LeerCapitulo] Sin imágenes. HTML en {debug_path}")
-
-            log.info(f"  [LeerCapitulo] {len(urls)} imágenes — {driver.current_url}")
-            return urls
-
-        except Exception as e:
-            log.error(f"  [LeerCapitulo] Error: {e}")
-            return []
-        finally:
-            try:
-                driver.quit()
-            except Exception:
-                pass
+        return urls
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -5706,6 +6584,17 @@ def _descargar_caps_nuevos(caps_nuevos: list[dict], manga_cfg: dict,
             pausas_antes = scraper.detector_bloqueo.veces_pausado
             ok, colgado, motivo_fallo = _descargar_con_timeout(scraper, cap, carpeta_destino, restante)
             pausas_nuevas = scraper.detector_bloqueo.veces_pausado - pausas_antes
+        except SesionExpiradaError:
+            # Igual que en escanear_manga: no se atrapa acá, tiene que
+            # llegar hasta el loop principal para deshabilitar el resto
+            # de la fuente. Este es el caso de sesión que vence A MITAD
+            # de la corrida (ya se venía descargando bien) — sin este
+            # re-raise quedaría tratado como un fallo suelto de ESTE
+            # capítulo puntual, y el aviso grande de "sesión vencida"
+            # nunca se vería.
+            if upgrade_de is not None:
+                shutil.rmtree(carpeta_destino, ignore_errors=True)
+            raise
         except Exception as e:
             log.error(f"  Error inesperado descargando {nombrecap}: {e}")
             marcar_capitulo_con_error(manga_cfg, num)
@@ -5966,10 +6855,19 @@ def escanear_olympus(mangas_olympus: list[dict], carpeta_base: Path,
     return total
 
 
-def escanear_manga(manga_cfg: dict, carpeta_base: Path, reporte: "ReporteEscaneo" = None) -> int:
+def escanear_manga(manga_cfg: dict, carpeta_base: Path,
+                    reporte: "ReporteEscaneo" = None) -> tuple[int, bool]:
     """
     Escanea un manga (no-Olympus) y descarga capítulos nuevos.
-    Retorna la cantidad de capítulos nuevos descargados.
+    Retorna (cantidad_descargada, hubo_capitulos_nuevos):
+      - hubo_capitulos_nuevos=False: no había nada nuevo para este
+        manga (el caso normal, "al día"), o ni siquiera se pudo listar
+        el manga (sitio roto / error de otro tipo) — ninguno de los
+        dos casos dice nada sobre si hace falta sesión en ningún lado.
+      - hubo_capitulos_nuevos=True: SÍ había capítulos nuevos que
+        intentar. cantidad_descargada puede ser 0 si todos fallaron —
+        eso es justo la señal que usa _escanear_temple() para decidir
+        si conviene cargar sesión.
 
     Si la carpeta del manga no tiene ningún capítulo real en disco
     (se borró manualmente, o nunca se descargó), se ignora el valor
@@ -6008,7 +6906,7 @@ def escanear_manga(manga_cfg: dict, carpeta_base: Path, reporte: "ReporteEscaneo
     if not scraper:
         if reporte:
             reporte.error(nombre, fuente, "No se pudo crear el scraper para esta fuente")
-        return 0
+        return 0, False
 
     try:
         # tmo es la única fuente que necesita datos de manga_cfg ANTES
@@ -6029,24 +6927,31 @@ def escanear_manga(manga_cfg: dict, carpeta_base: Path, reporte: "ReporteEscaneo
         log.error(f"  🔧 POSIBLE SITIO ROTO en {nombre} [{fuente}]: {e}")
         if reporte:
             reporte.error(nombre, fuente, f"🔧 SITIO ROTO (revisar selectores): {e}")
-        return 0
+        return 0, False
+    except SesionExpiradaError:
+        # NO se atrapa acá — tiene que llegar hasta el loop principal
+        # (for manga_cfg in lista) para deshabilitar el resto de la
+        # fuente y pasar a la siguiente, en vez de tratarse como un
+        # fallo más de ESTE manga puntual (que repetiría el mismo
+        # aviso, uno por uno, en cada uno de los manga restantes).
+        raise
     except Exception as e:
         log.error(f"  Error obteniendo capítulos de {nombre}: {type(e).__name__}: {e}")
         if reporte:
             reporte.error(nombre, fuente, f"Error obteniendo capítulos ({type(e).__name__}): {e}")
-        return 0
+        return 0, False
 
     if not caps:
         log.info(f"  Sin capítulos disponibles para {nombre}")
         if reporte:
             reporte.advertencia(nombre, fuente, "No se encontraron capítulos disponibles")
-        return 0
+        return 0, False
 
     # Cap 0 suele ser un placeholder de "fecha de lanzamiento" sin
     # contenido real del manga — se ignora siempre, en cualquier sitio.
     caps = [c for c in caps if c["numero"] != 0]
     if not caps:
-        return 0
+        return 0, False
 
     # Asegurar que cada cap lleva la fuente para los filtros adaptativos,
     # y su prioridad efectiva (manual si se forzó, automática según el
@@ -6109,20 +7014,109 @@ def escanear_manga(manga_cfg: dict, carpeta_base: Path, reporte: "ReporteEscaneo
 
     if not nuevos:
         log.info(f"  ✓ {nombre} al día (hasta cap {caps[-1]['numero']})")
-        return 0
+        return 0, False
 
     if ultimo == 0 and ultimo_guardado > 0:
         log.info(f"  → Descarga completa para {nombre}: {len(nuevos)} capítulo(s)")
     else:
         log.info(f"  → {len(nuevos)} capítulo(s) nuevo(s) para {nombre}")
     try:
-        return _descargar_caps_nuevos(nuevos, manga_cfg, carpeta_manga, scraper, reporte)
+        return _descargar_caps_nuevos(nuevos, manga_cfg, carpeta_manga, scraper, reporte), True
     finally:
         # Cierra el navegador reutilizado (si se abrió uno para este
         # manga) — se abre a demanda en el primer capítulo que lo
         # necesite y se reutiliza para todos los siguientes; acá se
         # cierra una sola vez al terminar, en vez de por capítulo.
         scraper.cerrar_driver_selenium()
+
+
+def _escanear_temple(lista: list[dict], carpeta_base: Path,
+                      reporte: "ReporteEscaneo", data: dict) -> int:
+    """
+    Reemplaza el paso genérico de ciclo_escaneo() para la fuente
+    'temple' (mismo patrón que ya usa Olympus con escanear_olympus).
+
+    2026-09: Temple dejó de exigir sesión iniciada para leer, así que
+    por default no se carga ninguna — se prueba cada manga tal cual
+    (ver TempleScraper._asegurar_cookies_temple, forzar_carga=False).
+    Se lleva una racha de mangas SEGUIDOS (sin que se intercale ninguno
+    exitoso) que tuvieron capítulos nuevos pero terminaron en 0
+    imágenes descargadas — un manga sin nada nuevo ("al día") no cuenta
+    ni corta la racha, no dice nada sobre si hace falta sesión.
+
+    Al llegar a TEMPLE_UMBRAL_SIN_SESION seguidos, se interpreta como
+    señal de que el sitio volvió a pedir login: se carga la sesión
+    (forzar_carga=True — mismo mecanismo de siempre, con su aviso y su
+    chance de reloguearse a mano si hace falta) y se reintentan esos
+    mismos mangas de la racha antes de seguir con el resto de la lista.
+    Si la sesión no se puede cargar, se deshabilita Temple el resto de
+    la corrida — igual que si hubiera pasado al arrancar.
+    """
+    n_fuente = 0
+    racha: list[dict] = []
+
+    def _deshabilitar_resto(desde_idx: int, motivo: Exception, en_reintento: bool = False) -> None:
+        etiqueta = "reintento con sesión" if en_reintento else "escaneo sin sesión"
+        log.error(f"  │  🔴 temple deshabilitado el resto de esta corrida ({etiqueta}): {motivo}")
+        reporte.error("Temple (general)", "temple",
+            f"🔴 Sesión vencida — temple deshabilitado el resto de esta corrida: {motivo}")
+        restantes = lista[desde_idx:]
+        if restantes:
+            nombres_restantes = [m.get('nombre_carpeta', '?') for m in restantes]
+            log.error(f"  │  ⏭  {len(restantes)} manga(s) de temple sin intentar "
+                     f"esta corrida: {', '.join(nombres_restantes)}")
+            for m in restantes:
+                reporte.error(m.get('nombre_carpeta', '?'), "temple",
+                    "⏭ No se intentó esta corrida — temple deshabilitado por sesión vencida")
+
+    for idx, manga_cfg in enumerate(lista):
+        CONTROL.avanzar_manga(manga_cfg.get('nombre_carpeta', '?'))
+        CONTROL.chequear_y_lanzar()
+        try:
+            n, hubo_nuevos = escanear_manga(manga_cfg, carpeta_base, reporte)
+            n_fuente += n
+            if n > 0:
+                racha.clear()
+            elif hubo_nuevos:
+                racha.append(manga_cfg)
+            # si no hubo_nuevos (el caso normal, "al día"), la racha
+            # queda como estaba — no cuenta ni corta nada.
+        except SesionExpiradaError as e:
+            _deshabilitar_resto(idx + 1, e)
+            return n_fuente
+        except Exception as e:
+            nombre_m = manga_cfg.get('nombre_carpeta', '?')
+            log.error(f"  │  ✗ Error en {nombre_m}: {e}")
+            reporte.error(nombre_m, "temple", f"Error inesperado en el escaneo: {e}")
+        finally:
+            guardar_seguimiento(data)
+
+        if len(racha) >= TEMPLE_UMBRAL_SIN_SESION:
+            nombres_racha = ", ".join(m.get('nombre_carpeta', '?') for m in racha)
+            log.warning(f"  [Temple Scan] {len(racha)} manga(s) seguidos sin imágenes "
+                       f"({nombres_racha}) — probando con sesión iniciada por las dudas...")
+            try:
+                TempleScraper()._asegurar_cookies_temple(forzar_carga=True)
+            except SesionExpiradaError as e:
+                _deshabilitar_resto(idx + 1, e)
+                return n_fuente
+
+            for manga_reintento in racha:
+                try:
+                    n2, _ = escanear_manga(manga_reintento, carpeta_base, reporte)
+                    n_fuente += n2
+                except SesionExpiradaError as e:
+                    _deshabilitar_resto(idx + 1, e, en_reintento=True)
+                    return n_fuente
+                except Exception as e:
+                    nombre_m = manga_reintento.get('nombre_carpeta', '?')
+                    log.error(f"  │  ✗ Error en {nombre_m} (reintento con sesión): {e}")
+                    reporte.error(nombre_m, "temple", f"Error inesperado en el reintento con sesión: {e}")
+                finally:
+                    guardar_seguimiento(data)
+            racha.clear()
+
+    return n_fuente
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -6576,6 +7570,19 @@ def ciclo_escaneo():
     log.info(f"║  🔍 ESCANEO  {ahora:<44}║")
     log.info("╚" + "═"*58 + "╝")
 
+    # Resetear el circuit-breaker de sesión de Temple al empezar CADA
+    # ciclo — son atributos de CLASE (compartidos entre todas las
+    # instancias de TempleScraper de esta corrida, ver _asegurar_
+    # cookies_temple), así que sin este reset, una vez detectada como
+    # vencida en un ciclo quedarían deshabilitados TODOS los ciclos
+    # siguientes para siempre (el scheduler corre en un mismo proceso
+    # de larga duración, no se reinicia solo entre ciclos) — incluso
+    # después de que Martín ya se haya vuelto a loguear a mano. Cada
+    # ciclo nuevo se merece su propia verificación, no arrastrar el
+    # resultado del anterior.
+    TempleScraper._sesion_muerta = False
+    TempleScraper._cookies_compartidas = None
+
     data = cargar_seguimiento()
     if data is None:
         log.error("  No se pudo cargar seguimiento.json — se salta "
@@ -6608,6 +7615,7 @@ def ciclo_escaneo():
     validar_multi_fuente(mangas)
 
     total_nuevos = 0
+    totales_por_fuente: dict[str, int] = {}
 
     # ── Armar la secuencia de escaneo completa, ya en el orden efectivo ──
     # Antes Olympus corría en un bloque aparte SIEMPRE primero, sin
@@ -6648,6 +7656,7 @@ def ciclo_escaneo():
                 n = escanear_olympus(lista, carpeta_base, scraper_olympus, reporte,
                                      guardado_incremental=lambda: guardar_seguimiento(data))
                 total_nuevos += n
+                totales_por_fuente["olympus"] = totales_por_fuente.get("olympus", 0) + n
                 log.info(f"  └─ ✓ {n} capítulo(s) nuevos")
             except Exception as e:
                 log.error(f"  └─ ✗ Error Olympus: {e}")
@@ -6660,16 +7669,44 @@ def ciclo_escaneo():
                 guardar_seguimiento(data)
             continue
 
-        icono = {"nexus":"🔗","temple":"🏯","dragon":"🐉","manhwaweb":"📚","ikigai":"🌸","leercapitulo":"📕","taurus":"🐂","tmo":"📙"}.get(fuente,"📖")
+        if fuente == "temple":
+            log.info(f"\n  ┌─ 🏯  Temple ({len(lista)} manga(s))")
+            n_fuente = _escanear_temple(lista, carpeta_base, reporte, data)
+            total_nuevos += n_fuente
+            totales_por_fuente["temple"] = totales_por_fuente.get("temple", 0) + n_fuente
+            log.info(f"  └─ ✓ {n_fuente} capítulo(s) nuevos")
+            continue
+
+        icono = ICONOS_FUENTE.get(fuente, "📖")
         log.info(f"\n  ┌─ {icono}  {fuente.title()} ({len(lista)} manga(s))")
         n_fuente = 0
-        for manga_cfg in lista:
+        for idx_manga, manga_cfg in enumerate(lista):
             CONTROL.avanzar_manga(manga_cfg.get('nombre_carpeta', '?'))
             CONTROL.chequear_y_lanzar()
             try:
-                n = escanear_manga(manga_cfg, carpeta_base, reporte)
+                n, _ = escanear_manga(manga_cfg, carpeta_base, reporte)
                 total_nuevos += n
                 n_fuente     += n
+            except SesionExpiradaError as e:
+                nombre_m = manga_cfg.get('nombre_carpeta','?')
+                log.error(f"  │  🔴 {fuente} deshabilitado el resto de esta corrida: {e}")
+                reporte.error(nombre_m, fuente,
+                    f"🔴 Sesión vencida — {fuente} deshabilitado el resto de esta corrida: {e}")
+                # Sin esto, los manga restantes de la lista simplemente NO
+                # aparecen en ningún lado del resumen final — indistinguible
+                # de "no tenía capítulos nuevos esta vez" (que es normal y
+                # no se reporta). Se listan explícitamente para que quede
+                # claro que se saltearon por el corte, no que se revisaron
+                # y no había nada nuevo.
+                restantes = lista[idx_manga + 1:]
+                if restantes:
+                    nombres_restantes = [m.get('nombre_carpeta', '?') for m in restantes]
+                    log.error(f"  │  ⏭  {len(restantes)} manga(s) de {fuente} sin intentar "
+                             f"esta corrida: {', '.join(nombres_restantes)}")
+                    for m in restantes:
+                        reporte.error(m.get('nombre_carpeta', '?'), fuente,
+                            f"⏭ No se intentó esta corrida — {fuente} deshabilitado por sesión vencida")
+                break
             except Exception as e:
                 nombre_m = manga_cfg.get('nombre_carpeta','?')
                 log.error(f"  │  ✗ Error en {nombre_m}: {e}")
@@ -6681,6 +7718,7 @@ def ciclo_escaneo():
                 # mismo ciclo no se pierden — quedan grabados en disco ya,
                 # no recién al terminar los 20 mangas restantes.
                 guardar_seguimiento(data)
+        totales_por_fuente[fuente] = totales_por_fuente.get(fuente, 0) + n_fuente
         log.info(f"  └─ ✓ {n_fuente} capítulo(s) nuevos")
 
     # Guardado final (redundante con los incrementales, pero no estorba —
@@ -6699,13 +7737,24 @@ def ciclo_escaneo():
     # algo) — antes había que scrollear todo el log para juntarlo a mano.
     reporte.imprimir_resumen_terminal()
 
+    ANCHO_CAJA_RESUMEN = 58
     log.info("")
-    log.info("╔" + "═"*58 + "╗")
+    log.info("╔" + "═"*ANCHO_CAJA_RESUMEN + "╗")
+    # Solo las fuentes que de verdad descargaron algo esta corrida, en
+    # el mismo orden en que se escanearon.
+    for fuente in sitios:
+        n = totales_por_fuente.get(fuente, 0)
+        if n <= 0:
+            continue
+        icono   = ICONOS_FUENTE.get(fuente, "📖")
+        palabra = "nuevo" if n == 1 else "nuevos"
+        log.info(_linea_caja(f"  {icono} {fuente.title()} — {n} {palabra}", ANCHO_CAJA_RESUMEN))
     if total_nuevos > 0:
-        log.info(f"║  ✅ {total_nuevos} capítulo(s) nuevos descargados{' '*(28-len(str(total_nuevos)))}║")
+        log.info("╠" + "═"*ANCHO_CAJA_RESUMEN + "╣")
+        log.info(_linea_caja(f"  ✅ {total_nuevos} capítulo(s) nuevos descargados", ANCHO_CAJA_RESUMEN))
     else:
-        log.info("║  ✅ Todo al día — sin capítulos nuevos              ║")
-    log.info("╚" + "═"*58 + "╝")
+        log.info(_linea_caja("  ✅ Todo al día — sin capítulos nuevos", ANCHO_CAJA_RESUMEN))
+    log.info("╚" + "═"*ANCHO_CAJA_RESUMEN + "╝")
 
 # ══════════════════════════════════════════════════════════════════════
 # §14  SCHEDULER
@@ -6745,41 +7794,150 @@ def scheduler():
 # §15  MAIN
 # ══════════════════════════════════════════════════════════════════════
 
+def _pid_esta_vivo(pid) -> bool | None:
+    """
+    Chequea si un PID sigue vivo de verdad, usando 'tasklist' (viene
+    incluido en Windows — no hace falta agregar psutil como dependencia
+    nueva solo para esto).
+
+    Devuelve True/False si se pudo determinar con confianza, o None si
+    el chequeo en sí no se pudo hacer (tasklist no disponible, timeout,
+    PID ilegible, etc.) — en ese caso el llamador debe caer al criterio
+    viejo por edad del archivo como red de seguridad, no asumir ninguna
+    de las dos cosas a ciegas.
+    """
+    try:
+        pid_int = int(pid)
+    except (TypeError, ValueError):
+        return None
+    try:
+        salida = subprocess.run(
+            ["tasklist", "/FI", f"PID eq {pid_int}", "/FO", "CSV", "/NH"],
+            capture_output=True, text=True, timeout=5,
+        )
+    except Exception:
+        return None
+    # Con /FO CSV /NH: si el PID existe, la primera línea es una fila
+    # CSV real que arranca con comilla (ej. '"python.exe","12345",...').
+    # Si no existe, tasklist devuelve un mensaje de texto plano (tipo
+    # "INFO: no hay ninguna tarea en ejecución que coincida...") que NO
+    # arranca con comilla — más confiable que buscar el número de PID
+    # como substring dentro de ese mensaje (podría coincidir de pura
+    # casualidad).
+    return salida.stdout.strip().startswith('"')
+
+def _mejora_ia_esta_corriendo() -> bool:
+    """
+    Chequea si la mejora con IA (panel Node) está corriendo de verdad en
+    este momento, leyendo su mismo estado_vivo.json — no hay un segundo
+    lock file para esto, es la misma fuente de verdad que ya usa ese
+    subsistema para autodetectar una caída.
+
+    Devuelve False ante cualquier duda (archivo ausente, corrupto,
+    heartbeat viejo o ilegible) — mismo criterio de "fallar abierto"
+    que ya usa el resto de este archivo.
+    """
+    if not UPSCALE_ESTADO_VIVO_PATH.exists():
+        return False
+    try:
+        estado = json.loads(UPSCALE_ESTADO_VIVO_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return False
+
+    if estado.get("status") != "corriendo":
+        return False
+
+    heartbeat_txt = estado.get("heartbeat")
+    if not heartbeat_txt:
+        return False
+    try:
+        # Node escribe con new Date().toISOString() -> siempre UTC con
+        # sufijo "Z"; fromisoformat necesita "+00:00" en su lugar.
+        heartbeat_dt = datetime.fromisoformat(heartbeat_txt.replace("Z", "+00:00"))
+    except ValueError:
+        return False
+
+    edad_seg = (datetime.now(timezone.utc) - heartbeat_dt).total_seconds()
+    return edad_seg < UPSCALE_HEARTBEAT_MAX_SEGUNDOS
+
 def _adquirir_lock() -> bool:
     """
     Crea scraper.lock para evitar que corran dos instancias del scraper
-    a la vez — riesgo real: las dos escribirían a los mismos
-    seguimiento.json/registro_progreso.json sin coordinarse entre sí.
+    a la vez — riesgo real y ya confirmado en la práctica: las dos
+    terminan escribiendo a los mismos seguimiento.json/registro_
+    progreso.json sin coordinarse entre sí (WinError 32 en el rename de
+    seguimiento.tmp, logs de dos ciclos completos mezclados en la
+    consola/scraper.log).
 
-    Si ya existe un lock más viejo que LOCK_MAX_HORAS, se asume que
-    quedó de una corrida anterior que se colgó o crasheó sin limpiar
-    (corte de luz, proceso matado a la fuerza, etc.) y se pisa — para
-    no terminar bloqueado para siempre por un lock fantasma.
+    2026-09: antes esto se decidía SOLO por la edad del archivo
+    (LOCK_MAX_HORAS) — pero el modo continuo está pensado para correr
+    días o semanas sin reiniciarse, así que un proceso sano que lleva
+    corriendo más de LOCK_MAX_HORAS terminaba pareciendo "colgado" para
+    cualquier intento de arranque duplicado (tarea programada, reinicio
+    de PC, apretar "Iniciar" de nuevo en el panel web sin saber que ya
+    había uno corriendo), y ese arranque duplicado lo pisaba sin más.
+
+    Ahora se verifica primero si el PID guardado en el lock sigue vivo
+    de verdad (vía tasklist, ver _pid_esta_vivo) antes de asumir que
+    quedó colgado. La edad del archivo queda como resguardo SOLO para
+    cuando ese chequeo de PID no se puede hacer. Como red de seguridad
+    adicional, ControlEjecucion también refresca el mtime de este
+    archivo periódicamente mientras el proceso sigue vivo (ver
+    ControlEjecucion._escribir) — así, aunque el chequeo de PID llegara
+    a fallar en algún entorno, un proceso sano de larga duración sigue
+    sin depender de LOCK_MAX_HORAS para no verse "viejo".
 
     Retorna True si es seguro seguir, False si hay otra instancia
     genuinamente corriendo ahora mismo.
     """
+    if _mejora_ia_esta_corriendo():
+        log.error("La mejora con IA está corriendo en este momento (panel web) — "
+                 "esperá a que termine antes de arrancar el scraper; comparten el "
+                 "mismo disco de la biblioteca.")
+        return False
+    
     if LOCK_PATH.exists():
         try:
-            edad_seg = time.time() - LOCK_PATH.stat().st_mtime
+            pid_viejo = LOCK_PATH.read_text(encoding="utf-8").strip()
         except OSError:
-            edad_seg = LOCK_MAX_HORAS * 3600 + 1  # ilegible → tratar como viejo
+            pid_viejo = "?"
 
-        if edad_seg < LOCK_MAX_HORAS * 3600:
-            try:
-                pid_viejo = LOCK_PATH.read_text(encoding="utf-8").strip()
-            except OSError:
-                pid_viejo = "?"
-            log.error(f"Ya parece haber otra instancia corriendo (lock de hace "
-                     f"{int(edad_seg/60)} min, PID guardado: {pid_viejo}). Si "
-                     f"estás seguro de que no hay ninguna otra corriendo, borrá "
-                     f"'{LOCK_PATH.name}' a mano y volvé a intentar.")
+        vivo = _pid_esta_vivo(pid_viejo)
+
+        if vivo is True:
+            log.error(f"Ya hay otra instancia corriendo de verdad (PID "
+                     f"{pid_viejo}, confirmado vivo con tasklist). Si esto "
+                     f"es un error, cerrá ese proceso o borrá "
+                     f"'{LOCK_PATH.name}' a mano antes de reintentar.")
             return False
+
+        if vivo is False:
+            log.warning(f"Encontrado '{LOCK_PATH.name}' con PID {pid_viejo}, "
+                       f"que ya no existe (confirmado con tasklist) — quedó "
+                       f"de una corrida anterior que se colgó o crasheó sin "
+                       f"limpiar. Se ignora y se continúa.")
         else:
+            # No se pudo confirmar por PID (tasklist falló, PID
+            # ilegible, etc.) — cae al criterio viejo por edad como
+            # única red de seguridad disponible en este caso puntual.
+            try:
+                edad_seg = time.time() - LOCK_PATH.stat().st_mtime
+            except OSError:
+                edad_seg = LOCK_MAX_HORAS * 3600 + 1  # ilegible → tratar como viejo
+
+            if edad_seg < LOCK_MAX_HORAS * 3600:
+                log.error(f"Ya parece haber otra instancia corriendo (no se "
+                         f"pudo confirmar por PID vía tasklist — lock de "
+                         f"hace {int(edad_seg/60)} min, PID guardado: "
+                         f"{pid_viejo}). Si estás seguro de que no hay "
+                         f"ninguna otra corriendo, borrá '{LOCK_PATH.name}' "
+                         f"a mano y volvé a intentar.")
+                return False
             log.warning(f"Encontrado '{LOCK_PATH.name}' de hace "
-                       f"{edad_seg/3600:.1f}h (más de {LOCK_MAX_HORAS}h) — se "
-                       f"asume de una corrida anterior que se colgó o crasheó "
-                       f"sin limpiar. Se ignora y se continúa.")
+                       f"{edad_seg/3600:.1f}h y no se pudo confirmar el PID "
+                       f"{pid_viejo} vía tasklist — se asume colgado por "
+                       f"antigüedad (más de {LOCK_MAX_HORAS}h). Se ignora y "
+                       f"se continúa.")
 
     try:
         LOCK_PATH.write_text(str(os.getpid()), encoding="utf-8")

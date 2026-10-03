@@ -20,9 +20,11 @@ const fs   = require('fs');
 const path = require('path');
 const {
   writeJsonAtomic, naturalCompare, listDirNames, listImageNames,
-  getFolderDate, getDirMtimeMs, getMetadataSync, IMAGE_EXT_RE
+  getFolderDate, getDirMtimeMs, getMetadataSync, getRegistroProgresoSync,
+  IMAGE_EXT_RE, COVER_EXTENSIONS
 } = require('../lib/fsHelpers');
 const { slugifyManga, slugifyChapter } = require('../lib/slug');
+const { computeSourceCounts, resolveSources } = require('../lib/sources');
 
 const DETECTED_FILE = path.join(__dirname, '../detected_dates.json');
 const SNAPSHOT_FILE = path.join(__dirname, '../catalog_index.json');
@@ -93,9 +95,21 @@ function saveSnapshotDebounced() {
 }
 
 // ── CONSTRUCCIÓN DE UNA ENTRADA (el único punto que toca el disco externo) ───
+// Prueba cover.jpg, cover.jpeg, cover.png y cover.webp en ese orden — el
+// orden es solo un desempate arbitrario para el caso (raro) de que existiera
+// más de un archivo cover.* a la vez; en el uso normal solo hay uno.
+function findCoverFile(mp) {
+  for (const ext of COVER_EXTENSIONS) {
+    const candidate = `cover.${ext}`;
+    if (fs.existsSync(path.join(mp, candidate))) return candidate;
+  }
+  return null;
+}
+
 function getCoverUrlFor(mp, name, chapterEntries) {
-  if (fs.existsSync(path.join(mp, 'cover.jpg')))
-    return `/api/images/${encodeURIComponent(name)}/__cover__/cover.jpg`;
+  const coverFile = findCoverFile(mp);
+  if (coverFile)
+    return `/api/images/${encodeURIComponent(name)}/__cover__/${encodeURIComponent(coverFile)}`;
   if (chapterEntries.length > 0 && chapterEntries[0].images.length > 0)
     return `/api/images/${encodeURIComponent(name)}/${encodeURIComponent(chapterEntries[0].number)}/${encodeURIComponent(chapterEntries[0].images[0])}`;
   return null;
@@ -125,6 +139,12 @@ function buildMangaEntry(root, name) {
     date:   getEffectiveDate(name, ch, mp).toISOString()
   }));
   const meta = getMetadataSync(mp);
+  // registro_progreso.json vive en la misma carpeta que metadata.json y los
+  // capítulos (§5c en scraper.py) — cualquier cambio ahí (nuevo capítulo,
+  // reintento, etc.) ya dispara scheduleRebuild() igual que un capítulo
+  // nuevo, así que el conteo de fuentes se recalcula solo en cada
+  // reconstrucción sin necesidad de un watcher ni una caché aparte.
+  const sourceCounts = computeSourceCounts(getRegistroProgresoSync(mp));
   const entry = {
     name,
     slug: slugifyManga(name), // se puede pisar en rebuildSlugMaps() si choca con otro manga
@@ -136,8 +156,16 @@ function buildMangaEntry(root, name) {
       genres:  Array.isArray(meta.genres) ? meta.genres : [],
       synopsis:meta.synopsis || '',
       ranking: meta.ranking  ?? null,
-      adult:   meta.adult    || false
+      adult:   meta.adult    || false,
+      // Fuente forzada a mano desde el editor de metadata (opcional). Ver
+      // resolveSources() en lib/sources.js para cómo pisa el conteo real.
+      forcedSource: meta.forcedSource || null
     },
+    // { counts, autoRanked, ranked, forced } — 'ranked' es el resultado ya
+    // resuelto (forzado si corresponde) que consumen las rutas de manga.js;
+    // 'autoRanked'/'counts' quedan para que el editor de metadata pueda
+    // mostrar "detectado automáticamente: X, Y" aunque haya una forzada activa.
+    sources: resolveSources(sourceCounts, meta.forcedSource || null),
     addedDate:       getEffectiveDate(name, null, mp).toISOString(),
     lastChapterDate: chapters.length ? chapters[chapters.length - 1].date : null,
     folderMtimeMs:   getDirMtimeMs(mp)
@@ -283,6 +311,16 @@ function start() {
         if (!cached.slug) {
           cached.slug = slugifyManga(name);
           for (const ch of cached.chapters) if (!ch.slug) ch.slug = slugifyChapter(ch.number);
+        }
+        // Migración en caliente para snapshots de antes de que existiera
+        // 'sources': en vez de una reconstrucción completa (que releería
+        // capítulos e imágenes sin necesidad), alcanza con leer
+        // registro_progreso.json una vez — mismo espíritu que la migración
+        // de slugs de arriba.
+        if (!cached.sources) {
+          if (cached.metadata && cached.metadata.forcedSource === undefined) cached.metadata.forcedSource = null;
+          const forced = cached.metadata?.forcedSource || null;
+          cached.sources = resolveSources(computeSourceCounts(getRegistroProgresoSync(mp)), forced);
         }
         _index.set(name, cached);
         _rootOf.set(name, root);

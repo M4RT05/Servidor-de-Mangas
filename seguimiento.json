@@ -1,0 +1,1493 @@
+{
+  "fuentes_activas": {
+    "olympus": true,
+    "nexus": true,
+    "temple": true,
+    "dragon": true,
+    "ikigai": true,
+    "taurus": true,
+    "leercapitulo": true,
+    "manhwaweb": true,
+    "tmo": true
+  },
+  "mangas": [
+    {
+      "nombre_carpeta": "Viviendo como un bárbaro en un mundo de fantasía",
+      "fuente": "olympus",
+      "url_manga": "https://olympusxyz.com/series/comic-viviendo-como-un-barbaro-en-un-mundo-de-fantasia",
+      "slug": "comic-viviendo-como-un-barbaro-en-un-mundo-de-fantasia",
+      "ultimo_capitulo": 72.0,
+      "capitulos_con_error": null,
+      "activo": true,
+      "manga_id": "1552"
+    },
+    {
+      "nombre_carpeta": "Sin fin skills",
+      "fuente": "olympus",
+      "url_manga": "https://olympusxyz.com/series/comic-sin-fin-skills-20261001-080402281",
+      "slug": "comic-sin-fin-skills-20261001-080402281",
+      "ultimo_capitulo": 279.0,
+      "capitulos_con_error": null,
+      "activo": true,
+      "manga_id": "175"
+    },
+    {
+      "nombre_carpeta": "El Primer Príncipe La leyenda del canto de la espada",
+      "fuente": "olympus",
+      "url_manga": "https://olympusxyz.com/series/comic-el-primer-principe-la-leyenda-del-canto-de-la-espada",
+      "slug": "comic-el-primer-principe-la-leyenda-del-canto-de-la-espada",
+      "ultimo_capitulo": 55,
+      "capitulos_con_error": null,
+      "activo": true,
+      "manga_id": "1664"
+    },
+    {
+      "nombre_carpeta": "Pick me up, Gacha Infinito",
+      "fuente": "olympus",
+      "url_manga": "https://olympusxyz.com/series/comic-pick-me-up-gacha-infinito-20261001-080414593",
+      "slug": "comic-pick-me-up-gacha-infinito-20261001-080414593",
+      "ultimo_capitulo": 221,
+      "capitulos_con_error": null,
+      "activo": true,
+      "manga_id": "94"
+    },
+    {
+      "nombre_carpeta": "El heroe de nivel legendario prodigio de la academia",
+      "fuente": "olympus",
+      "url_manga": "https://olympusxyz.com/series/comic-10-05-2025rio-prodigio-de-la-academia",
+      "slug": "comic-10-05-2025rio-prodigio-de-la-academia",
+      "ultimo_capitulo": 106,
+      "capitulos_con_error": null,
+      "activo": true,
+      "manga_id": "1471"
+    },
+    {
+      "nombre_carpeta": "Guia de supervivencia del extra de la academia",
+      "fuente": "olympus",
+      "url_manga": "https://olympusxyz.com/series/comic-guia-de-supervivencia-del-extra-de-la-academia-20261001-080338863",
+      "slug": "comic-guia-de-supervivencia-del-extra-de-la-academia-20261001-080338863",
+      "ultimo_capitulo": 125,
+      "capitulos_con_error": null,
+      "activo": true,
+      "manga_id": "1226"
+    },
+    {
+      "nombre_carpeta": "El maestro de la espada Genio de la academia",
+      "fuente": "olympus",
+      "url_manga": "https://olympusxyz.com/series/comic-el-maestro-de-la-espada-genio-de-la-academia-20261001-080414986",
+      "slug": "comic-el-maestro-de-la-espada-genio-de-la-academia-20261001-080414986",
+      "ultimo_capitulo": 156,
+      "capitulos_con_error": null,
+      "activo": true,
+      "manga_id": "976"
+    },
+    {
+      "nombre_carpeta": "Estandar de la Reencarnación",
+      "fuente": "olympus",
+      "url_manga": "https://olympusxyz.com/series/comic-elmancochet20-225-o532413424",
+      "slug": "comic-elmancochet20-225-o532413424",
+      "ultimo_capitulo": 200,
+      "capitulos_con_error": null,
+      "activo": true,
+      "manga_id": "130"
+    },
+    {
+      "nombre_carpeta": "El regreso del héroe de clase Desastre",
+      "fuente": "olympus",
+      "url_manga": "https://olympusxyz.com/series/comic-el-cl20-225-ase-desastre13424",
+      "slug": "comic-el-cl20-225-ase-desastre13424",
+      "ultimo_capitulo": 191.5,
+      "capitulos_con_error": null,
+      "activo": true,
+      "manga_id": "106"
+    },
+    {
+      "nombre_carpeta": "Manual de instrucciones del Reencarnado",
+      "fuente": "olympus",
+      "url_manga": "https://olympusxyz.com/series/comic-manual-de-instrucc20-225-l-reencarnado",
+      "slug": "comic-manual-de-instrucc20-225-l-reencarnado",
+      "ultimo_capitulo": 205,
+      "capitulos_con_error": null,
+      "activo": true,
+      "manga_id": "155"
+    },
+    {
+      "nombre_carpeta": "El prodigioso caballero oscuro con tiempo Limitado",
+      "fuente": "olympus",
+      "url_manga": "https://olympusxyz.com/series/comic-el-prodigioso-caballero-oscuro-con-tiempo-limitado-20261001-080411899",
+      "slug": "comic-el-prodigioso-caballero-oscuro-con-tiempo-limitado-20261001-080411899",
+      "ultimo_capitulo": 151,
+      "capitulos_con_error": null,
+      "activo": true,
+      "manga_id": "815"
+    },
+    {
+      "nombre_carpeta": "El asesino que reencarnó como un genio espadachín",
+      "fuente": "olympus",
+      "url_manga": "https://olympusxyz.com/series/comic-el-asesi20-225-genio-espadachin13424",
+      "slug": "comic-el-asesi20-225-genio-espadachin13424",
+      "ultimo_capitulo": 96.1,
+      "capitulos_con_error": null,
+      "activo": true,
+      "manga_id": "1035"
+    },
+    {
+      "nombre_carpeta": "El maestro de la espada acogedor de estrellas",
+      "fuente": "olympus",
+      "url_manga": "https://olympusxyz.com/series/comic-el-maestro-de-la-espada-acogedor-de-estrellas-20261001-080335684",
+      "slug": "comic-el-maestro-de-la-espada-acogedor-de-estrellas-20261001-080335684",
+      "ultimo_capitulo": 140,
+      "capitulos_con_error": null,
+      "activo": true,
+      "manga_id": "1094"
+    },
+    {
+      "nombre_carpeta": "La regresión 100 del jugador de nivel máximo",
+      "fuente": "olympus",
+      "url_manga": "https://olympusxyz.com/series/comic-la-r20-225-egresion-100-del-jugador-de-nivel-maximo13424",
+      "slug": "comic-la-r20-225-egresion-100-del-jugador-de-nivel-maximo13424",
+      "ultimo_capitulo": 89.5,
+      "capitulos_con_error": null,
+      "activo": true,
+      "manga_id": "1151"
+    },
+    {
+      "nombre_carpeta": "Shirone El Infinit0 (Mago infinito)",
+      "fuente": "olympus",
+      "url_manga": "https://olympusxyz.com/series/comic-shirone20-225-el22-infinit015551251524131123",
+      "slug": "comic-shirone20-225-el22-infinit015551251524131123",
+      "ultimo_capitulo": 188,
+      "capitulos_con_error": null,
+      "activo": true,
+      "manga_id": "98"
+    },
+    {
+      "nombre_carpeta": "El Dios Marcial que Regresó al nivel 2",
+      "fuente": "olympus",
+      "url_manga": "https://olympusxyz.com/series/comic-el-dios-marcial-que-regreso-al-nivel-2-20261001-080414557",
+      "slug": "comic-el-dios-marcial-que-regreso-al-nivel-2-20261001-080414557",
+      "ultimo_capitulo": 128.5,
+      "capitulos_con_error": null,
+      "activo": true,
+      "manga_id": "969"
+    },
+    {
+      "nombre_carpeta": "toxicólogo del clan tang de sichuan",
+      "fuente": "olympus",
+      "url_manga": "https://olympusxyz.com/series/comic-toxicologo-del-clan-tang-de-sichuan-20261001-080355639",
+      "slug": "comic-toxicologo-del-clan-tang-de-sichuan-20261001-080355639",
+      "ultimo_capitulo": 107,
+      "capitulos_con_error": null,
+      "activo": true,
+      "manga_id": "1460"
+    },
+    {
+      "nombre_carpeta": "El asesino que retornó como el hijo del duque",
+      "fuente": "olympus",
+      "url_manga": "https://olympusxyz.com/series/comic-el-asesino-que-retorno-como-el-hijo-del-duque-20261001-080341254",
+      "slug": "comic-el-asesino-que-retorno-como-el-hijo-del-duque-20261001-080341254",
+      "ultimo_capitulo": 146,
+      "capitulos_con_error": null,
+      "activo": true,
+      "manga_id": "1285"
+    },
+    {
+      "nombre_carpeta": "La venganza del sabueso de sangre de hierro",
+      "fuente": "olympus",
+      "url_manga": "https://olympusxyz.com/series/comic-20-225-2sabueso13424",
+      "slug": "comic-20-225-2sabueso13424",
+      "ultimo_capitulo": 182,
+      "capitulos_con_error": null,
+      "activo": true,
+      "manga_id": "743"
+    },
+    {
+      "nombre_carpeta": "Yo mate al jugador de la Academia",
+      "fuente": "olympus",
+      "url_manga": "https://olympusxyz.com/series/comic-yo-mate-al-jugador-de-la-academia-20261001-080337409",
+      "slug": "comic-yo-mate-al-jugador-de-la-academia-20261001-080337409",
+      "ultimo_capitulo": 140.1,
+      "capitulos_con_error": null,
+      "activo": true,
+      "manga_id": "1168"
+    },
+    {
+      "nombre_carpeta": "El Ascenso del Tercer Príncipe del Reino Caído",
+      "fuente": "olympus",
+      "url_manga": "https://olympusxyz.com/series/comic-el-ascenso-del-tercer-principe-del-reino-caido",
+      "slug": "comic-el-ascenso-del-tercer-principe-del-reino-caido",
+      "ultimo_capitulo": 75.5,
+      "capitulos_con_error": null,
+      "activo": true,
+      "manga_id": "1535"
+    },
+    {
+      "nombre_carpeta": "El hijo menor del maestro de la espada",
+      "fuente": "olympus",
+      "url_manga": "https://olympusxyz.com/series/comic-el-hijo20-225-de-la-espada13424",
+      "slug": "comic-el-hijo20-225-de-la-espada13424",
+      "ultimo_capitulo": 214,
+      "capitulos_con_error": null,
+      "activo": true,
+      "manga_id": "86"
+    },
+    {
+      "nombre_carpeta": "El Blinker genio de la academia mágica",
+      "fuente": "olympus",
+      "url_manga": "https://olympusxyz.com/series/comic-20-225-e-la-academia-magica",
+      "slug": "comic-20-225-e-la-academia-magica",
+      "ultimo_capitulo": 100.5,
+      "capitulos_con_error": null,
+      "activo": true,
+      "manga_id": "1349"
+    },
+    {
+      "nombre_carpeta": "Mi hija es el jefe final",
+      "fuente": "olympus",
+      "url_manga": "https://olympusxyz.com/series/comic-mi-hija-20-225-es-el-jefe-final13424",
+      "slug": "comic-mi-hija-20-225-es-el-jefe-final13424",
+      "ultimo_capitulo": 165.1,
+      "capitulos_con_error": null,
+      "activo": true,
+      "manga_id": "163"
+    },
+    {
+      "nombre_carpeta": "El Regreso del Espadachín Oscuro",
+      "fuente": "olympus",
+      "url_manga": "https://olympusxyz.com/series/comic-el-regreso-del-espadachin-oscuro",
+      "slug": "comic-el-regreso-del-espadachin-oscuro",
+      "ultimo_capitulo": 67.0,
+      "capitulos_con_error": null,
+      "activo": true,
+      "manga_id": "1533"
+    },
+    {
+      "nombre_carpeta": "El regreso del mago ilegítimo",
+      "fuente": "olympus",
+      "url_manga": "https://olympusxyz.com/series/comic-el-regreso-del-mago-ilegitimo-20261001-080421794",
+      "slug": "comic-el-regreso-del-mago-ilegitimo-20261001-080421794",
+      "ultimo_capitulo": 46.1,
+      "capitulos_con_error": null,
+      "activo": true,
+      "manga_id": "1553"
+    },
+    {
+      "nombre_carpeta": "Soy el Unico Hombre en el Salon de Masajes",
+      "fuente": "nexus",
+      "url_manga": "https://nexusscanlation.com/series/soy-el-unico-hombre-en-el-salon-de-masajes",
+      "slug": "soy-el-unico-hombre-en-el-salon-de-masajes",
+      "ultimo_capitulo": 29,
+      "capitulos_con_error": [
+        9
+      ],
+      "activo": true
+    },
+    {
+      "nombre_carpeta": "Trabaja con tu cuerpo",
+      "fuente": "nexus",
+      "url_manga": "https://nexusscanlation.com/series/trabaja-con-tu-cuerpo",
+      "slug": "trabaja-con-tu-cuerpo",
+      "ultimo_capitulo": 37.0,
+      "capitulos_con_error": [
+        28,
+        38
+      ],
+      "activo": true
+    },
+    {
+      "nombre_carpeta": "Te Digo Que Solo Puedo Verte A Ti",
+      "fuente": "nexus",
+      "url_manga": "https://nexusscanlation.com/series/te-digo-que-solo-puedo-verte-a-ti",
+      "slug": "te-digo-que-solo-puedo-verte-a-ti",
+      "ultimo_capitulo": 31,
+      "capitulos_con_error": null,
+      "activo": true
+    },
+    {
+      "nombre_carpeta": "Gata Mañosa",
+      "fuente": "temple",
+      "url_manga": "https://aedexnox.akan01.com/serie/gata-manosa/",
+      "slug": "gata-manosa",
+      "ultimo_capitulo": 24,
+      "capitulos_con_error": null,
+      "activo": true
+    },
+    {
+      "nombre_carpeta": "Amor De Porristas",
+      "fuente": "temple",
+      "url_manga": "https://aedexnox.akan01.com/serie/amor-de-porristas/",
+      "slug": "amor-de-porristas",
+      "ultimo_capitulo": 23,
+      "capitulos_con_error": null,
+      "activo": true
+    },
+    {
+      "nombre_carpeta": "Búsqueda De Amor",
+      "fuente": "temple",
+      "url_manga": "https://aedexnox.akan01.com/serie/busqueda-de-amor/",
+      "slug": "busqueda-de-amor",
+      "ultimo_capitulo": 32,
+      "capitulos_con_error": null,
+      "activo": true,
+      "prioridad_fuente": 1
+    },
+    {
+      "nombre_carpeta": "Búsqueda De Amor",
+      "fuente": "nexus",
+      "url_manga": "https://nexusscanlation.com/series/busqueda-de-amor",
+      "slug": "busqueda-de-amor",
+      "ultimo_capitulo": 35,
+      "capitulos_con_error": null,
+      "activo": true,
+      "prioridad_fuente": 1
+    },
+    {
+      "nombre_carpeta": "Relación Inversa",
+      "fuente": "temple",
+      "url_manga": "https://aedexnox.akan01.com/serie/relacion-inversa/",
+      "slug": "relacion-inversa",
+      "ultimo_capitulo": 126,
+      "capitulos_con_error": null,
+      "activo": true
+    },
+    {
+      "nombre_carpeta": "Quieres Trabajar Aquí",
+      "fuente": "temple",
+      "url_manga": "https://aedexnox.akan01.com/serie/quieres-trabajar-aqui/",
+      "slug": "quieres-trabajar-aqui",
+      "ultimo_capitulo": 41.5,
+      "capitulos_con_error": null,
+      "activo": true
+    },
+    {
+      "nombre_carpeta": "Te Enseñaré Defensa Personal",
+      "fuente": "temple",
+      "url_manga": "https://aedexnox.akan01.com/serie/te-ensenare-defensa-personal/",
+      "slug": "te-ensenare-defensa-personal",
+      "ultimo_capitulo": 46,
+      "capitulos_con_error": null,
+      "activo": true
+    },
+    {
+      "nombre_carpeta": "Me Marcó Una Acosadora",
+      "fuente": "temple",
+      "url_manga": "https://aedexnox.akan01.com/serie/me-marco-una-acosadora/",
+      "slug": "me-marco-una-acosadora",
+      "ultimo_capitulo": 60,
+      "capitulos_con_error": null,
+      "activo": true
+    },
+    {
+      "nombre_carpeta": "Los Habitantes De La Oscuridad",
+      "fuente": "temple",
+      "url_manga": "https://aedexnox.akan01.com/serie/los-habitantes-de-la-oscuridad/",
+      "slug": "los-habitantes-de-la-oscuridad",
+      "ultimo_capitulo": 93.5,
+      "capitulos_con_error": null,
+      "activo": true
+    },
+    {
+      "nombre_carpeta": "Tómame Una Foto",
+      "fuente": "temple",
+      "url_manga": "https://aedexnox.akan01.com/serie/tomame-una-foto/",
+      "slug": "tomame-una-foto",
+      "ultimo_capitulo": 60,
+      "capitulos_con_error": null,
+      "activo": true
+    },
+    {
+      "nombre_carpeta": "Reinicio De Ahegao",
+      "fuente": "temple",
+      "url_manga": "https://aedexnox.akan01.com/serie/reinicio-de-ahegao/",
+      "slug": "reinicio-de-ahegao",
+      "ultimo_capitulo": 33,
+      "capitulos_con_error": null,
+      "activo": true
+    },
+    {
+      "nombre_carpeta": "Conexión Inalámbrica",
+      "fuente": "temple",
+      "url_manga": "https://aedexnox.akan01.com/serie/conexion-inalambrica/",
+      "slug": "conexion-inalambrica",
+      "ultimo_capitulo": 123,
+      "capitulos_con_error": null,
+      "activo": true
+    },
+    {
+      "nombre_carpeta": "El Único Hombre",
+      "fuente": "temple",
+      "url_manga": "https://aedexnox.akan01.com/serie/el-unico-hombre/",
+      "slug": "el-unico-hombre",
+      "ultimo_capitulo": 27.0,
+      "capitulos_con_error": null,
+      "activo": true
+    },
+    {
+      "nombre_carpeta": "Soy Un Vampiro",
+      "fuente": "temple",
+      "url_manga": "https://aedexnox.akan01.com/serie/soy-un-vampiro/",
+      "slug": "soy-un-vampiro",
+      "ultimo_capitulo": 45.0,
+      "capitulos_con_error": null,
+      "activo": true
+    },
+    {
+      "nombre_carpeta": "Dominando A Mi Hermanastra",
+      "fuente": "temple",
+      "url_manga": "https://aedexnox.akan01.com/serie/dominando-a-mi-hermanastra/",
+      "slug": "dominando-a-mi-hermanastra",
+      "ultimo_capitulo": 32.5,
+      "capitulos_con_error": null,
+      "activo": true
+    },
+    {
+      "nombre_carpeta": "Taerang Salva El Otro Mundo",
+      "fuente": "temple",
+      "url_manga": "https://aedexnox.akan01.com/serie/taerang-salva-el-otro-mundo/",
+      "slug": "taerang-salva-el-otro-mundo",
+      "ultimo_capitulo": 62,
+      "capitulos_con_error": null,
+      "activo": true
+    },
+    {
+      "nombre_carpeta": "Deja De Fumar",
+      "fuente": "temple",
+      "url_manga": "https://aedexnox.akan01.com/serie/deja-de-fumar/",
+      "slug": "deja-de-fumar",
+      "ultimo_capitulo": 113,
+      "capitulos_con_error": null,
+      "activo": true
+    },
+    {
+      "nombre_carpeta": "Chicas Universitarias Que Son Inesperadas",
+      "fuente": "temple",
+      "url_manga": "https://aedexnox.akan01.com/serie/chicas-universitarias-que-son-inesperadas/",
+      "slug": "chicas-universitarias-que-son-inesperadas",
+      "ultimo_capitulo": 66,
+      "capitulos_con_error": null,
+      "activo": true
+    },
+    {
+      "nombre_carpeta": "Mi Esposa Es Una Chica Mágica",
+      "fuente": "temple",
+      "url_manga": "https://aedexnox.akan01.com/serie/mi-esposa-es-una-chica-magica/",
+      "slug": "mi-esposa-es-una-chica-magica",
+      "ultimo_capitulo": 28,
+      "capitulos_con_error": null,
+      "activo": true
+    },
+    {
+      "nombre_carpeta": "Pequeña Acosadora",
+      "fuente": "temple",
+      "url_manga": "https://aedexnox.akan01.com/serie/pequena-acosadora/",
+      "slug": "pequena-acosadora",
+      "ultimo_capitulo": 57,
+      "capitulos_con_error": null,
+      "activo": true
+    },
+    {
+      "nombre_carpeta": "Escasez De Hombres",
+      "fuente": "temple",
+      "url_manga": "https://aedexnox.akan01.com/serie/escasez-de-hombres/",
+      "slug": "escasez-de-hombres",
+      "ultimo_capitulo": 69,
+      "capitulos_con_error": null,
+      "activo": true
+    },
+    {
+      "nombre_carpeta": "Nuestra Frecuencia Imperfecta",
+      "fuente": "temple",
+      "url_manga": "https://aedexnox.akan01.com/serie/nuestra-frecuencia-imperfecta/",
+      "slug": "nuestra-frecuencia-imperfecta",
+      "ultimo_capitulo": 28,
+      "capitulos_con_error": null,
+      "activo": true
+    },
+    {
+      "nombre_carpeta": "El Mesías Y Sus Seguidoras",
+      "fuente": "temple",
+      "url_manga": "https://aedexnox.akan01.com/serie/el-mesias-y-sus-seguidoras/",
+      "slug": "el-mesias-y-sus-seguidoras",
+      "ultimo_capitulo": 63,
+      "capitulos_con_error": null,
+      "activo": true
+    },
+    {
+      "nombre_carpeta": "Código De Obediencia",
+      "fuente": "temple",
+      "url_manga": "https://aedexnox.akan01.com/serie/codigo-de-obediencia/",
+      "slug": "codigo-de-obediencia",
+      "ultimo_capitulo": 24,
+      "capitulos_con_error": null,
+      "activo": true
+    },
+    {
+      "nombre_carpeta": "Diario De Conquista Femenina Del Guerrero Regresivo",
+      "fuente": "temple",
+      "url_manga": "https://aedexnox.akan01.com/serie/diario-de-conquista-femenina-del-guerrero-regresivo/",
+      "slug": "diario-de-conquista-femenina-del-guerrero-regresivo",
+      "ultimo_capitulo": 103,
+      "capitulos_con_error": null,
+      "activo": true
+    },
+    {
+      "nombre_carpeta": "Plan De Intercambio De Madres",
+      "fuente": "temple",
+      "url_manga": "https://aedexnox.akan01.com/serie/plan-de-intercambio-de-madres/",
+      "slug": "plan-de-intercambio-de-madres",
+      "ultimo_capitulo": 91.0,
+      "capitulos_con_error": null,
+      "activo": true
+    },
+    {
+      "nombre_carpeta": "Un Juego De Deseo",
+      "fuente": "temple",
+      "url_manga": "https://aedexnox.akan01.com/serie/__trashed/",
+      "slug": "__trashed",
+      "ultimo_capitulo": 49,
+      "capitulos_con_error": null,
+      "activo": true
+    },
+    {
+      "nombre_carpeta": "Guía De Romance SexmuWiki",
+      "fuente": "temple",
+      "url_manga": "https://aedexnox.akan01.com/serie/guia-de-romance-sexmuwiki/",
+      "slug": "guia-de-romance-sexmuwiki",
+      "ultimo_capitulo": 19,
+      "capitulos_con_error": null,
+      "activo": true
+    },
+    {
+      "nombre_carpeta": "Relaciones amorosas después del trabajo",
+      "fuente": "ikigai",
+      "url_manga": "https://visualikigai.aplikando.com/series/relaciones-amorosas-despues-del-trabajo/",
+      "slug": "relaciones-amorosas-despues-del-trabajo",
+      "ultimo_capitulo": 135.2,
+      "capitulos_con_error": null,
+      "activo": true
+    },
+    {
+      "nombre_carpeta": "Conquistando la Academia con solo un Cuchillo de Sashimi",
+      "fuente": "ikigai",
+      "url_manga": "https://visualikigai.aplikando.com/series/conquistando-la-academia-con-solo-un-cuchillo-de-sashimi/",
+      "slug": "conquistando-la-academia-con-solo-un-cuchillo-de-sashimi",
+      "ultimo_capitulo": 97.0,
+      "capitulos_con_error": null,
+      "activo": true
+    },
+    {
+      "nombre_carpeta": "La vida después de la muerte",
+      "fuente": "ikigai",
+      "url_manga": "https://visualikigai.aplikando.com/series/la-vida-despues-de-la-muerte/",
+      "slug": "la-vida-despues-de-la-muerte",
+      "ultimo_capitulo": 256.1,
+      "capitulos_con_error": null,
+      "activo": true
+    },
+    {
+      "nombre_carpeta": "Cómo me convertí en un hombre casado en otro mundo",
+      "fuente": "ikigai",
+      "url_manga": "https://visualikigai.treefy.online/series/como-me-converti-en-un-hombre-casado-en-otro-mundo/",
+      "slug": "como-me-converti-en-un-hombre-casado-en-otro-mundo",
+      "ultimo_capitulo": 29,
+      "capitulos_con_error": null,
+      "activo": true
+    },
+    {
+      "nombre_carpeta": "Camión de comida de Go Deokchun",
+      "fuente": "ikigai",
+      "url_manga": "https://visualikigai.treefy.online/series/camion-de-comida-de-go-deokchun/",
+      "slug": "camion-de-comida-de-go-deokchun",
+      "ultimo_capitulo": 51,
+      "capitulos_con_error": null,
+      "activo": true
+    },
+    {
+      "nombre_carpeta": "La reina demonio solo quiere vivir en paz",
+      "fuente": "ikigai",
+      "url_manga": "https://visualikigai.treefy.online/series/la-reina-demonio-solo-quiere-vivir-en-paz/",
+      "slug": "la-reina-demonio-solo-quiere-vivir-en-paz",
+      "ultimo_capitulo": 40,
+      "capitulos_con_error": null,
+      "activo": true
+    },
+    {
+      "nombre_carpeta": "Mi esposa me esperaba en el campo de trigo",
+      "fuente": "ikigai",
+      "url_manga": "https://visualikigai.treefy.online/series/mi-esposa-me-esperaba-en-el-campo-de-trigo/",
+      "slug": "mi-esposa-me-esperaba-en-el-campo-de-trigo",
+      "ultimo_capitulo": 27,
+      "capitulos_con_error": null,
+      "activo": true
+    },
+    {
+      "nombre_carpeta": "Soy el Unico Hombre en el Salon de Masajes",
+      "fuente": "manhwaweb",
+      "url_manga": "https://manhwaweb.com/manhwa/Woman_Massage_1774965802813",
+      "slug": "Woman_Massage_1774965802813",
+      "ultimo_capitulo": 9,
+      "capitulos_con_error": null,
+      "activo": true
+    },
+    {
+      "nombre_carpeta": "La Nobleza de las Flores",
+      "fuente": "manhwaweb",
+      "url_manga": "https://manhwaweb.com/manhwa/kaoru_hana_wa_rin_to_saku_1703742073447",
+      "slug": "kaoru_hana_wa_rin_to_saku_1703742073447",
+      "tipo_contenido": "manga",
+      "ultimo_capitulo": 203,
+      "capitulos_con_error": [
+        200.5
+      ],
+      "activo": true
+    },
+    {
+      "nombre_carpeta": "Una carta de amor del futuro",
+      "fuente": "olympus",
+      "url_manga": "https://olympusxyz.com/series/comic-5zxzamor-del-futuro",
+      "slug": "comic-5zxzamor-del-futuro",
+      "ultimo_capitulo": 62,
+      "capitulos_con_error": null,
+      "activo": true,
+      "manga_id": "1481"
+    },
+    {
+      "nombre_carpeta": "Amigo de la Infancia del Zenit",
+      "fuente": "olympus",
+      "url_manga": "https://olympusxyz.com/series/comic-amigo-de20-225-e-zenith",
+      "slug": "comic-amigo-de20-225-e-zenith",
+      "ultimo_capitulo": 108,
+      "capitulos_con_error": null,
+      "activo": true,
+      "manga_id": "1388"
+    },
+    {
+      "nombre_carpeta": "Me convertí en el villano con el que la heroína está obsesionada",
+      "fuente": "olympus",
+      "url_manga": "https://olympusxyz.com/series/comic-me-converti-en-el-villano-con-el-que-la-heroina-esta-obsesionada",
+      "slug": "comic-me-converti-en-el-villano-con-el-que-la-heroina-esta-obsesionada",
+      "ultimo_capitulo": 60.5,
+      "capitulos_con_error": null,
+      "activo": true,
+      "manga_id": "1578"
+    },
+    {
+      "nombre_carpeta": "La voluntad de supervivencia del villano",
+      "fuente": "olympus",
+      "url_manga": "https://olympusxyz.com/series/comic-la-volunt10-05-2025-del-villano",
+      "slug": "comic-la-volunt10-05-2025-del-villano",
+      "ultimo_capitulo": 68,
+      "capitulos_con_error": null,
+      "activo": true,
+      "manga_id": "1491"
+    },
+    {
+      "nombre_carpeta": "EL MUNDO DESPUES DEL FIN",
+      "fuente": "olympus",
+      "url_manga": "https://olympusxyz.com/series/comic-el-mundo-despues-del-fin-20261001-080333049",
+      "slug": "comic-el-mundo-despues-del-fin-20261001-080333049",
+      "ultimo_capitulo": 254,
+      "capitulos_con_error": null,
+      "activo": true,
+      "manga_id": "100"
+    },
+    {
+      "nombre_carpeta": "El guerrero despiadado",
+      "fuente": "olympus",
+      "url_manga": "https://olympusxyz.com/series/comic-el-guerrero-despiadado-20261001-080416607",
+      "slug": "comic-el-guerrero-despiadado-20261001-080416607",
+      "ultimo_capitulo": 73,
+      "capitulos_con_error": null,
+      "activo": true,
+      "manga_id": "1541"
+    },
+    {
+      "nombre_carpeta": "Cómo criar villanos correctamente",
+      "fuente": "olympus",
+      "url_manga": "https://olympusxyz.com/series/comic-como-criar-villanos-correctamente-20261001-080419753",
+      "slug": "comic-como-criar-villanos-correctamente-20261001-080419753",
+      "ultimo_capitulo": 55.0,
+      "capitulos_con_error": null,
+      "activo": true,
+      "manga_id": "1611"
+    },
+    {
+      "nombre_carpeta": "El legendario prodigio del ducado",
+      "fuente": "olympus",
+      "url_manga": "https://olympusxyz.com/series/comic-el-legendario-prodigio-del-ducado",
+      "slug": "comic-el-legendario-prodigio-del-ducado",
+      "ultimo_capitulo": 65.5,
+      "capitulos_con_error": null,
+      "activo": true,
+      "manga_id": "1612"
+    },
+    {
+      "nombre_carpeta": "El Rebelde de la Noble Familia Tiránica",
+      "fuente": "olympus",
+      "url_manga": "https://olympusxyz.com/series/comic-el-rebelde-de-la-noble-familia-tiranica",
+      "slug": "comic-el-rebelde-de-la-noble-familia-tiranica",
+      "ultimo_capitulo": 42,
+      "capitulos_con_error": null,
+      "activo": true,
+      "manga_id": "1669"
+    },
+    {
+      "nombre_carpeta": "El Maestro de la Espada que Saltó a Través del Tiempo",
+      "fuente": "olympus",
+      "url_manga": "https://olympusxyz.com/series/comic-el-maestro-de-la-espada-que-salto-a-traves-del-tiempo-20261001-080417981",
+      "slug": "comic-el-maestro-de-la-espada-que-salto-a-traves-del-tiempo-20261001-080417981",
+      "ultimo_capitulo": 40,
+      "capitulos_con_error": null,
+      "activo": true,
+      "manga_id": "1580"
+    },
+    {
+      "nombre_carpeta": "El Retorno del Patriarca Mil Años Después",
+      "fuente": "olympus",
+      "url_manga": "https://olympusxyz.com/series/comic-el-retorno-del-patriarca-mil-anos-despues",
+      "slug": "comic-el-retorno-del-patriarca-mil-anos-despues",
+      "ultimo_capitulo": 59,
+      "capitulos_con_error": null,
+      "activo": true,
+      "manga_id": "1621"
+    },
+    {
+      "nombre_carpeta": "Un codicioso convertido en profeta",
+      "fuente": "olympus",
+      "url_manga": "https://olympusxyz.com/series/comic-un-codicioso-convertido-en-profeta-20261001-080424769",
+      "slug": "comic-un-codicioso-convertido-en-profeta-20261001-080424769",
+      "ultimo_capitulo": 57,
+      "capitulos_con_error": null,
+      "activo": true,
+      "manga_id": "1545"
+    },
+    {
+      "nombre_carpeta": "El Rey Demonio Abrumado por Héroes",
+      "fuente": "olympus",
+      "url_manga": "https://olympusxyz.com/series/comic-el-rey-demonio-abrumado-por-heroes-20261001-080419314",
+      "slug": "comic-el-rey-demonio-abrumado-por-heroes-20261001-080419314",
+      "ultimo_capitulo": 50.0,
+      "capitulos_con_error": null,
+      "activo": true,
+      "manga_id": "1629"
+    },
+    {
+      "nombre_carpeta": "Mi Vida Cuidando Dragonas",
+      "fuente": "olympus",
+      "url_manga": "https://olympusxyz.com/series/comic-mi-vida-cuidando-dragonas-20261001-080419197",
+      "slug": "comic-mi-vida-cuidando-dragonas-20261001-080419197",
+      "ultimo_capitulo": 62,
+      "capitulos_con_error": null,
+      "activo": true,
+      "manga_id": "1636"
+    },
+    {
+      "nombre_carpeta": "El Stream del Reencarnado",
+      "fuente": "olympus",
+      "url_manga": "https://olympusxyz.com/series/comic-el-stream-del-reencarnado-20261001-080423242",
+      "slug": "comic-el-stream-del-reencarnado-20261001-080423242",
+      "ultimo_capitulo": 66,
+      "capitulos_con_error": null,
+      "activo": true,
+      "manga_id": "1635"
+    },
+    {
+      "nombre_carpeta": "El Regreso del Caballero de la Muerte Clase Apocalipsis",
+      "fuente": "olympus",
+      "url_manga": "https://olympusxyz.com/series/comic-el-regreso-del-caballero-de-la-muerte-clase-apocalipsis",
+      "slug": "comic-el-regreso-del-caballero-de-la-muerte-clase-apocalipsis",
+      "ultimo_capitulo": 89,
+      "capitulos_con_error": null,
+      "activo": true,
+      "manga_id": "1542"
+    },
+    {
+      "nombre_carpeta": "El príncipe heredero que vende medicina",
+      "fuente": "olympus",
+      "url_manga": "https://olympusxyz.com/series/comic-el-principe-heredero-que-vende-medicina-20261001-080338526",
+      "slug": "comic-el-principe-heredero-que-vende-medicina-20261001-080338526",
+      "ultimo_capitulo": 125.0,
+      "capitulos_con_error": null,
+      "activo": true,
+      "manga_id": "1200"
+    },
+    {
+      "nombre_carpeta": "Maestro de la espada devorador de espadas",
+      "fuente": "olympus",
+      "url_manga": "https://olympusxyz.com/series/comic-maestro-de-la-espada-devorador-de-espadas-20261001-080423295",
+      "slug": "comic-maestro-de-la-espada-devorador-de-espadas-20261001-080423295",
+      "ultimo_capitulo": 34,
+      "capitulos_con_error": null,
+      "activo": true,
+      "manga_id": "1638"
+    },
+    {
+      "nombre_carpeta": "Manual de Reeducación de Damas Nobles",
+      "fuente": "olympus",
+      "url_manga": "https://olympusxyz.com/series/comic-manual-de-reeducacion-de-damas-nobles-20261001-080427708",
+      "slug": "comic-manual-de-reeducacion-de-damas-nobles-20261001-080427708",
+      "ultimo_capitulo": 44,
+      "capitulos_con_error": null,
+      "activo": true,
+      "manga_id": "1662"
+    },
+    {
+      "nombre_carpeta": "Guía de estrategia de un cobarde para conquistar la torre",
+      "fuente": "olympus",
+      "url_manga": "https://olympusxyz.com/series/comic-guia-de-estrategia-de-un-cobarde-para-conquistar-la-torre-20261001-080422451",
+      "slug": "comic-guia-de-estrategia-de-un-cobarde-para-conquistar-la-torre-20261001-080422451",
+      "ultimo_capitulo": 42,
+      "capitulos_con_error": null,
+      "activo": true,
+      "manga_id": "1637"
+    },
+    {
+      "nombre_carpeta": "El Herrero que Regresó para Reparar Todo",
+      "fuente": "olympus",
+      "url_manga": "https://olympusxyz.com/series/comic-el-herrero-que-regreso-para-reparar-todo",
+      "slug": "comic-el-herrero-que-regreso-para-reparar-todo",
+      "ultimo_capitulo": 39.5,
+      "capitulos_con_error": null,
+      "activo": true,
+      "manga_id": "1673"
+    },
+    {
+      "nombre_carpeta": "El Espectro del Desierto Calcinado",
+      "fuente": "olympus",
+      "url_manga": "https://olympusxyz.com/series/comic-el-espectro-del-desierto-calcinado",
+      "slug": "comic-el-espectro-del-desierto-calcinado",
+      "ultimo_capitulo": 30,
+      "capitulos_con_error": null,
+      "activo": true,
+      "manga_id": "1703"
+    },
+    {
+      "nombre_carpeta": "El Mago de Decima Clase",
+      "fuente": "olympus",
+      "url_manga": "https://olympusxyz.com/series/comic-el-mago-de-decima-clase-20261001-080430240",
+      "slug": "comic-el-mago-de-decima-clase-20261001-080430240",
+      "ultimo_capitulo": 30,
+      "capitulos_con_error": null,
+      "activo": true,
+      "manga_id": "1702"
+    },
+    {
+      "nombre_carpeta": "El Séptimo Príncipe Quiere Escapar",
+      "fuente": "olympus",
+      "url_manga": "https://olympusxyz.com/series/comic-el-septimo-principe-quiere-escapar-20261001-080431233",
+      "slug": "comic-el-septimo-principe-quiere-escapar-20261001-080431233",
+      "ultimo_capitulo": 22,
+      "capitulos_con_error": null,
+      "activo": true,
+      "manga_id": "1709"
+    },
+    {
+      "nombre_carpeta": "El Genio Marcial que lo Recuerda Todo",
+      "fuente": "olympus",
+      "url_manga": "https://olympusxyz.com/series/comic-el-genio-marcial-que-lo-recuerda-todo-20261001-080430621",
+      "slug": "comic-el-genio-marcial-que-lo-recuerda-todo-20261001-080430621",
+      "ultimo_capitulo": 28,
+      "capitulos_con_error": null,
+      "activo": true,
+      "manga_id": "1704"
+    },
+    {
+      "nombre_carpeta": "Pensaste que podrías vivir una vida normal en un mundo con una proporción de 1 hombre por cada 5 mujeres Cuando las chicas con emociones intensas juegan con un chico desprevenido",
+      "fuente": "leercapitulo",
+      "url_manga": "https://www.leercapitulo.co/manga/7mbadjh023/pensaste-que-podrias-vivir-una-vida-normal-en-un-mundo-con-una-proporcion-de-1-hombre-por-cada-5-mujeres-cuando-las-chicas-con-emociones-intensas-juegan-con-un-chico-desprevenido/",
+      "slug": "7mbadjh023/pensaste-que-podrias-vivir-una-vida-normal-en-un-mundo-con-una-proporcion-de-1-hombre-por-cada-5-mujeres-cuando-las-chicas-con-emociones-intensas-juegan-con-un-chico-desprevenido",
+      "ultimo_capitulo": 21.5,
+      "capitulos_con_error": null,
+      "activo": true,
+      "tipo_contenido": "manga"
+    },
+    {
+      "nombre_carpeta": "Yuujin ni 500 en Kashitara Shakkin no Kata ni Imouto wo Yokoshite kita no dakeredo, Ore wa Ittai dousureba iindarou",
+      "fuente": "leercapitulo",
+      "url_manga": "https://www.leercapitulo.co/manga/9tehwobcte/yuujin-ni-500-en-kashitara-shakkin-no-kata-ni-imouto-wo-yokoshite-kita-no-dakeredo-ore-wa-ittai-dousureba-iindarou/",
+      "slug": "9tehwobcte/yuujin-ni-500-en-kashitara-shakkin-no-kata-ni-imouto-wo-yokoshite-kita-no-dakeredo-ore-wa-ittai-dousureba-iindarou",
+      "ultimo_capitulo": 16,
+      "capitulos_con_error": null,
+      "activo": true,
+      "tipo_contenido": "manga"
+    },
+    {
+      "nombre_carpeta": "ATM ojisan isekai de moteki ga tomaranai",
+      "fuente": "leercapitulo",
+      "url_manga": "https://www.leercapitulo.co/manga/otm2fas7/atm-ojisan-isekai-de-moteki-ga-tomaranai/",
+      "slug": "otm2fas7/atm-ojisan-isekai-de-moteki-ga-tomaranai",
+      "ultimo_capitulo": 21,
+      "capitulos_con_error": null,
+      "activo": true,
+      "tipo_contenido": "manga"
+    },
+    {
+      "nombre_carpeta": "Chonin A wa Akuyaku Reijo o Doshite mo Sukuitai",
+      "fuente": "leercapitulo",
+      "url_manga": "https://www.leercapitulo.co/manga/9x3wrnts5e/chonin-a-wa-akuyaku-reijo-o-doshite-mo-sukuitai/",
+      "slug": "9x3wrnts5e/chonin-a-wa-akuyaku-reijo-o-doshite-mo-sukuitai",
+      "ultimo_capitulo": 51.1,
+      "capitulos_con_error": [
+        46.1
+      ],
+      "activo": true,
+      "tipo_contenido": "manga"
+    },
+    {
+      "nombre_carpeta": "Now That We Draw",
+      "fuente": "leercapitulo",
+      "url_manga": "https://www.leercapitulo.co/manga/inojsf1zlp/now-that-we-draw/",
+      "slug": "inojsf1zlp/now-that-we-draw",
+      "ultimo_capitulo": 63,
+      "capitulos_con_error": null,
+      "activo": true,
+      "tipo_contenido": "manga"
+    },
+    {
+      "nombre_carpeta": "Yusha ni zenbu ubawa reta ore wa yusha no hahaoya to pati o kumimashita",
+      "fuente": "leercapitulo",
+      "url_manga": "https://www.leercapitulo.co/manga/do3cfdi50m/yusha-ni-zenbu-ubawa-reta-ore-wa-yusha-no-hahaoya-to-pati-o-kumimashita/",
+      "slug": "do3cfdi50m/yusha-ni-zenbu-ubawa-reta-ore-wa-yusha-no-hahaoya-to-pati-o-kumimashita",
+      "ultimo_capitulo": 38,
+      "capitulos_con_error": null,
+      "activo": true,
+      "tipo_contenido": "manga"
+    },
+    {
+      "nombre_carpeta": "2.5 jigen no Yuuwaku",
+      "fuente": "leercapitulo",
+      "url_manga": "https://www.leercapitulo.co/manga/quqq3cbkbv/2-5-jigen-no-yuuwaku/",
+      "slug": "quqq3cbkbv/2-5-jigen-no-yuuwaku",
+      "ultimo_capitulo": 201,
+      "capitulos_con_error": null,
+      "activo": true,
+      "tipo_contenido": "manga"
+    },
+    {
+      "nombre_carpeta": "Un Día de Suerte",
+      "fuente": "nexus",
+      "url_manga": "https://nexusscanlation.com/series/un-dia-de-suerte",
+      "slug": "un-dia-de-suerte",
+      "ultimo_capitulo": 6,
+      "capitulos_con_error": null,
+      "activo": true
+    },
+    {
+      "nombre_carpeta": "Amor en Venta",
+      "fuente": "nexus",
+      "url_manga": "https://nexusscanlation.com/series/amor-en-venta",
+      "slug": "amor-en-venta",
+      "ultimo_capitulo": 19,
+      "capitulos_con_error": null,
+      "activo": true,
+      "prioridad_fuente": 1
+    },
+    {
+      "nombre_carpeta": "Amor en Venta",
+      "fuente": "temple",
+      "url_manga": "https://aedexnox.akan01.com/serie/amor-en-venta/",
+      "slug": "amor-en-venta",
+      "ultimo_capitulo": 16,
+      "capitulos_con_error": null,
+      "activo": true,
+      "prioridad_fuente": 1
+    },
+    {
+      "nombre_carpeta": "Tum Tum S-Matching",
+      "fuente": "temple",
+      "url_manga": "https://aedexnox.akan01.com/serie/tum-tum-s-matching/",
+      "slug": "tum-tum-s-matching",
+      "ultimo_capitulo": 19,
+      "capitulos_con_error": null,
+      "activo": true
+    },
+    {
+      "nombre_carpeta": "Un Campamento De Verano Para Enamorarse",
+      "fuente": "temple",
+      "url_manga": "https://aedexnox.akan01.com/serie/un-campamento-de-verano-para-enamorarse/",
+      "slug": "un-campamento-de-verano-para-enamorarse",
+      "ultimo_capitulo": 6,
+      "capitulos_con_error": null,
+      "activo": true
+    },
+    {
+      "nombre_carpeta": "Un Campamento De Verano Para Enamorarse",
+      "fuente": "nexus",
+      "url_manga": "https://nexusscanlation.com/series/un-campamento-de-verano-inolvidable",
+      "slug": "un-campamento-de-verano-inolvidable",
+      "ultimo_capitulo": 6,
+      "capitulos_con_error": null,
+      "activo": true,
+      "prioridad_fuente": 1
+    },
+    {
+      "nombre_carpeta": "Evolución insana de cero",
+      "fuente": "taurus",
+      "url_manga": "https://lectortaurus.com/manga/evolucion-insana-de-cero/",
+      "slug": "evolucion-insana-de-cero",
+      "ultimo_capitulo": 131.0,
+      "capitulos_con_error": null,
+      "activo": true
+    },
+    {
+      "nombre_carpeta": "Callate dragona malvada, ya no quiero criar hijos contigo",
+      "fuente": "taurus",
+      "url_manga": "https://lectortaurus.com/manga/callate-dragona-malvada-ya-no-quiero-criar-hijos-contigo/",
+      "slug": "callate-dragona-malvada-ya-no-quiero-criar-hijos-contigo",
+      "ultimo_capitulo": 112.0,
+      "capitulos_con_error": null,
+      "activo": true
+    },
+    {
+      "nombre_carpeta": "Carnicero Marcial De Rango Divino",
+      "fuente": "taurus",
+      "url_manga": "https://lectortaurus.com/manga/puedo-destruir-los-10000-mundos-con-un-cuchillo-carnicero/",
+      "slug": "puedo-destruir-los-10000-mundos-con-un-cuchillo-carnicero",
+      "ultimo_capitulo": 63,
+      "capitulos_con_error": null,
+      "activo": true
+    },
+    {
+      "nombre_carpeta": "El DM sexual de mi Noona",
+      "fuente": "nexus",
+      "url_manga": "https://nexusscanlation.com/series/el-dm-sexual-de-mi-noona",
+      "slug": "el-dm-sexual-de-mi-noona",
+      "ultimo_capitulo": 6,
+      "capitulos_con_error": null,
+      "activo": true
+    },
+    {
+      "nombre_carpeta": "Despertar del guerrero del Rayo Clase SSS",
+      "fuente": "taurus",
+      "url_manga": "https://lectortaurus.com/manga/despertar-del-guerrero-del-rayo-clase-sss/",
+      "slug": "despertar-del-guerrero-del-rayo-clase-sss",
+      "ultimo_capitulo": 92,
+      "capitulos_con_error": null,
+      "activo": true
+    },
+    {
+      "nombre_carpeta": "La Regresión Inigualable del Caza Dragones",
+      "fuente": "olympus",
+      "url_manga": "https://olympusxyz.com/series/comic-la-reg10-05-2025del-caza-dragones",
+      "slug": "comic-la-reg10-05-2025del-caza-dragones",
+      "ultimo_capitulo": 104,
+      "capitulos_con_error": null,
+      "activo": true,
+      "manga_id": "1473"
+    },
+    {
+      "nombre_carpeta": "Ecos del Mundo Invertido",
+      "fuente": "olympus",
+      "url_manga": "https://olympusxyz.com/series/comic-ecos-del-mundo-invertido",
+      "slug": "comic-ecos-del-mundo-invertido",
+      "ultimo_capitulo": 48.0,
+      "capitulos_con_error": null,
+      "activo": true,
+      "manga_id": "1623"
+    },
+    {
+      "nombre_carpeta": "El Perro Loco de la Mansión del Duque",
+      "fuente": "olympus",
+      "url_manga": "https://olympusxyz.com/series/comic-el-perro-loco-de-la-mansion-del-duque",
+      "slug": "comic-el-perro-loco-de-la-mansion-del-duque",
+      "ultimo_capitulo": 77,
+      "capitulos_con_error": null,
+      "activo": true,
+      "manga_id": "1574"
+    },
+    {
+      "nombre_carpeta": "Me Case con la Dragona que Maté",
+      "fuente": "olympus",
+      "url_manga": "https://olympusxyz.com/series/comic-me-case-con-la-dragona-que-mate-20261001-080431644",
+      "slug": "comic-me-case-con-la-dragona-que-mate-20261001-080431644",
+      "ultimo_capitulo": 17,
+      "capitulos_con_error": null,
+      "activo": true,
+      "manga_id": "1717"
+    },
+    {
+      "nombre_carpeta": "Es malo que el personaje principal sea un roleplayer",
+      "fuente": "olympus",
+      "url_manga": "https://olympusxyz.com/series/comic-es-malo-que-el-personaje-principal-sea-un-roleplayer",
+      "slug": "comic-es-malo-que-el-personaje-principal-sea-un-roleplayer",
+      "ultimo_capitulo": 30.0,
+      "capitulos_con_error": null,
+      "activo": true,
+      "manga_id": "1718"
+    },
+    {
+      "nombre_carpeta": "El prodigioso caballero oscuro con tiempo Limitado",
+      "fuente": "manhwaweb",
+      "url_manga": "https://manhwaweb.com/manhwa/elprodigiosocaballerooscurocontiempolimitado_1732074919510",
+      "slug": "elprodigiosocaballerooscurocontiempolimitado_1732074919510",
+      "ultimo_capitulo": 162,
+      "capitulos_con_error": null,
+      "activo": true
+    },
+    {
+      "nombre_carpeta": "Comere Por Usted, Joven Amo",
+      "fuente": "dragon",
+      "url_manga": "https://dragontranslation.org/manga/comere-por-usted-joven-amo/",
+      "slug": "comere-por-usted-joven-amo",
+      "ultimo_capitulo": 71,
+      "capitulos_con_error": null,
+      "activo": true
+    },
+    {
+      "nombre_carpeta": "Comere Por Usted, Joven Amo",
+      "fuente": "manhwaweb",
+      "url_manga": "https://manhwaweb.com/manhwa/comere-por-usted-joven-amo_1748211708542",
+      "slug": "comere-por-usted-joven-amo_1748211708542",
+      "ultimo_capitulo": 75.0,
+      "capitulos_con_error": null,
+      "activo": true
+    },
+    {
+      "nombre_carpeta": "Urakata de Support Shiteta Geinou Ikka wo Tsuihousareta Boku wa, Futsuu no Seishun wo Ouka Shitai",
+      "fuente": "leercapitulo",
+      "url_manga": "https://www.leercapitulo.co/manga/vqyyntx20p/urakata-de-sapoto-shi-teta-geino-ikka-o-tsuiho-sa-reta-boku-wa-futsu-no-seishun-o-oka-shitai/",
+      "slug": "vqyyntx20p/urakata-de-sapoto-shi-teta-geino-ikka-o-tsuiho-sa-reta-boku-wa-futsu-no-seishun-o-oka-shitai",
+      "ultimo_capitulo": 27,
+      "capitulos_con_error": null,
+      "activo": true,
+      "tipo_contenido": "manga"
+    },
+    {
+      "nombre_carpeta": "Taida na Akujoku Kizoku ni Tensei Shita Ore, Scenario wo Bukkowa Shitara Kikaku-gai no Maryoku de Saikyou ni Natta",
+      "fuente": "leercapitulo",
+      "url_manga": "https://www.leercapitulo.co/manga/tr024zd1hl/taidana-akuhazukashime-kizoku-ni-tensei-shita-ore-scenario-wo-bukkowashitara-kikaku-gai-no-maryoku-de-saikyo-ni-natta/",
+      "slug": "tr024zd1hl/taidana-akuhazukashime-kizoku-ni-tensei-shita-ore-scenario-wo-bukkowashitara-kikaku-gai-no-maryoku-de-saikyo-ni-natta",
+      "ultimo_capitulo": 26,
+      "capitulos_con_error": null,
+      "activo": true,
+      "tipo_contenido": "manga"
+    },
+    {
+      "nombre_carpeta": "The Cutest Girl Closest To Me",
+      "fuente": "leercapitulo",
+      "url_manga": "https://www.leercapitulo.co/manga/x9dkc2ocrm/the-cutest-girl-closest-to-me-serializacion/",
+      "slug": "x9dkc2ocrm/the-cutest-girl-closest-to-me-serializacion",
+      "ultimo_capitulo": 34.3,
+      "capitulos_con_error": null,
+      "activo": true,
+      "tipo_contenido": "manga"
+    },
+    {
+      "nombre_carpeta": "El Noble Villano Ama Demasiado a las Heroinas Mamas, Volviendose el Mas Fuerte con Esfuerzo Sincero para Salvar a sus Personajes Favoritos en Desgracia",
+      "fuente": "leercapitulo",
+      "url_manga": "https://www.leercapitulo.co/manga/b2qxpic4ji/sono-akuyaku-kizoku-mama-hiroin-ga-suki-sugiru-shinshina-doryoku-de-saikyou-to-nari-fuguna-oshi-kyara-tasukemakuru/",
+      "slug": "b2qxpic4ji/sono-akuyaku-kizoku-mama-hiroin-ga-suki-sugiru-shinshina-doryoku-de-saikyou-to-nari-fuguna-oshi-kyara-tasukemakuru",
+      "ultimo_capitulo": 51,
+      "capitulos_con_error": null,
+      "activo": true,
+      "tipo_contenido": "manga"
+    },
+    {
+      "nombre_carpeta": "Negatte mo nai tsuihou-go kara no surou raifu Intai shita hazu ga nariyuki de bishoujo gyaru no shishou ni nattara nazeka mechakucha natsukareta",
+      "fuente": "leercapitulo",
+      "url_manga": "https://www.leercapitulo.co/manga/e7lqnt3s/negatte-mo-nai-tsuihou-go-kara-no-surou-raifu-intai-shita-hazu-ga-nariyuki-de-bishoujo-gyaru-no-shishou-ni-nattara-nazeka-mechakucha-natsukareta/",
+      "slug": "e7lqnt3s/negatte-mo-nai-tsuihou-go-kara-no-surou-raifu-intai-shita-hazu-ga-nariyuki-de-bishoujo-gyaru-no-shishou-ni-nattara-nazeka-mechakucha-natsukareta",
+      "ultimo_capitulo": 12,
+      "capitulos_con_error": null,
+      "activo": true,
+      "tipo_contenido": "manga"
+    },
+    {
+      "nombre_carpeta": "Yusha ni zenbu ubawa reta ore wa yusha no hahaoya to pati o kumimashita",
+      "fuente": "manhwaweb",
+      "url_manga": "https://manhwaweb.com/manhwa/yshanizenbuubawaretaorewayshanohahaoyatoptiokumimashita_1720357517216",
+      "slug": "yshanizenbuubawaretaorewayshanohahaoyatoptiokumimashita_1720357517216",
+      "ultimo_capitulo": 0,
+      "capitulos_con_error": null,
+      "activo": true,
+      "tipo_contenido": "manga"
+    },
+    {
+      "nombre_carpeta": "Harem Capitalista",
+      "fuente": "temple",
+      "url_manga": "https://aedexnox.akan01.com/serie/harem-capitalista/",
+      "slug": "harem-capitalista",
+      "ultimo_capitulo": 15.0,
+      "capitulos_con_error": null,
+      "activo": true
+    },
+    {
+      "nombre_carpeta": "Atando mi Secreto",
+      "fuente": "ikigai",
+      "url_manga": "https://visorikigai.gettocaboca.com/series/atando-mi-secreto/",
+      "slug": "atando-mi-secreto",
+      "ultimo_capitulo": 55,
+      "capitulos_con_error": null,
+      "activo": true
+    },
+    {
+      "nombre_carpeta": "Largo De Aquí",
+      "fuente": "temple",
+      "url_manga": "https://aedexnox.akan01.com/serie/largo-de-aqui/",
+      "slug": "largo-de-aqui",
+      "ultimo_capitulo": 13,
+      "capitulos_con_error": null,
+      "activo": true
+    },
+    {
+      "nombre_carpeta": "Mi Tipo Idea Es La Mamá De Mi Amigo",
+      "fuente": "temple",
+      "url_manga": "https://aedexnox.akan01.com/serie/mi-tipo-ideal-es-la-mama-de-mi-amiga/",
+      "slug": "mi-tipo-ideal-es-la-mama-de-mi-amiga",
+      "ultimo_capitulo": 12,
+      "capitulos_con_error": null,
+      "activo": true
+    },
+    {
+      "nombre_carpeta": "Pensaste que podrías vivir una vida normal en un mundo con una proporción de 1 hombre por cada 5 mujeres Cuando las chicas con emociones intensas juegan con un chico desprevenido",
+      "fuente": "manhwaweb",
+      "url_manga": "https://manhwaweb.com/manhwa/pensaste-que-podrias-vivir-una-vida-normal-en-un-mundo-con-una-proporcion-de--hombre-por-cada--mujeres-cuando-las-chicas-con-emociones-intensas-juegan-con-un-chico-desprevenido_1742793208303",
+      "slug": "pensaste-que-podrias-vivir-una-vida-normal-en-un-mundo-con-una-proporcion-de--hombre-por-cada--mujeres-cuando-las-chicas-con-emociones-intensas-juegan-con-un-chico-desprevenido_1742793208303",
+      "ultimo_capitulo": 22,
+      "capitulos_con_error": null,
+      "activo": true
+    },
+    {
+      "nombre_carpeta": "Sistema de Retorno Me Vuelvo Invencible al darle cosas a Otros",
+      "fuente": "taurus",
+      "url_manga": "https://lectortaurus.com/manga/sistema-de-retorno-me-vuelvo-invencible-al-darle-cosas-a-otros/",
+      "slug": "sistema-de-retorno-me-vuelvo-invencible-al-darle-cosas-a-otros",
+      "ultimo_capitulo": 40,
+      "capitulos_con_error": null,
+      "activo": true
+    },
+    {
+      "nombre_carpeta": "Está Bien Es Solo Una Broma",
+      "fuente": "nexus",
+      "url_manga": "https://nexusscanlation.com/series/esta-bien-es-solo-una-broma",
+      "slug": "esta-bien-es-solo-una-broma",
+      "ultimo_capitulo": 36,
+      "capitulos_con_error": [
+        14
+      ],
+      "activo": true
+    },
+    {
+      "nombre_carpeta": "El Heroé es la Secretaria",
+      "fuente": "nexus",
+      "url_manga": "https://nexusscanlation.com/series/el-heroe-es-la-secretaria",
+      "slug": "el-heroe-es-la-secretaria",
+      "ultimo_capitulo": 14.0,
+      "capitulos_con_error": null,
+      "activo": true
+    },
+    {
+      "nombre_carpeta": "El Heroé es la Secretaria",
+      "fuente": "manhwaweb",
+      "url_manga": "https://manhwaweb.com/manhwa/el-heroe-es-la-secretaria_1787280965089",
+      "slug": "el-heroe-es-la-secretaria_1787280965089",
+      "ultimo_capitulo": 0,
+      "capitulos_con_error": null,
+      "activo": true
+    },
+    {
+      "nombre_carpeta": "Ella Es La Mejor",
+      "fuente": "temple",
+      "url_manga": "https://aedexnox.akan01.com/serie/ella-es-la-mejor/",
+      "slug": "ella-es-la-mejor",
+      "ultimo_capitulo": 12,
+      "capitulos_con_error": null,
+      "activo": true
+    },
+    {
+      "nombre_carpeta": "Juego De Amor Y Riesgo",
+      "fuente": "temple",
+      "url_manga": "https://aedexnox.akan01.com/serie/juego-de-amor-y-riesgo/",
+      "slug": "juego-de-amor-y-riesgo",
+      "ultimo_capitulo": 11.0,
+      "capitulos_con_error": null,
+      "activo": true
+    },
+    {
+      "nombre_carpeta": "Supremacía de la Supervivencia",
+      "fuente": "olympus",
+      "url_manga": "https://olympusxyz.com/series/comic-supremacia-de-la-supervivencia-20261001-080433045",
+      "slug": "comic-supremacia-de-la-supervivencia-20261001-080433045",
+      "ultimo_capitulo": 13,
+      "capitulos_con_error": null,
+      "activo": true,
+      "manga_id": "1727"
+    },
+    {
+      "nombre_carpeta": "El  Restaurante del mago",
+      "fuente": "olympus",
+      "url_manga": "https://olympusxyz.com/series/comic-restaurante-del-mago-20261001-080341145",
+      "slug": "comic-restaurante-del-mago-20261001-080341145",
+      "ultimo_capitulo": 153,
+      "capitulos_con_error": null,
+      "activo": true,
+      "manga_id": "1281"
+    },
+    {
+      "nombre_carpeta": "Conviviendo Con Mi Profesora",
+      "fuente": "temple",
+      "url_manga": "https://aedexnox.akan01.com/serie/conviviendo-con-mi-profesora/",
+      "slug": "conviviendo-con-mi-profesora",
+      "ultimo_capitulo": 10,
+      "capitulos_con_error": null,
+      "activo": true
+    },
+    {
+      "nombre_carpeta": "Quiero Muchísimo A Mi Ajumma",
+      "fuente": "temple",
+      "url_manga": "https://aedexnox.akan01.com/serie/quiero-muchisimo-a-mi-ajumma/",
+      "slug": "quiero-muchisimo-a-mi-ajumma",
+      "ultimo_capitulo": 10,
+      "capitulos_con_error": null,
+      "activo": true
+    },
+    {
+      "nombre_carpeta": "Han Pasado 30 Años Desde el Prólogo",
+      "fuente": "olympus",
+      "url_manga": "https://olympusxyz.com/series/comic-han-pasado-30-anos-desde-el-prologo",
+      "slug": "comic-han-pasado-30-anos-desde-el-prologo",
+      "ultimo_capitulo": 18,
+      "capitulos_con_error": null,
+      "activo": true,
+      "manga_id": "1722"
+    },
+    {
+      "nombre_carpeta": "Jugador que regresó 10.000 años después",
+      "fuente": "olympus",
+      "url_manga": "https://olympusxyz.com/series/comic-jugad20-225-reso-10000-anos-despues13424",
+      "slug": "comic-jugad20-225-reso-10000-anos-despues13424",
+      "ultimo_capitulo": 161,
+      "capitulos_con_error": null,
+      "activo": true,
+      "manga_id": "197"
+    },
+    {
+      "nombre_carpeta": "Callate dragona malvada, ya no quiero criar hijos contigo",
+      "fuente": "dragon",
+      "url_manga": "https://dragontranslation.org/manga/callate-dragona-malvada-ya-no-quiero-criar-hijos-contigo/",
+      "slug": "callate-dragona-malvada-ya-no-quiero-criar-hijos-contigo",
+      "ultimo_capitulo": 112,
+      "capitulos_con_error": null,
+      "activo": true,
+      "prioridad_fuente": 9
+    },
+    {
+      "nombre_carpeta": "La Libreta de la Lujuria",
+      "fuente": "ikigai",
+      "url_manga": "https://visualikigai.cmpunjabrashancard.pk/series/la-libreta-de-la-lujuria/",
+      "slug": "la-libreta-de-la-lujuria",
+      "ultimo_capitulo": 8,
+      "capitulos_con_error": null,
+      "activo": true
+    },
+    {
+      "nombre_carpeta": "Salvando a mi Chica Mágica",
+      "fuente": "dragon",
+      "url_manga": "https://dragontranslation.org/manga/salvando-a-mi-chica-magica/",
+      "slug": "salvando-a-mi-chica-magica",
+      "ultimo_capitulo": 49,
+      "capitulos_con_error": null,
+      "activo": true
+    },
+    {
+      "nombre_carpeta": "Haciendome rico con la caza automatica",
+      "fuente": "olympus",
+      "url_manga": "https://olympusxyz.com/series/comic-haciendome-rico-con-la-caza-automatica",
+      "slug": "comic-haciendome-rico-con-la-caza-automatica",
+      "ultimo_capitulo": 22,
+      "capitulos_con_error": null,
+      "activo": true,
+      "manga_id": "1770"
+    },
+    {
+      "nombre_carpeta": "Oda de los Valientes",
+      "fuente": "olympus",
+      "url_manga": "https://olympusxyz.com/series/comic-oda-de-los-valientes",
+      "slug": "comic-oda-de-los-valientes",
+      "ultimo_capitulo": 8,
+      "capitulos_con_error": null,
+      "activo": true,
+      "manga_id": "1772"
+    },
+    {
+      "nombre_carpeta": "El replicador de armas de la Academia",
+      "fuente": "olympus",
+      "url_manga": "https://olympusxyz.com/series/comic-el-replicador-de-armas-de-la-academia",
+      "slug": "comic-el-replicador-de-armas-de-la-academia",
+      "ultimo_capitulo": 20,
+      "capitulos_con_error": null,
+      "activo": true,
+      "manga_id": "1774"
+    },
+    {
+      "nombre_carpeta": "El Villano Rubio De La Novela De La Protagonista Femenina Quiere Ser Feliz",
+      "fuente": "manhwaweb",
+      "url_manga": "https://manhwaweb.com/manhwa/el-villano-rubio-de-la-novela-de-la-protagonista-femenina-quiere-ser-feliz_1740100080803",
+      "slug": "el-villano-rubio-de-la-novela-de-la-protagonista-femenina-quiere-ser-feliz_1740100080803",
+      "ultimo_capitulo": 89.0,
+      "capitulos_con_error": [
+        0.1,
+        71
+      ],
+      "activo": true
+    },
+    {
+      "nombre_carpeta": "Obtuve una Galería en la Naturaleza",
+      "fuente": "olympus",
+      "url_manga": "https://olympusxyz.com/series/comic-obtuve-una-galeria-en-la-naturaleza",
+      "slug": "comic-obtuve-una-galeria-en-la-naturaleza",
+      "ultimo_capitulo": 7,
+      "capitulos_con_error": null,
+      "activo": true,
+      "manga_id": "1731"
+    },
+    {
+      "nombre_carpeta": "Bien hecho, Súcubo",
+      "fuente": "nexus",
+      "url_manga": "https://nexusscanlation.com/series/bien-hecho-sucubo",
+      "slug": "bien-hecho-sucubo",
+      "ultimo_capitulo": 2,
+      "capitulos_con_error": null,
+      "activo": true
+    },
+    {
+      "nombre_carpeta": "Error D Echo",
+      "fuente": "nexus",
+      "url_manga": "https://nexusscanlation.com/series/error-d-echo",
+      "slug": "error-d-echo",
+      "ultimo_capitulo": 5.0,
+      "capitulos_con_error": null,
+      "activo": true
+    },
+    {
+      "nombre_carpeta": "Sangre Maldita",
+      "fuente": "olympus",
+      "url_manga": "https://olympusxyz.com/series/comic-sangre-maldita-20261001-080354233",
+      "slug": "comic-sangre-maldita-20261001-080354233",
+      "ultimo_capitulo": 101.0,
+      "capitulos_con_error": null,
+      "activo": true,
+      "manga_id": "1445"
+    },
+    {
+      "nombre_carpeta": "Esclavo de las sombras",
+      "fuente": "olympus",
+      "url_manga": "https://olympusxyz.com/series/comic-esclavo-de-las-sombras",
+      "slug": "comic-esclavo-de-las-sombras",
+      "ultimo_capitulo": 11.0,
+      "capitulos_con_error": null,
+      "activo": true,
+      "manga_id": "1729"
+    },
+    {
+      "nombre_carpeta": "Mi Novia ha Regresado Como una Dragona",
+      "fuente": "olympus",
+      "url_manga": "https://olympusxyz.com/series/comic-mi-novia-ha-regresado-como-una-dragona",
+      "slug": "comic-mi-novia-ha-regresado-como-una-dragona",
+      "ultimo_capitulo": 7.0,
+      "capitulos_con_error": null,
+      "activo": true,
+      "manga_id": "1776"
+    }
+  ]
+}

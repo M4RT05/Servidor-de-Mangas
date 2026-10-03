@@ -1,0 +1,10 @@
+# Dependencias del scraper. Instalación manual (opcional — scraper.py ya
+# instala solo las que falten la primera vez que lo corrés):
+#     pip install -r scraper/requirements.txt
+requests
+beautifulsoup4
+Pillow
+tqdm
+pycryptodome
+selenium
+curl_cffi
